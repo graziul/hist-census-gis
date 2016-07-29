@@ -422,6 +422,11 @@ def sm_fuzzy_match(sm_st,ed):
 		return [best_match_ed[0][0],best_match_ed[0][1],True]
 	else:
 		return ['','',False]
+         #? A.K.: what about when there are two equally good matches in the whole city?
+         #  e.g. micro st: ?ine St
+         #  best_match_ed: Vine St
+         # best_match_all: Pine St
+         # result: no match
 
 #Create dictionary based on Street-ED pairs for faster lookup using helper function
 df_no_validated_exact_match = df[(df.sm_st_exact_match_bool==False) | (df.sm_st_ed_match_bool==False)]
