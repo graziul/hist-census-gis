@@ -433,7 +433,7 @@ def sm_fuzzy_match(sm_st,ed):
 	best_match_all = process.extractOne(sm_st,sm_all_streets)
 	#Step 3: If both best matches are the same, return as best match
 	if (best_match_ed == best_match_all):
-		return [best_match_ed[0][0],best_match_ed[0][1],True]
+		return [best_match_ed[0],best_match_ed[1],True]
 	else:
 		return ['','',False]
 
