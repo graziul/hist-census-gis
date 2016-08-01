@@ -19,6 +19,7 @@ import time
 import numpy as np
 import pandas as pd
 from fuzzywuzzy import process
+import fuzzyset
 
 #Pretty output for easy reading
 class color:
@@ -55,10 +56,14 @@ print(color.BOLD + '%s Automated Cleaning\n' % (city_name) + color.END)
 def compute_time(t):
 	return '%s seconds (%s minutes)' % (round(t,0),round(float(t)/60,1))
 
+start_total = time.time()
+
 #
 #	Import data
 #
+
 start = time.time()
+
 df = pd.read_stata('%sStata13.dta' % (file_name))
 end = time.time()
 print(color.DARKCYAN + 'Loading data for %s took %s' % (city_name,compute_time(end-start)) + color.END)
@@ -425,8 +430,12 @@ start = time.time()
 # Find the best matching Steve Morse street name
 #
 
+#Create a set of all streets for fuzzy matching (create once, call on)
+sm_all_streets_fuzzyset = fuzzyset.FuzzySet(sm_all_streets)
+
 #Keep track of problem EDs
 problem_EDs = []
+
 def sm_fuzzy_match(sm_st,ed):
 	
 	#Return null if sm_st is blank
@@ -436,17 +445,26 @@ def sm_fuzzy_match(sm_st,ed):
 	#Microdata ED may not be in Steve Morse, if so then add it to problem ED list and return null
 	try:
 		sm_ed_streets = sm_ed_st_dict[ed]
+		sm_ed_streets_fuzzyset = fuzzyset.FuzzySet(sm_ed_streets)
 	except:
 		problem_EDs.append(ed)
 		return ['','',False]
-    
+    #
 	#Step 1: Find best match among streets associated with microdata ED
-	best_match_ed = process.extractOne(sm_st,sm_ed_streets)
+	try:
+		best_match_ed = sm_ed_streets_fuzzyset[sm_st][0]
+	except:
+		return ['','',False]
+#	best_match_ed = process.extractOne(sm_st,sm_ed_streets)
 	#Step 2: Find best match among all streets
-	best_match_all = process.extractOne(sm_st,sm_all_streets)
+	try:
+		best_match_all = sm_all_streets_fuzzyset[sm_st][0]
+	except:
+		return ['','',False]	
+#	best_match_all = process.extractOne(sm_st,sm_all_streets)
 	#Step 3: If both best matches are the same, return as best match
-	if (best_match_ed == best_match_all):
-		return [best_match_ed[0],best_match_ed[1],True]
+	if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] > 0.5):
+		return [best_match_ed[1],best_match_ed[0],True]
 	else:
 		return ['','',False]
 
@@ -493,12 +511,17 @@ df.loc[df['sm_st_fuzzy_match_bool'],'sm_st_overall_match'] = df['sm_st_fuzzy_mat
 
 df.loc[df['sm_st_exact_match_bool'] & df['sm_st_ed_match_bool'],'overall_match_type'] = 'ExactSM'
 df.loc[df['sm_st_fuzzy_match_bool'],'overall_match_type'] = 'FuzzySM'
+df.loc[df['sm_st_exact_match_bool'] & df['sm_st_ed_match_bool'],'overall_match_type'] = 'ExactSM'
 
 df.loc[(df['overall_match_type'] == 'ExactSM') | (df['overall_match_type'] == 'FuzzySM'),'sm_st_overall_match_bool'] = True 
 
 #df = pd.concat([df,df.apply(lambda s: overall_match(s['sm_st'],s['sm_st_exact_match_bool'],s['sm_st_ed_match_bool'],s['sm_st_fuzzy_match_bool'],s['sm_st_fuzzy_match']), axis=1)],axis=1)
 sm_st_overall_matches = np.sum(df['sm_st_overall_match_bool'])
-print("Overall matches: "+str(sm_st_overall_matches)+" of "+str(len(df))+" total cases ("+str(round(100*float(sm_st_overall_matches)/float(len(df)),1))+"%)")
+print("Overall matches: "+str(sm_st_overall_matches)+" of "+str(len(df))+" total cases ("+str(round(100*float(sm_st_overall_matches)/float(len(df)),1))+"%)\n")
+
+end_total = time.time()
+
+print(color.DARKCYAN + color.BOLD + 'Total processing time for %s: %s\n' % (city_name,compute_time(end_total-start_total)) + color.END)
 
 df.to_csv('%s_AutoCleaned.csv' % (city_name))
 '''
