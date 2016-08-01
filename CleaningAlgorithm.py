@@ -1,3 +1,16 @@
+#
+#	Name: 		CleaningAlgorithm.py
+#	Authors: 	Chris Graziul, Amory Kisch
+#
+#	Input:		file_name - File name of city file, saved in Stata 13 (or below) format
+#	Output:		<file_name>_autocleaned.csv - City file with addresses cleaned 
+#
+#	Purpose:	This is the master script for automatically cleaning addresses before
+#				manually cleaning the file using Ancestry images. Large functions will
+#				eventually become separate scripts that will be further refined and
+#				called from this script.
+#
+
 import urllib
 import re
 import os
@@ -7,6 +20,7 @@ import numpy as np
 import pandas as pd
 from fuzzywuzzy import process
 
+#Pretty output for easy reading
 class color:
    PURPLE = '\033[95m'
    CYAN = '\033[96m'
@@ -20,9 +34,8 @@ class color:
    END = '\033[0m'
 
 file_name = sys.argv[1] 
-#file_name = 'NewHaven'
-#sm_web_abbr = 'nhct'
 
+#Temporary dictionaries that will eventually be stored as a txt file
 city_name_dict = {
 	'NewHaven':'New Haven',
 	'Chicago1930reduced':'Chicago',
