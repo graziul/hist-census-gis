@@ -40,12 +40,14 @@ file_name = sys.argv[1]
 city_name_dict = {
 	'NewHaven':'New Haven',
 	'Chicago1930reduced':'Chicago',
+        'chicago_30_data':'Chicago',
 	'Yonkers':'Yonkers'}
 city_name = city_name_dict[file_name]
 
 sm_web_abbr_dict = {
 	'NewHaven':'nhct',
 	'Chicago1930reduced':'chil',
+        'chicago_30_data':'chil',
 	'Yonkers':'yony'
 }
 sm_web_abbr = sm_web_abbr_dict[file_name]
@@ -213,9 +215,8 @@ def preclean_dir_type(st):
         st = re.sub("[Ss]even(th)?","7th",st)
         st = re.sub("[Ee]ighth?","8th",st)
         st = re.sub("[Nn]in(th|e)","9th",st)
-
+    match = re.search(DIR+'(.+)'+TYPE,st)
     if NAME=='' :
-        match = re.search(DIR+'(.+)'+TYPE,st)
         if match :
             NAME = match.group(1).strip()
             if re.search("[0-9]+",NAME) :
@@ -242,9 +243,10 @@ def preclean_dir_type(st):
                     runAgain = True
             else :
                 NAME = NAME.title()
-            st = re.sub(re.escape(match.group(1).strip()),NAME,st)
+            
         else :
             assert(False)
+    st = re.sub(re.escape(match.group(1).strip()),NAME,st)
     try :
         assert st == (DIR+' '+NAME+' '+TYPE).strip()
     except AssertionError :
