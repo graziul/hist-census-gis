@@ -6,7 +6,7 @@ import time
 import math
 import numpy as np
 
-df = pd.read_stata("Chicago_autocleaned_merge.dta",convert_categoricals=False)
+df = pd.read_stata("Chicago_autocleaned_merge_fragment.dta",convert_categoricals=False)
 
 HN_SEQ = []
 ST_SEQ = []
@@ -200,39 +200,46 @@ def seq_match_num(ind) :
     return [seq_start,seq_end]#[seq_start,seq_end,get_hn(seq_start),get_hn(seq_end)]
 
 def isolate_st_name(st) :
-    TYPE = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
-    if(TYPE) :
-        st = re.sub(TYPE.group(0), "",st)
-    st = re.sub("^[NSEW]+","",st)
-    st = st.strip()
+    if(not (st == None or st == '' or st == -1)) :
+
+        TYPE = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+        if(TYPE) :
+            st = re.sub(TYPE.group(0), "",st)
+        st = re.sub("^[NSEW]+","",st)
+        st = st.strip()
     return st
 
 def st_seq(ind) :
     name = get_name(ind)
     i=ind
-    #TODO: Modify code so that it identifies and fixes "S Shore" and "S Shore Drive" being different stnames
+    #TODO: Modify code so that it CHECKS AGAINST OTHER STNAMES IN ED / CITY
     while(get_name(i-1)==name or isolate_st_name(get_name(i-1))==isolate_st_name(name)) :
+        print("BEHIND!!!!")
         if(get_name(i-1)==name) :
             i = i-1
         else :
-            if(not seq_end_chk(get_hn(i),get_hn(i-1))) :
+            if(not seq_end_chk(get_hn(i),get_hn(i-1))[0] and len(get_name(i-1)) < len(get_name(i))) : #more sophisticated check?
                 i = i-1
                 print("at %s changed %s to %s" %(i,get_name(i),name))
                 df.set_value(i, 'street', name)
             else :
-               print("at %s DID NOT change %s to %s" %(i,get_name(i),name)) 
+               print("at %s DID NOT change %s to %s" %(i-1,get_name(i-1),name))
+               break
                 
     start = i
-    while(get_name(ind+1)==name or isolate_st_name(get_name(i+1))==isolate_st_name(name)) :
-        if(get_name(i+1)==name) :
+    while(get_name(ind+1)==name or isolate_st_name(get_name(ind+1))==isolate_st_name(name)) :
+        
+        if(get_name(ind+1)==name) :
             ind = ind+1
         else :
-            if(not seq_end_chk(get_hn(i),get_hn(i+1))) :
-                i = i+1
-                print("at %s changed %s to %s" %(i,get_name(i),name))
-                df.set_value(i, 'street', name)
+            print("FORWARD!!!!")
+            if(not seq_end_chk(get_hn(ind),get_hn(ind+1))[0] and len(get_name(ind+1)) < len(get_name(ind))) : #more sophisticated check?
+                ind = ind+1
+                print("at %s changed %s to %s" %(ind,get_name(ind),name))
+                df.set_value(ind, 'street', name)
             else :
-               print("at %s DID NOT change %s to %s" %(i,get_name(i),name))
+               print("at %s DID NOT change %s to %s" %(ind+1,get_name(ind+1),name))
+               return [start,ind]
     return [start,ind]#[start,ind,name]
 
 #if chk_dir is -1 or 1, does a uni-directional search for end of sequence and returns index
