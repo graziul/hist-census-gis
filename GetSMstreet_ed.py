@@ -41,9 +41,10 @@ def get_sm_web_abbr(year):
                     continue
                 else:
                     city = line[line.find(end_num)+1:line.find("(")].rstrip().replace('.','')
-                    city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
-                    city_abbr = re.sub(r'\$[0-9]','',city_abbr)
-                    sm_web_abbr_dict[year][state_abbr][city_name] = city_abbr + state_abbr
+                    if city == city_name:
+                        city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
+                        city_abbr = re.sub(r'\$[0-9]','',city_abbr)
+                        sm_web_abbr_dict[year][state_abbr][city_name] = city_abbr + state_abbr
 
 sm_web_abbr_dict = {}
 for year in [1900,1910,1930,1940]:
@@ -124,12 +125,13 @@ def get_sm_st_ed(year):
                     st = sm_standardize(st)
                     #Initialize dictionary for NAME if it doesn't exist already
                     NAME = st[2]
-                    sm_st_ed_dict_city[NAME] = {}
+                    sm_st_ed_dict_city[NAME] = sm_st_ed_dict_city.setdefault(NAME, {})
                     #Extract EDs as one long string
                     st_str = line[line.find(start_num) + 7 : line.find(end_num)-1]
                     #Split string of EDs into a list and assign to street name in dictionary
                     sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
         sm_st_ed_dict[year][city_state] = sm_st_ed_dict_city
+
 
 sm_st_ed_dict ={}
 for year in [1900,1910,1930,1940]:
