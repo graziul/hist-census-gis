@@ -16,6 +16,9 @@ SINGLE_HN_ERRORS = []
 ED_ST_HN_dict = {}
 SUBUNIT_HN_ERRORS = []
 
+missingTypes=0
+
+
 ### THIS IS A CITYWIDE LIMIT ON THE NUMBER OF PEOPLE THAT CAN LIVE AT A SINGLE ADDRESS ###
 sys.setrecursionlimit(2000)
 
@@ -205,25 +208,28 @@ def isolate_st_name(st) :
         TYPE = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
         if(TYPE) :
             st = re.sub(TYPE.group(0), "",st)
-        st = re.sub("^[NSEW]+","",st)
+        st = re.sub("^[NSEW]+ ","",st)
         st = st.strip()
     return st
 
+
+
 def st_seq(ind) :
+    global missingTypes
     name = get_name(ind)
     i=ind
     #TODO: Modify code so that it CHECKS AGAINST OTHER STNAMES IN ED / CITY
     while(get_name(i-1)==name or isolate_st_name(get_name(i-1))==isolate_st_name(name)) :
-        print("BEHIND!!!!")
         if(get_name(i-1)==name) :
             i = i-1
         else :
             if(not seq_end_chk(get_hn(i),get_hn(i-1))[0] and len(get_name(i-1)) < len(get_name(i))) : #more sophisticated check?
                 i = i-1
-                print("at %s changed %s to %s" %(i,get_name(i),name))
+                #print("at %s changed %s to %s" %(i,get_name(i),name))
                 df.set_value(i, 'street', name)
+                missingTypes= missingTypes+1
             else :
-               print("at %s DID NOT change %s to %s" %(i-1,get_name(i-1),name))
+              # print("at %s DID NOT change %s to %s" %(i-1,get_name(i-1),name))
                break
                 
     start = i
@@ -232,13 +238,13 @@ def st_seq(ind) :
         if(get_name(ind+1)==name) :
             ind = ind+1
         else :
-            print("FORWARD!!!!")
             if(not seq_end_chk(get_hn(ind),get_hn(ind+1))[0] and len(get_name(ind+1)) < len(get_name(ind))) : #more sophisticated check?
                 ind = ind+1
-                print("at %s changed %s to %s" %(ind,get_name(ind),name))
+               # print("at %s changed %s to %s" %(ind,get_name(ind),name))
+                missingTypes= missingTypes+1
                 df.set_value(ind, 'street', name)
             else :
-               print("at %s DID NOT change %s to %s" %(ind+1,get_name(ind+1),name))
+              # print("at %s DID NOT change %s to %s" %(ind+1,get_name(ind+1),name))
                return [start,ind]
     return [start,ind]#[start,ind,name]
 
@@ -340,7 +346,7 @@ DW_SEQ = get_DW_SEQ()
 print(DW_SEQ[:20])
 print(len(DW_SEQ))
 
-def get_HN_SEQ():
+def get_HN_SEQ(df):
     ind = 0
     HN_SEQ = []
     while ind<len(df) :
@@ -350,13 +356,14 @@ def get_HN_SEQ():
             print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(ind))+" on page "+df.ix[ind,'line_num'])
         ind = HN_SEQ[len(HN_SEQ)-1][1]+1
     return HN_SEQ
-HN_SEQ = get_HN_SEQ()
+HN_SEQ = get_HN_SEQ(df)
 
 print("subunit")
 print(SUBUNIT_HN_ERRORS[:20])
 print(len(SUBUNIT_HN_ERRORS))
 
 def get_ST_SEQ():
+    missingTypes = 0
     ind = 0
     ST_SEQ = []
     while ind<len(df) :
@@ -364,6 +371,7 @@ def get_ST_SEQ():
         ind = ST_SEQ[len(ST_SEQ)-1][1]+1
     return ST_SEQ
 ST_SEQ = get_ST_SEQ()	
+print("missing TYPES: "+str(missingTypes))
 
 ### ERROR CHECKING LOOP: check swatches that do not match up ###
 
