@@ -11,11 +11,13 @@
 #				called from this script.
 #
 
+from __future__ import print_function
 import urllib
 import re
 import os
 import sys
 import time
+import math
 import numpy as np
 import pandas as pd
 from multiprocessing import Pool
@@ -24,6 +26,14 @@ from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 
 year = int(sys.argv[1])
+
+file_path = '/home/s4-data/LatestCities/%s' % (str(year))
+city_info_file = file_path + '/CityInfo%s.csv' % (str(year))
+city_info_df = pd.read_csv(city_info_file)
+city_info_list = city_info_df.values.tolist()
+
+for i in city_info_list:
+    i.append(year)
 
 #Pretty output for easy reading
 class color:
@@ -60,7 +70,7 @@ def preclean_dir_type(st):
     #Check if st is empty or blank and return empty to [st,DIR,NAME,TYPE]
     if st == '' or st == ' ':
         return ['','','','']
-     
+    
     ###stname part analysis###
     DIR = ''
     NAME = ''
@@ -245,69 +255,168 @@ def preclean_dir_type(st):
     else :
         return [st, DIR, NAME, TYPE]
 
+
+#
+#   Function to fix blank street names based on house number sequences
+#
+#   Author: Amory Kisch
+#   Date:   8/29/16
+#
+
+def make_int(s):
+    try :
+        s = int(s)
+        return s
+    except ValueError:
+        return None
+
+def clean_hn(st):
+
+    st = re.sub('[0-9]/[0-9]|[Rr]ear','',st)
+
+    debug = False
+    contHN = re.search("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?-?",st)
+    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
+    
+    st = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',st)
+    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
+    if(rangeHN) :
+        st = rangeHN.group(1)
+    st = st.strip()
+    
+    return st
+
+def fix_blank_streets_using_hn(df):
+
+    ### THIS IS A CITYWIDE LIMIT ON THE NUMBER OF PEOPLE THAT CAN LIVE AT A SINGLE ADDRESS ###
+    sys.setrecursionlimit(2000)
+
+    ### THIS IS MAXIMUM GAP IN HOUSE NUMBER
+    MAX_GAP = 100
+
+    def get_hn(ind) :
+        if ind>=0 and ind<len(df) :
+            return df.ix[ind,'hn']
+        else :
+            # SHOULD RETURN -1 HERE OR SOMETHING, CONSEQUENCES?
+            return None
+
+    def get_name(ind) :
+        if ind>=0 and ind<len(df) :
+            if df.ix[ind,'street'] == "" :
+                return None
+            else :
+                return df.ix[ind,'street']
+        else :
+#            print ("GET NAME OUT OF BOUNDS "+str(ind))
+            return -1 #different return values for out of bounds vs. stname missing
+
+    def isolate_st_name(st) :
+        if(not (st == None or st == '' or st == -1)) :
+
+            TYPE = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+            if(TYPE) :
+                st = re.sub(TYPE.group(0), "",st)
+            st = re.sub("^[NSEW]+","",st)
+            st = st.strip()
+        return st
+
+    #evaluative function to determine HN sequences#
+    def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in DIFFERENT SEQs
+        error_type = 0
+        if(cur_num == None) : #if housenum undefined, consider it the end of seq
+            error_type = 1
+        elif (not (cur_num+chk_num) % 2 == 0) : #one num even, next odd; or vice-versa
+            error_type = 2
+        elif (abs(cur_num-chk_num) > MAX_GAP) : #gap between two nums exceeds MAX_GAP
+            error_type = 3
+        return (not error_type==0, error_type)
+
+    def st_seq(ind) :
+        name = get_name(ind)
+        i=ind
+        #TODO: Modify code so that it CHECKS AGAINST OTHER STNAMES IN ED / CITY
+        while(get_name(i-1)==name or isolate_st_name(get_name(i-1))==isolate_st_name(name)) :
+#            print("BEHIND!!!!")
+            if(get_name(i-1)==name) :
+                i = i-1
+            else :
+                if(not seq_end_chk(get_hn(i),get_hn(i-1))[0] and len(get_name(i-1)) < len(get_name(i))) : #more sophisticated check?
+                    i = i-1
+#                    print("at %s changed %s to %s" %(i,get_name(i),name))
+                    df.set_value(i, 'street', name)
+                else :
+#                    print("at %s DID NOT change %s to %s" %(i-1,get_name(i-1),name))
+                    break
+                    
+        start = i
+        while(get_name(ind+1)==name or isolate_st_name(get_name(ind+1))==isolate_st_name(name)) :
+            
+            if(get_name(ind+1)==name) :
+                ind = ind+1
+            else :
+#                print("FORWARD!!!!")
+                if(not seq_end_chk(get_hn(ind),get_hn(ind+1))[0] and len(get_name(ind+1)) < len(get_name(ind))) : #more sophisticated check?
+                    ind = ind+1
+#                    print("at %s changed %s to %s" %(ind,get_name(ind),name))
+                    df.set_value(i, 'street', name)
+                else :
+#                    print("at %s DID NOT change %s to %s" %(ind+1,get_name(ind+1),name))
+                    break
+    #               return [start,ind]
+    #    return [start,ind]#[start,ind,name]
+
+    for i in range(len(df)):
+        df.ix[i,'street'] = st_seq(i)
+
+    return df
+
+# 
+# Autoclean microdata 
+#
+
+def sm_standardize(st) :
+    orig_st = st
+    st = re.sub(" [Ee][Xx][Tt][Dd]?$","",st)
+    DIR = re.search(" ([NSEW]+)$",st)
+    st = re.sub(" ([NSEW]+)$","",st)
+    if(DIR) :
+        DIR = DIR.group(1)
+    else :
+        DIR = ""
+    TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Rd|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+    
+    if(TYPE) :
+        st = re.sub(TYPE.group(0),"",st)
+        TYPE = TYPE.group(1)
+        if(TYPE=="Av") :
+            TYPE = "Ave"
+        if(TYPE=="Rd") :
+            TYPE = "Road"
+        if(TYPE=="Dr") :
+            TYPE = "Drive"
+        if(re.match("All?e?y?",TYPE)) :
+            TYPE = "Aly"
+    else :
+        TYPE = "St"
+    
+    NAME = st
+    st = (DIR+" "+NAME+" "+TYPE).strip()
+#    print(orig_st)
+#    print("changed to "+st)
+    return st
+
 def clean_microdata(city):
 
     city_name = city[2]
     state_abbr =city[3]
     year = city[5]
-    if year == 1930:
-        file_name = city[0].lower() + city[3]
-    else:
-        file_name = city[0] + city[3]
+    file_name = city[0] + city[3]
     sm_web_abbr = city[4]
-
-    #Helper function for checking that microdata ED is in Steve Morse list of EDs for street name
-    def check_ed_match(microdata_ed,sm_st):
-        if (sm_st is None) or (sm_st_ed_dict[sm_st] is None):
-            return False
-        else:
-            if microdata_ed in sm_st_ed_dict[sm_st]:
-                return True
-            else:
-                return False
-
-    def sm_fuzzy_match(sm_st,ed):
-        
-        #Return null if sm_st is blank
-        if sm_st == '':
-            return ['','',False]
-
-        #Microdata ED may not be in Steve Morse, if so then add it to problem ED list and return null
-        try:
-            sm_ed_streets = sm_ed_st_dict[ed]
-            sm_ed_streets_fuzzyset = fuzzyset.FuzzySet(sm_ed_streets)
-        except:
-            problem_EDs.append(ed)
-            return ['','',False]
-        #
-        #Step 1: Find best match among streets associated with microdata ED
-        try:
-            best_match_ed = sm_ed_streets_fuzzyset[sm_st][0]
-        except:
-            return ['','',False]
-    #   best_match_ed = process.extractOne(sm_st,sm_ed_streets)
-        #Step 2: Find best match among all streets
-        try:
-            best_match_all = sm_all_streets_fuzzyset[sm_st][0]
-        except:
-            return ['','',False]    
-    #   best_match_all = process.extractOne(sm_st,sm_all_streets)
-        #Step 3: If both best matches are the same, return as best match
-        if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] > 0.5):
-            return [best_match_ed[1],best_match_ed[0],True]
-        else:
-            return ['','',False]
-
-    #Helper function (necessary since dictionary built only for cases without validated exact matches)
-    def get_fuzzy_match(sm_st,ed):
-        try:
-            return sm_fuzzy_match_dict[sm_st,ed]
-        except:
-            return ['','',False]
 
     #Save to logfile
     init()
-    sys.stdout = open(file_path + "/logs/%s_Cleaning.log" % (city_name),'wb')
+#    sys.stdout = open(file_path + "/logs/%s_Cleaning.log" % (city_name),'wb')
 
     cprint('%s Automated Cleaning\n' % (city_name), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -318,10 +427,10 @@ def clean_microdata(city):
     #
 
     start = time.time()
-
     try:
         df = pd.read_stata(file_path + '/%s.dta' % (file_name), convert_categoricals=False)
     except:
+        print('Error loading %s raw data' % (city_name))
         return [year, city_name, state_abbr, 0, 
     0, 0,
     0, 0,
@@ -330,8 +439,17 @@ def clean_microdata(city):
     0, 0,
     0, 0, 0,
     0, 0, 0, 0, 0] 
+    if len(df) == 0:
+        print('Error loading %s raw data' % (city_name))
+        return [year, city_name, state_abbr, 0, 
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0, 0,
+    0, 0, 0, 0, 0]   
 
-    #df = pd.read_stata('%sStata13.dta' % (file_name))
     end = time.time()
 
     num_records = len(df)
@@ -340,17 +458,19 @@ def clean_microdata(city):
     cprint('Loading data for %s took %s' % (city_name,load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
     #Save a pristine copy for debugging
-    df_save = df
+    #df_save = df
 
     #The original variable names change from census to census
 
+    if year == 1940:
+        df['street_raw'] = df['street']
     if year == 1930:
-        df['street'] = df['self_residence_place_streetaddre']
+        df['street_raw'] = df['self_residence_place_streetaddre']
     if year == 1920:
-        df['street'] = df['indexed_street']
+        df['street_raw'] = df['indexed_street']
     if year == 1910:
-        df['street'] = df['Street']
-    
+        df['street_raw'] = df['Street']
+
     if year == 1940:
         df['ed'] = df['derived_enumdist']
     if year == 1930:
@@ -359,11 +479,22 @@ def clean_microdata(city):
         df['ed'] = df['general_enumeration_district']
     if year == 1910:
         df['ed'] = df['EnumerationDistrict']
-    
+
     #Strip leading zeroes from EDs
     df['ed'] = df['ed'].astype(str)
     df['ed'] = df['ed'].str.split('.').str[0]
     df['ed'] = df['ed'].str.lstrip('0')
+
+    if year == 1940:
+        df['hn'] = df['housenum']
+    if year == 1930:
+        df['hn'] = df['general_house_number_in_cities_o']
+    if year == 1920:
+        df['hn'] = df['general_housenumber']
+    if year == 1910:
+        df['hn'] = df['HouseNumber']    
+
+    df['hn'] = df['hn'].apply(clean_hn).apply(make_int)
 
     #
     # Pre-clean data
@@ -371,90 +502,25 @@ def clean_microdata(city):
 
     start = time.time()
     #Create dictionary for (and run precleaning on) unique street names
-    grouped = df.groupby(['street'])
+    grouped = df.groupby(['street_raw'])
     cleaning_dict = {}
     for name,_ in grouped:
     	cleaning_dict[name] = preclean_dir_type(name)
     #Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
-    df['st'] = df.street.apply(lambda s: cleaning_dict[s][0])
-    df['DIR'] = df.street.apply(lambda s: cleaning_dict[s][1])
-    df['NAME'] = df.street.apply(lambda s: cleaning_dict[s][2])
-    df['TYPE'] = df.street.apply(lambda s: cleaning_dict[s][3])
+    df['street_precleaned'] = df['street_raw'].apply(lambda s: cleaning_dict[s][0])
+    df['DIR'] = df['street_raw'].apply(lambda s: cleaning_dict[s][1])
+    df['NAME'] = df['street_raw'].apply(lambda s: cleaning_dict[s][2])
+    df['TYPE'] = df['street_raw'].apply(lambda s: cleaning_dict[s][3])
     end = time.time()
     preclean_time = round(float(end-start)/60,1)
 
     cprint('Precleaning street names for %s took %s\n' % (city_name,preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
-
 
     ##
     ##	Identify matches using Steve Morse data
     ##
 
     cprint("Exact matching algorithm\n",attrs=['underline'],file=AnsiToWin32(sys.stdout))
-
-    start = time.time()
-
-    #Steve Morse data has its own abbreviations for streets, alter TYPE for matching purposes
-    df['sm_type'] = df['TYPE']
-    micro_type_to_sm_type_dict = {
-    	#These are changes
-    	'Aly':'Alley',
-    	'Ave':'Av',
-    	'St':'',
-    	'Road':'Dr',
-    	'Ln':'Lane',
-    	#These are not
-    	'Pl':'Pl',
-    	'Ter':'Ter',
-    	'Ct':'Ct',
-    	'Park':'Park',
-    	'Pkwy':'Pkwy',
-    	'Sq':'Sq',
-    	'Blvd':'Blvd',
-    	'Cir':'Cir',
-    	'Way':'Way',
-    	'Trail':'Trail',
-    	'Crescent':'Crescent',
-    	'River':'River',
-    	'':''
-    }
-
-    #Idiosyncracies in Steve Morse
-    ave_is_ave = ['Springfield',
-        'Columbus',
-        'Youngstown',
-        'Trenton',
-        'Jersey City',
-        'Akron',
-        'San Francisco',
-        'Toledo',
-        'Oakland',
-        'Cincinnati',
-        'St Louis',
-        'Newark',
-        'Dayton',
-        'Long Beach',
-        'Omaha',
-        'Flint',
-        'Grand Rapids',
-        'San Antonio',
-        'Chattanooga',
-        'Richmond',
-        'Tulsa',
-        'Des Moines',
-        'Oklahoma City',
-        'Portland',
-        'Miami',
-        'San Diego']
-    if city_name in ave_is_ave:
-        micro_type_to_sm_type_dict['Ave'] = 'Ave'
-
-    df['sm_type'] = df['sm_type'].replace(micro_type_to_sm_type_dict,regex=False)
-
-    #Rearrange street address to match Steve Morse format
-    df['sm_st'] = df['NAME'] + ' ' + df['sm_type'] + ' ' + df['DIR']
-    df['sm_st'] = df['sm_st'].replace({' +':' '},regex=True)
-    df['sm_st'] = df['sm_st'].str.strip()
 
     ##
     ## 	Get Steve Morse street-EDs
@@ -485,6 +551,7 @@ def clean_microdata(city):
             else:
             	#Extract street name between ">" and "</option>""
                 streetname = line[line.find(end_num)+1:line.find(end_name)]
+                streetname = sm_standardize(streetname)
                 #Extract EDs as one long string
                 streetnum_str = line[line.find(start_num) + 7 : line.find(end_num)-1]
                 #Split string of EDs into a list and assign to street name in dictionary
@@ -493,8 +560,21 @@ def clean_microdata(city):
     #Capture all Steve Morse streets in one list
     sm_all_streets = sm_st_ed_dict.keys()
 
+    #Make sure everything went alright
+    if len(sm_all_streets) == 0:
+        print("No Street-EDs found from Steve Morse")
+        return([year, city_name, state_abbr, 0, 
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0, 0,
+    0, 0, 0, 0, 0])
+        
+
     #For bookkeeping when validating matches using ED 
-    microdata_all_streets = np.unique(df['sm_st'])
+    microdata_all_streets = np.unique(df['street_precleaned'])
     for st in microdata_all_streets:
     	if st not in sm_all_streets:
     		sm_st_ed_dict[st] = None
@@ -520,37 +600,63 @@ def clean_microdata(city):
     		    sm_ed_st_dict[ed].append(st)
 
     #
+    # Fix blank street names Round 1
+    #
+
+#    start = time.time()
+
+ #   df = fix_blank_streets_using_hn(df)
+
+  #  end = time.time()
+   # fix_r1_time = round(float(end-start)/60,1)
+
+    #cprint("First application of HN algorithm for %s took %s\n" % (city_name,fix_r1_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+
+    #
     # Find exact matches
     #
 
-    df['sm_st_exact_match_bool'] = df.sm_st.apply(lambda s: s in sm_all_streets)
-    sm_exact_matches = np.sum(df['sm_st_exact_match_bool'])
-    cprint("Exact matches before ED validation: "+str(sm_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*float(sm_exact_matches)/float(num_records),1))+"%)",file=AnsiToWin32(sys.stdout))
+    start = time.time()
+
+    df['sm_st_exact_match_bool'] = df['street_precleaned'].apply(lambda s: s in sm_all_streets)
+    sm_st_exact_matches = np.sum(df['sm_st_exact_match_bool'])
+    if num_records == 0:
+        num_records += 1
+    cprint("Exact matches before ED validation: "+str(sm_st_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*float(sm_st_exact_matches)/float(num_records),1))+"%)",file=AnsiToWin32(sys.stdout))
 
     #
     # Validate exact matches by comparing Steve Morse ED to microdata ED
     #
 
-    df['sm_st_ed_match_bool'] = df.apply(lambda s: check_ed_match(s['ed'],s['sm_st']), axis=1)
-    np.sum(df['sm_st_ed_match_bool'])
+    #Helper function for checking that microdata ED is in Steve Morse list of EDs for street name
+    def check_ed_match(microdata_ed,street):
+        if (street is None) or (sm_st_ed_dict[street] is None):
+            return False
+        else:
+            if microdata_ed in sm_st_ed_dict[street]:
+                return True
+            else:
+                return False
+
+    df['sm_ed_match_bool'] = df.apply(lambda s: check_ed_match(s['ed'],s['street_precleaned']), axis=1)
 
     #Validation of exact match fails if microdata ED and Steve Morse ED do not match
-    failed_validation = df[(df.sm_st_exact_match_bool==True) & (df.sm_st_ed_match_bool==False)]
+    failed_validation = df[(df.sm_st_exact_match_bool==True) & (df.sm_ed_match_bool==False)]
     num_failed_validation = len(failed_validation)
     #Validation of exact match succeeds if microdata ED and Steve Morse ED are the same
-    passed_validation = df[(df.sm_st_exact_match_bool==True) & (df.sm_st_ed_match_bool==True)]
+    passed_validation = df[(df.sm_st_exact_match_bool==True) & (df.sm_ed_match_bool==True)]
     num_passed_validation = len(passed_validation)
 
     #Keep track of unique street-ED pairs that have failed versus passed validation
-    num_pairs_failed_validation = len(failed_validation.groupby(['ed','sm_st']).count())
-    num_pairs_passed_validation = len(passed_validation.groupby(['ed','sm_st']).count())
+    num_pairs_failed_validation = len(failed_validation.groupby(['ed','street_precleaned']).count())
+    num_pairs_passed_validation = len(passed_validation.groupby(['ed','street_precleaned']).count())
     num_pairs = num_pairs_failed_validation + num_pairs_passed_validation
     end = time.time()
     exact_matching_time = round(float(end-start)/60,1)
 
-    if sm_exact_matches == 0:
-        sm_exact_matches += 1
-    cprint("Failed ED validation: "+str(num_failed_validation)+" of "+str(sm_exact_matches)+" cases with exact name matches ("+str(round(100*float(len(failed_validation))/float(sm_exact_matches),1))+"%)",'red',file=AnsiToWin32(sys.stdout))
+    if sm_st_exact_matches == 0:
+        sm_st_exact_matches += 1
+    cprint("Failed ED validation: "+str(num_failed_validation)+" of "+str(sm_st_exact_matches)+" cases with exact name matches ("+str(round(100*float(len(failed_validation))/float(sm_st_exact_matches),1))+"%)",'red',file=AnsiToWin32(sys.stdout))
     cprint("Exact matches after ED validation: "+str(num_passed_validation)+" of "+str(num_records)+" cases ("+str(round(100*float(num_passed_validation)/float(num_records),1))+"%)",file=AnsiToWin32(sys.stdout))
     if num_pairs == 0:
         num_pairs += 1
@@ -575,18 +681,57 @@ def clean_microdata(city):
     #Keep track of problem EDs
     problem_EDs = []
 
-    #Create dictionary based on Street-ED pairs for faster lookup using helper function
-    df_no_validated_exact_match = df[(df.sm_st_exact_match_bool==False) | (df.sm_st_ed_match_bool==False)]
-    df_grouped = df_no_validated_exact_match.groupby(['sm_st','ed'])
-    sm_fuzzy_match_dict = {}
-    for sm_st_ed,_ in df_grouped:
-    	sm_fuzzy_match_dict[sm_st_ed] = sm_fuzzy_match(sm_st_ed[0],sm_st_ed[1])
+    def sm_fuzzy_match(street,ed):
+        
+        #Return null if street is blank
+        if street == '':
+            return ['','',False]
 
+        #Microdata ED may not be in Steve Morse, if so then add it to problem ED list and return null
+        try:
+            sm_ed_streets = sm_ed_st_dict[ed]
+            sm_ed_streets_fuzzyset = fuzzyset.FuzzySet(sm_ed_streets)
+        except:
+            problem_EDs.append(ed)
+            return ['','',False]
+        
+        #Step 1: Find best match among streets associated with microdata ED
+        try:
+            best_match_ed = sm_ed_streets_fuzzyset[street][0]
+        except:
+            return ['','',False]
+
+        #Step 2: Find best match among all streets
+        try:
+            best_match_all = sm_all_streets_fuzzyset[street][0]
+        except:
+            return ['','',False]    
+
+        #Step 3: If both best matches are the same, return as best match
+        if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] > 0.5):
+            return [best_match_ed[1],best_match_ed[0],True]
+        else:
+            return ['','',False]
+
+    #Create dictionary based on Street-ED pairs for faster lookup using helper function
+    df_no_validated_exact_match = df[(df.sm_st_exact_match_bool==False) | (df.sm_ed_match_bool==False)]
+    df_grouped = df_no_validated_exact_match.groupby(['street_precleaned','ed'])
+    sm_fuzzy_match_dict = {}
+    for st_ed,_ in df_grouped:
+    	sm_fuzzy_match_dict[st_ed] = sm_fuzzy_match(st_ed[0],st_ed[1])
+
+    #Helper function (necessary since dictionary built only for cases without validated exact matches)
+    def get_fuzzy_match(ed,street):
+        try:
+            return sm_fuzzy_match_dict[street,ed]
+        except:
+            return ['','',False]
+       
     #Get fuzzy matches and replace missing data with null values
-    df['sm_st_fuzzy_match'] = df.apply(lambda s: get_fuzzy_match(s['sm_st'],s['ed'])[0], axis=1)
-    df['sm_st_fuzzy_match_score'] = df.apply(lambda s: get_fuzzy_match(s['sm_st'],s['ed'])[1], axis=1)
-    df['sm_st_fuzzy_match_bool'] = df.apply(lambda s: get_fuzzy_match(s['sm_st'],s['ed'])[2], axis=1)
-    sm_fuzzy_matches = np.sum(df['sm_st_fuzzy_match_bool'])
+    df['sm_st_fuzzy_match'] = df.apply(lambda s: get_fuzzy_match(s['ed'],s['street_precleaned'])[0], axis=1)
+    df['sm_st_fuzzy_match_score'] = df.apply(lambda s: get_fuzzy_match(s['ed'],s['street_precleaned'])[1], axis=1)
+    df['sm_st_fuzzy_match_bool'] = df.apply(lambda s: get_fuzzy_match(s['ed'],s['street_precleaned'])[2], axis=1)
+    sm_st_fuzzy_matches = np.sum(df['sm_st_fuzzy_match_bool'])
 
     end = time.time()
     fuzzy_matching_time = round(float(end-start)/60,1)
@@ -594,7 +739,7 @@ def clean_microdata(city):
     #Compute number of cases without validated exact match
     num_current_residual_cases = num_records - num_passed_validation
 
-    cprint("Fuzzy matches (using microdata ED): "+str(sm_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(sm_fuzzy_matches)/float(num_current_residual_cases),1))+"%)\n",file=AnsiToWin32(sys.stdout))
+    cprint("Fuzzy matches (using microdata ED): "+str(sm_st_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(sm_st_fuzzy_matches)/float(num_current_residual_cases),1))+"%)\n",file=AnsiToWin32(sys.stdout))
     cprint("Fuzzy matching for %s took %s\n" % (city_name,fuzzy_matching_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
 
     ##
@@ -608,12 +753,14 @@ def clean_microdata(city):
     df['sm_st_overall_match_bool'] = False
 
     df.loc[df['sm_st_fuzzy_match_bool'],'sm_st_overall_match'] = df['sm_st_fuzzy_match']
-    df.loc[df['sm_st_exact_match_bool'] & df['sm_st_ed_match_bool'],'sm_st_overall_match'] = df['sm_st']
+    df.loc[df['sm_st_exact_match_bool'] & df['sm_ed_match_bool'],'sm_st_overall_match'] = df['street_precleaned']
 
     df.loc[df['sm_st_fuzzy_match_bool'],'overall_match_type'] = 'FuzzySM'
-    df.loc[df['sm_st_exact_match_bool'] & df['sm_st_ed_match_bool'],'overall_match_type'] = 'ExactSM'
+    df.loc[df['sm_st_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match_type'] = 'ExactSM'
 
     df.loc[(df['overall_match_type'] == 'ExactSM') | (df['overall_match_type'] == 'FuzzySM'),'sm_st_overall_match_bool'] = True 
+
+    df['street_autocleaned'] = df['sm_st_overall_match']
 
     #df = pd.concat([df,df.apply(lambda s: overall_match(s['sm_st'],s['sm_st_exact_match_bool'],s['sm_st_ed_match_bool'],s['sm_st_fuzzy_match_bool'],s['sm_st_fuzzy_match']), axis=1)],axis=1)
     sm_st_overall_matches = np.sum(df['sm_st_overall_match_bool'])
@@ -627,20 +774,21 @@ def clean_microdata(city):
 
     problem_EDs = list(set(problem_EDs))
     print("Problem EDs: %s" % (problem_EDs))
+
     df.to_csv(file_path + '/autocleaned/%s_AutoCleaned.csv' % (file_name))
 
     num_residual_cases = num_records - sm_st_overall_matches
 
     prop_passed_validation = float(num_passed_validation)/float(num_records)
-    prop_sm_fuzzy_matches = float(sm_fuzzy_matches)/float(num_records)
+    prop_sm_fuzzy_matches = float(sm_st_fuzzy_matches)/float(num_records)
     prop_sm_st_overall_matches = float(sm_st_overall_matches)/float(num_records)
     prop_residual_cases = float(num_residual_cases)/float(num_records)
     prop_failed_validation = float(num_failed_validation)/float(num_records)
     prop_pairs_failed_validation = float(num_pairs_failed_validation)/float(num_pairs)
-    
+
     return [year, city_name, state_abbr, num_records, 
     num_passed_validation, prop_passed_validation,
-    sm_fuzzy_matches, prop_sm_fuzzy_matches,
+    sm_st_fuzzy_matches, prop_sm_fuzzy_matches,
     sm_st_overall_matches, prop_sm_st_overall_matches,
     num_residual_cases, prop_residual_cases,
     num_failed_validation, prop_failed_validation,

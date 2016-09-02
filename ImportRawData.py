@@ -42,21 +42,25 @@ def convert_raw_to_dta(s):
 		if year == 1930:
 			data = [row for row in reader if (row[7] in city_name_list) & (len(row) == len(header))]
 		if year == 1920:
-			data = [row for row in reader if (row[10].split(' Ward')[0] in city_name_list) & (len(row) == len(header))]
+			data = [row for row in reader if (len(row) == len(header))]
 		if year == 1910:	
-			data = [row for row in reader if (row[12].split(' Ward')[0] in city_name_list) & (len(row) == len(header))]
+			data = [row for row in reader if (len(row) == len(header))]
 		final_len = len(data)
 		if orig_len != final_len:
 			print("For %s in %s there were %s cases with wrong number of variables" % (state_abbr,year,str(orig_len-final_len)))
 	df = pd.DataFrame(data,columns=header)
+
 	for c in city_name_list:
 		stata_file_name = file_path + '/%s%s.dta' % (c.replace(' ',''),state_abbr)
 		if year == 1930:
 			df[df['self_residence_place_city']==c].to_stata(stata_file_name,encoding='utf-8')
 		if year == 1920:
-			df[df['self_residence_place_city'].str.split(' Ward').str[0]==c].to_stata(stata_file_name,encoding='utf-8')
+			df.ix[df['self_residence_place_city'].str.findall(c).nonzero()].to_stata(stata_file_name,encoding='utf-8')
 		if year == 1910:
-			df[df['ResidenceCity'].str.split(' Ward').str[0]==c].to_stata(stata_file_name,encoding='utf-8')
+			if state_abbr == 'DC':
+				df.to_stata(stata_file_name,encoding='utf-8')
+			else:
+				df.ix[df['ResidenceCity'].str.findall(c).nonzero()].to_stata(stata_file_name,encoding='utf-8')
 
 pool = Pool(4)
 pool.map(convert_raw_to_dta, state_info_list)
