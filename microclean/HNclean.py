@@ -521,4 +521,3 @@ for inc in INCONS_hn[:0] :
     last = inc
 
 print(errors)
-
