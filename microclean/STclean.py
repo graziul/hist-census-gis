@@ -41,6 +41,10 @@ class color:
    UNDERLINE = '\033[4m'
    END = '\033[0m'
 
+#
+# Step 1: Load data
+#
+
 def load_city(city,state,year):
 
     start = time.time()
@@ -116,11 +120,43 @@ def load_city(city,state,year):
 
     return df, load_time
 
-def load_steve_morse(df,city,state,year):
+#
+# Step 2: Preclean data
+#
+
+def preclean_street(df,city):
+
+    start = time.time()
+    #Create dictionary for (and run precleaning on) unique street names
+    grouped = df.groupby(['street_raw'])
+    cleaning_dict = {}
+    for name,_ in grouped:
+        cleaning_dict[name] = standardize_street(name)
+    #Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
+    df['street_precleaned'] = df['street_raw'].apply(lambda s: cleaning_dict[s][0])
+    df['DIR'] = df['street_raw'].apply(lambda s: cleaning_dict[s][1])
+    df['NAME'] = df['street_raw'].apply(lambda s: cleaning_dict[s][2])
+    df['TYPE'] = df['street_raw'].apply(lambda s: cleaning_dict[s][3])
+    end = time.time()
+    preclean_time = round(float(end-start)/60,1)
+
+    cprint('Precleaning street names for %s took %s\n' % (city,preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+
+    return df, preclean_time
+
+#
+# Step 3: Get Steve Morse street-ed data
+#
+
+def load_steve_morse(df,city,state,year,flatten):
 
     #NOTE: This dictionary must be built independently of this script
     sm_st_ed_dict_file = pickle.load(open(file_path + '/sm_st_ed_dict.pickle','rb'))
     sm_st_ed_dict = sm_st_ed_dict_file[year][(city,'%s' % (state.lower()))]
+
+    #Flatten dictionary
+    if flatten:
+        sm_st_ed_dict = {k:v for d in [v for k,v in sm_st_ed_dict.items()] for k,v in d.items()}
 
     #Capture all Steve Morse streets in one list
     sm_all_streets = sm_st_ed_dict.keys()
@@ -153,25 +189,9 @@ def load_steve_morse(df,city,state,year):
 
     return sm_all_streets, sm_st_ed_dict, sm_ed_st_dict
 
-def preclean_street(df,city):
-
-    start = time.time()
-    #Create dictionary for (and run precleaning on) unique street names
-    grouped = df.groupby(['street_raw'])
-    cleaning_dict = {}
-    for name,_ in grouped:
-        cleaning_dict[name] = standardize_street(name)
-    #Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
-    df['street_precleaned'] = df['street_raw'].apply(lambda s: cleaning_dict[s][0])
-    df['DIR'] = df['street_raw'].apply(lambda s: cleaning_dict[s][1])
-    df['NAME'] = df['street_raw'].apply(lambda s: cleaning_dict[s][2])
-    df['TYPE'] = df['street_raw'].apply(lambda s: cleaning_dict[s][3])
-    end = time.time()
-    preclean_time = round(float(end-start)/60,1)
-
-    cprint('Precleaning street names for %s took %s\n' % (city,preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
-
-    return df, preclean_time
+#
+# Step X: Matching steps
+#
 
 def find_exact_matches(df,city,sm_all_streets,sm_st_ed_dict):
 
@@ -234,7 +254,9 @@ def find_exact_matches(df,city,sm_all_streets,sm_st_ed_dict):
     prop_failed_validation = float(num_failed_validation)/float(num_records)
     prop_pairs_failed_validation = float(num_pairs_failed_validation)/float(num_pairs)
 
-    exact_info = [num_records, num_passed_validation, prop_passed_validation, num_failed_validation, prop_failed_validation, num_pairs_failed_validation, num_pairs, prop_pairs_failed_validation]
+    exact_info = [num_records, num_passed_validation, prop_passed_validation, 
+        num_failed_validation, prop_failed_validation, num_pairs_failed_validation, 
+        num_pairs, prop_pairs_failed_validation,exact_matching_time]
 
     return df, exact_info
 
@@ -312,12 +334,15 @@ def find_fuzzy_matches(df,city,sm_all_streets,sm_ed_st_dict):
     fuzzy_matching_time = round(float(end-start)/60,1)
 
     #Compute number of cases without validated exact match
+    passed_validation = df[(df.sm_st_exact_match_bool==True) & (df.sm_ed_match_bool==True)]
+    num_passed_validation = len(passed_validation)
     num_current_residual_cases = num_records - num_passed_validation
 
     cprint("Fuzzy matches (using microdata ED): "+str(sm_st_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(sm_st_fuzzy_matches)/float(num_current_residual_cases),1))+"%)\n",file=AnsiToWin32(sys.stdout))
     cprint("Fuzzy matching for %s took %s\n" % (city,fuzzy_matching_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
 
-    fuzzy_info = [sm_st_fuzzy_matches,prop_sm_fuzzy_matches]
+    prop_sm_fuzzy_matches = float(sm_st_fuzzy_matches)/float(num_records)
+
+    fuzzy_info = [sm_st_fuzzy_matches, prop_sm_fuzzy_matches, fuzzy_matching_time]
 
     return df, fuzzy_info, problem_EDs
-
