@@ -15,11 +15,11 @@ import time
 import math
 import numpy as np
 
-df = pd.read_stata("Chicago_autocleaned_merge_fragment.dta",convert_categoricals=False)
+#df = pd.read_stata("Chicago_autocleaned_merge_fragment.dta",convert_categoricals=False)
 
-HN_SEQ = []
-ST_SEQ = []
-DW_SEQ = []
+#HN_SEQ = []
+#ST_SEQ = []
+#DW_SEQ = []
 INCONS_st = []
 SINGLE_HN_ERRORS = []
 ED_ST_HN_dict = {}
@@ -57,13 +57,13 @@ def standardize_hn(st):
 
     return st
 
-def get_linenum(ind) :
+def get_linenum(df,ind) :
     if ind>=0 and ind<len(df) :
         return df.ix[ind,'line_num']
     else :
         return None
 
-def get_name(ind) :
+def get_name(df,ind) :
     if ind>=0 and ind<len(df) :
         if df.ix[ind,'street'] == "" :
             return None
@@ -73,7 +73,7 @@ def get_name(ind) :
         print ("GET NAME OUT OF BOUNDS "+str(ind))
         return -1 #different return values for out of bounds vs. stname missing
 
-def get_hn(ind) :
+def get_hn(df,ind) :
     if ind>=0 and ind<len(df) :
         return df.ix[ind,'hn']
     else :
@@ -84,7 +84,7 @@ def get_hn(ind) :
 #Defaults to str for return value; returns -1 on fail, which is >1 away from any valid dwelling_num
 #The value may be incorrect e.g. in apt buildings the apt. # may be in the dwelling field
 #However in these cases the housenum is unlikely to be wrong also.
-def get_dwelling(ind,numeric=False) : 
+def get_dwelling(df,ind,numeric=False) : 
     if ind>=0 and ind<len(df) :
         if(numeric) :
             debug = False
@@ -110,39 +110,39 @@ def get_dwelling(ind,numeric=False) :
         #-2 is adjacent to -1. Use -3 instead.
         return -3
 
-def get_fam(ind) :
+def get_fam(df,ind) :
     if ind>=0 and ind<len(df) :
         return df.ix[ind,'fam_id']
     else :
         return -1
 
-def get_relid(ind) :
+def get_relid(df,ind) :
     if ind>=0 and ind<len(df) :
         return df.ix[ind,'rel_id']
     else :
         return -1
 
-def get_ed(ind) :
+def get_ed(df,ind) :
     #ED can eventually go where imageid is in the input .txt varlist ([ind][0])
     if ind>=0 and ind<len(df) :
         return df.ix[ind,'ed']
     else :
         return -1
 
-def same_hh_chk(ind,chk) :
+def same_hh_chk(df,ind,chk) :
     dwel, fam, relid, ind_dwel, chk_dwel, ind_fam, chk_fam, ind_relid, chk_relid = (-1,)*9
-    if(get_dwelling(ind)!="") :
-        ind_dwel = get_dwelling(ind)
-    if(get_dwelling(chk)!="") :
-        chk_dwel = get_dwelling(chk)
-    if(get_fam(ind)!="") :
-        ind_fam = get_fam(ind)
-    if(get_fam(chk)!="") :
-        chk_fam = get_fam(chk)
-    if(get_relid(ind)!="") :
-        ind_relid = get_relid(ind)
-    if(get_relid(chk)!="") :
-        chk_relid = get_relid(chk)
+    if(get_dwelling(df,ind)!="") :
+        ind_dwel = get_dwelling(df,ind)
+    if(get_dwelling(df,chk)!="") :
+        chk_dwel = get_dwelling(df,chk)
+    if(get_fam(df,ind)!="") :
+        ind_fam = get_fam(df,ind)
+    if(get_fam(df,chk)!="") :
+        chk_fam = get_fam(df,chk)
+    if(get_relid(df,ind)!="") :
+        ind_relid = get_relid(df,ind)
+    if(get_relid(df,chk)!="") :
+        chk_relid = get_relid(df,chk)
     if(not -1==ind_dwel and not -1==chk_dwel) :
         dwel = (ind_dwel==chk_dwel)
     if(not -1==ind_fam and not -1==chk_fam) :
@@ -169,12 +169,12 @@ def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in D
 
   
 #recursive function to walk through HN sequences#
-def num_seq(ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to look
-    cur_num = get_hn(ind)
+def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to look
+    cur_num = get_hn(df,ind)
     end = seq_end_chk(cur_num,chk_num)
     if(end[0]) : #if cur num doesn't fit in SEQ...
-        nextNum = seq_end_chk(get_hn(ind+chk_dir),chk_num) #...see if next num does
-        if(not nextNum[0] and get_name(ind)==get_name(ind-1) and get_name(ind)==get_name(ind+1)) :
+        nextNum = seq_end_chk(get_hn(df,ind+chk_dir),chk_num) #...see if next num does
+        if(not nextNum[0] and get_name(df,ind)==get_name(df,ind-1) and get_name(df,ind)==get_name(df,ind+1)) :
         #do we want to check sequence of dwelling nums? e.g. 4584230_01092
         #seems like an error but is actually correct because non-consecutive dwelling no.
         #YES. TODO: improve HN swatches using other vars. if stname AND imageid changes, it's probably
@@ -182,12 +182,12 @@ def num_seq(ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to
         #Likewise, if HN swatch would stop but the error is explained by dwelling_num_SEQ changing while stname stays the same
     
             SINGLE_HN_ERRORS.append([ind,end[1]])
-            return num_seq(ind+chk_dir,chk_num,chk_dir)
+            return num_seq(df,ind+chk_dir,chk_num,chk_dir)
         else :
             #check places where housenum seq changes, but dwelling# and stname are unchanged
-            if(get_dwelling(ind+chk_dir)==get_dwelling(ind) and get_dwelling(ind-chk_dir)==get_dwelling(ind) and get_dwelling(ind)!=-1) :
-                if(chk_dir==1 and get_name(ind+chk_dir)==get_name(ind) and get_name(ind-chk_dir)==get_name(ind)) :#HNs may only replace other HNs "downstream"
-                    SUBUNIT_HN_ERRORS.append([ind,ed_hn_outlier_chk(get_ed(ind),get_name(ind),get_hn(ind))])
+            if(get_dwelling(df,ind+chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind-chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind)!=-1) :
+                if(chk_dir==1 and get_name(df,ind+chk_dir)==get_name(df,ind) and get_name(df,ind-chk_dir)==get_name(df,ind)) :#HNs may only replace other HNs "downstream"
+                    SUBUNIT_HN_ERRORS.append([ind,ed_hn_outlier_chk(get_ed(df,ind),get_name(df,ind),get_hn(df,ind))])
                     #HOW TO DEAL WITH THESE
                     #Reveals places where there are HN typos as well as apt/unit numbers in HN
                     #Therefore, we can fix based on whether one of the two addresses for a given dw# and stname is obviously an outlier
@@ -199,15 +199,15 @@ def num_seq(ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to
                     #return dwel_seq(ind,chk_dir)
             return ind-chk_dir
     else :
-        return num_seq(ind+chk_dir,cur_num,chk_dir)
+        return num_seq(df,ind+chk_dir,cur_num,chk_dir)
 
 #wrapper function for num_seq recursion#
-def seq_match_num(ind) : 
-    num = get_hn(ind)
+def seq_match_num(df,ind) : 
+    num = get_hn(df,ind)
     if num == None : #if housenum undefined, consider it a singleton seq
         return [ind,ind]
-    seq_start = num_seq(ind-1,num,-1)
-    seq_end = num_seq(ind+1,num,1)
+    seq_start = num_seq(df,ind-1,num,-1)
+    seq_end = num_seq(df,ind+1,num,1)
 
     return [seq_start,seq_end]#[seq_start,seq_end,get_hn(seq_start),get_hn(seq_end)]
 
@@ -221,18 +221,16 @@ def isolate_st_name(st) :
         st = st.strip()
     return st
 
-
-
-def st_seq(ind) :
+def st_seq(df,ind) :
     global missingTypes
-    name = get_name(ind)
+    name = get_name(df,ind)
     i=ind
     #TODO: Modify code so that it CHECKS AGAINST OTHER STNAMES IN ED / CITY
-    while(get_name(i-1)==name or isolate_st_name(get_name(i-1))==isolate_st_name(name)) :
-        if(get_name(i-1)==name) :
+    while(get_name(df,i-1)==name or isolate_st_name(get_name(df,i-1))==isolate_st_name(name)) :
+        if(get_name(df,i-1)==name) :
             i = i-1
         else :
-            if(not seq_end_chk(get_hn(i),get_hn(i-1))[0] and len(get_name(i-1)) < len(get_name(i))) : #more sophisticated check?
+            if(not seq_end_chk(get_hn(df,i),get_hn(df,i-1))[0] and len(get_name(df,i-1)) < len(get_name(df,i))) : #more sophisticated check?
                 i = i-1
                 #print("at %s changed %s to %s" %(i,get_name(i),name))
                 df.set_value(i, 'street', name)
@@ -242,12 +240,12 @@ def st_seq(ind) :
                break
                 
     start = i
-    while(get_name(ind+1)==name or isolate_st_name(get_name(ind+1))==isolate_st_name(name)) :
+    while(get_name(df,ind+1)==name or isolate_st_name(get_name(df,ind+1))==isolate_st_name(name)) :
         
-        if(get_name(ind+1)==name) :
+        if(get_name(df,ind+1)==name) :
             ind = ind+1
         else :
-            if(not seq_end_chk(get_hn(ind),get_hn(ind+1))[0] and len(get_name(ind+1)) < len(get_name(ind))) : #more sophisticated check?
+            if(not seq_end_chk(get_hn(df,ind),get_hn(df,ind+1))[0] and len(get_name(df,ind+1)) < len(get_name(df,ind))) : #more sophisticated check?
                 ind = ind+1
                # print("at %s changed %s to %s" %(ind,get_name(ind),name))
                 missingTypes= missingTypes+1
@@ -262,14 +260,14 @@ def st_seq(ind) :
 def dwel_seq(ind,chk_dir=0) :        
     start=ind
     if(chk_dir!=0) :
-        while (abs(get_dwelling(start+chk_dir,numeric=True)-get_dwelling(start,numeric=True))<=1) :
+        while (abs(get_dwelling(df,start+chk_dir,numeric=True)-get_dwelling(df,start,numeric=True))<=1) :
             start = start+chk_dir
         return start
     else :
-        while (abs(get_dwelling(start-1,numeric=True)-get_dwelling(start,numeric=True))<=1) :
+        while (abs(get_dwelling(df,start-1,numeric=True)-get_dwelling(df,start,numeric=True))<=1) :
             start = start-1
         end = ind
-        while (abs(get_dwelling(end+1,numeric=True)-get_dwelling(end,numeric=True))<=1) :
+        while (abs(get_dwelling(df,end+1,numeric=True)-get_dwelling(df,end,numeric=True))<=1) :
                 end = end+1
         return [start,end]
 
@@ -299,10 +297,10 @@ def get_cray_z_scores(arr) :
 
 #try to fix single hn errors based on sequence before and after error
 
-def hn_seq_err_fix(ind) :
-    hn = str(get_hn(ind))
-    p = str(get_hn(ind-1)) #prev num
-    n = str(get_hn(ind+1)) #next num
+def hn_seq_err_fix(df,ind) :
+    hn = str(get_hn(df,ind))
+    p = str(get_hn(df,ind-1)) #prev num
+    n = str(get_hn(df,ind+1)) #next num
     if(n==p) :
             print("thing: "+df.ix[ind,'line_num']+" "+p+" "+hn+" "+n)
     #if dwelling num is same as previous or consecutive; if not, don't try to fix
@@ -313,30 +311,32 @@ def hn_seq_err_fix(ind) :
         #even if we can't conclusively fix hn based on digit comparison, we should
         #still keep track of discrepancies with the rest of the sequence, which may also be wrong
 
-if year==1930:
-    df['image_id'] = df['imageid']
-    df['line_num'] = df['indexed_line_number'].apply(make_int)
-    df['street'] = df['st']
-    df['hn'] = df['general_house_number_in_cities_o'].apply(clean_hn).apply(make_int)
-    df['dn'] = df['general_dwelling_number']
-    df['fam_id'] = df['general_family_number']
-    df['rel_id'] = df['general_relid']
-    df['ed'] = df['indexed_enumeration_district']
-    df['st'] = df['street']
+def rename_vars(df,year,street):
+    df['street'] = df['%s' % (street)]
+    if year==1930:
+        df['image_id'] = df['imageid']
+        df['line_num'] = df['indexed_line_number'].apply(make_int)
+        df['hn'] = df['general_house_number_in_cities_o'].apply(standardize_hn).apply(make_int)
+        df['dn'] = df['general_dwelling_number']
+        df['fam_id'] = df['general_family_number']
+#        df['rel_id'] = df['general_relid'] #Can't find in 1930?
+        df['ed'] = df['indexed_enumeration_district']
 
-start_time = time.time()
+#start_time = time.time()
 ##    eds = [x[7] for x in df]
 ##    for ed in np.unique(eds) :
 ##        ED = eds[eds.index(ed):len(eds) - list(reversed(eds)).index(ed)]
 ##        assert(len(np.unique(ED))==1)
-ED_HN_OUTLIERS = df.groupby(['ed','st'])
-for ED_ST,df_HN in ED_HN_OUTLIERS : 
-	ED_ST_HN_dict[ED_ST] = get_cray_z_scores([x for x in df_HN['hn'] if not math.isnan(x)])
-	if(ED_ST_HN_dict[ED_ST]==None) :
-		False
-		#do something about ED_STs that could not have z-scores calculated
-		#this will consist of ED_STs that do not have more than 2 valid HNs
-print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
+def get_ED_HN_OUTLIERS(df):
+    ED_HN_OUTLIERS = df.groupby(['ed','street'])
+    start_time = time.time()
+    for ED_ST,df_HN in ED_HN_OUTLIERS : 
+    	ED_ST_HN_dict[ED_ST] = get_cray_z_scores([x for x in df_HN['hn'] if not math.isnan(x)])
+    	if(ED_ST_HN_dict[ED_ST]==None) :
+    		False
+    		#do something about ED_STs that could not have z-scores calculated
+    		#this will consist of ED_STs that do not have more than 2 valid HNs
+    print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
 
 def ed_hn_outlier_chk(ed,st,hn) :
     if(st is None or ED_ST_HN_dict[(ed,st)] is None or hn is None or math.isnan(hn)) :
@@ -344,35 +344,39 @@ def ed_hn_outlier_chk(ed,st,hn) :
     else :
         return ED_ST_HN_dict[(ed,st)][hn]
 
-def get_DW_SEQ():
+def get_DW_SEQ(df):
     ind = 1
     DW_SEQ = []
     while ind<len(df) :
         DW_SEQ.append(dwel_seq(ind))
         ind = DW_SEQ[len(DW_SEQ)-1][1]+1
     return DW_SEQ
-DW_SEQ = get_DW_SEQ()
+#DW_SEQ = get_DW_SEQ()
 
-print(DW_SEQ[:20])
-print(len(DW_SEQ))
+#print(DW_SEQ[:20])
+#print(len(DW_SEQ))
 
-def get_HN_SEQ(df):
+def get_HN_SEQ(df,year,street):
+    rename_vars(df,year,street)
+    get_ED_HN_OUTLIERS(df)
     ind = 0
     HN_SEQ = []
     while ind<len(df) :
         try:
-            HN_SEQ.append(seq_match_num(ind))
+            HN_SEQ.append(seq_match_num(df,ind))
         except RuntimeError :
-            print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(ind))+" on page "+df.ix[ind,'line_num'])
+            print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(df,ind))+" on page "+df.ix[ind,'line_num'])
         ind = HN_SEQ[len(HN_SEQ)-1][1]+1
+    avg_seq_len = round(np.mean(np.diff(HN_SEQ)),1)
+    print("Average HN sequence length is %s" % (str(avg_seq_len)))
     return HN_SEQ
-HN_SEQ = get_HN_SEQ(df)
+#HN_SEQ = get_HN_SEQ(df)
 
-print("subunit")
-print(SUBUNIT_HN_ERRORS[:20])
-print(len(SUBUNIT_HN_ERRORS))
+#print("subunit")
+#print(SUBUNIT_HN_ERRORS[:20])
+#print(len(SUBUNIT_HN_ERRORS))
 
-def get_ST_SEQ():
+def get_ST_SEQ(df):
     missingTypes = 0
     ind = 0
     ST_SEQ = []
@@ -380,11 +384,11 @@ def get_ST_SEQ():
         ST_SEQ.append(st_seq(ind))
         ind = ST_SEQ[len(ST_SEQ)-1][1]+1
     return ST_SEQ
-ST_SEQ = get_ST_SEQ()	
-print("missing TYPES: "+str(missingTypes))
+#ST_SEQ = get_ST_SEQ()	
+#print("missing TYPES: "+str(missingTypes))
 
 ### ERROR CHECKING LOOP: check swatches that do not match up ###
-
+'''
 hn_set = set(map(tuple,HN_SEQ))
 INCONS_st = [x for x in map(tuple,ST_SEQ) if x not in hn_set] #st swatches that lack a corresponding HN swatch
 
@@ -521,3 +525,4 @@ for inc in INCONS_hn[:0] :
     last = inc
 
 print(errors)
+'''
