@@ -320,7 +320,7 @@ def rename_vars(df,year,street):
         df['dn'] = df['general_dwelling_number']
         df['fam_id'] = df['general_family_number']
 #        df['rel_id'] = df['general_relid'] #Can't find in 1930?
-        df['ed'] = df['indexed_enumeration_district']
+#        df['ed'] = df['indexed_enumeration_district']
 
 #start_time = time.time()
 ##    eds = [x[7] for x in df]
