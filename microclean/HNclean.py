@@ -337,7 +337,8 @@ def get_ED_HN_OUTLIERS(df):
     		#do something about ED_STs that could not have z-scores calculated
     		#this will consist of ED_STs that do not have more than 2 valid HNs
     print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
-
+    return(ED_ST_HN_dict)
+    
 def ed_hn_outlier_chk(ed,st,hn) :
     if(st is None or ED_ST_HN_dict[(ed,st)] is None or hn is None or math.isnan(hn)) :
         return -1
@@ -358,7 +359,7 @@ def get_DW_SEQ(df):
 
 def get_HN_SEQ(df,year,street):
     rename_vars(df,year,street)
-    get_ED_HN_OUTLIERS(df)
+    ED_HN_OUTLIERS = get_ED_HN_OUTLIERS(df)
     ind = 0
     HN_SEQ = []
     while ind<len(df) :
@@ -369,7 +370,7 @@ def get_HN_SEQ(df,year,street):
         ind = HN_SEQ[len(HN_SEQ)-1][1]+1
     avg_seq_len = round(np.mean(np.diff(HN_SEQ)),1)
     print("Average HN sequence length is %s" % (str(avg_seq_len)))
-    return HN_SEQ
+    return HN_SEQ, ED_HN_OUTLIERS
 #HN_SEQ = get_HN_SEQ(df)
 
 #print("subunit")
