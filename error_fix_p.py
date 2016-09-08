@@ -5,6 +5,7 @@ import re
 import time
 import math
 import numpy as np
+import pickle
 
 df = pd.read_stata("Chicago_autocleaned_merge_fragment.dta",convert_categoricals=False)
 
@@ -24,6 +25,12 @@ sys.setrecursionlimit(2000)
 
 ### THIS IS MAXIMUM GAP IN HOUSE NUMBER
 MAX_GAP = 100
+
+# MAKE THIS DICTIONARY CITY-SENSITIVE! #
+sm_st_ed_dict_file = pickle.load(open('sm_st_ed_dict.pickle','rb'))
+sm_st_ed_dict = sm_st_ed_dict_file[1930][("Chicago","il")]
+
+print(sm_st_ed_dict["Superior"]["E Superior St"])
 
 def make_int(s):
     try :
@@ -212,7 +219,17 @@ def isolate_st_name(st) :
         st = st.strip()
     return st
 
-
+#returns True if st does not share a NAME with any other street in ed
+def st_name_ed_check(st, ed) :
+    NAME = isolate_st_name(st)
+    if(NAME in sm_st_ed_dict.keys()) :
+        for s in sm_st_ed_dict[NAME].keys() :
+            if(s != st and str(ed) in sm_st_ed_dict[NAME][s]) :
+                print("%s is in same ed as %s" %(s,st))
+                return False
+    else :
+        print("could not find %s in dict" %NAME)
+    return True
 
 def st_seq(ind) :
     global missingTypes
@@ -223,7 +240,7 @@ def st_seq(ind) :
         if(get_name(i-1)==name) :
             i = i-1
         else :
-            if(not seq_end_chk(get_hn(i),get_hn(i-1))[0] and len(get_name(i-1)) < len(get_name(i))) : #more sophisticated check?
+            if(not seq_end_chk(get_hn(i),get_hn(i-1))[0] and len(get_name(i-1)) < len(get_name(i)) and st_name_ed_check(get_name(i), get_ed(i))) : #more sophisticated check?
                 i = i-1
                 #print("at %s changed %s to %s" %(i,get_name(i),name))
                 df.set_value(i, 'street', name)
@@ -285,6 +302,8 @@ def get_cray_z_scores(arr) :
             if debug : print("MeanAD Zs: "+str(meanified_z_score))
             if debug : print ("Results: "+str(meanified_z_score * modified_z_score > 16))
 
+
+            #return dict(zip(inc_arr, modified_z_score))
             return dict(zip(inc_arr, np.sqrt(meanified_z_score * modified_z_score)))
     return None
 
