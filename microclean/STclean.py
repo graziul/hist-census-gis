@@ -11,6 +11,9 @@
 #				called from this script.
 #
 
+#   To do list: 1. Identify/flag institutions
+#               2. Fix blank street names (naive)
+
 from __future__ import print_function
 import urllib
 import re
@@ -305,10 +308,13 @@ def find_fuzzy_matches(df,city,sm_all_streets,sm_ed_st_dict):
             return ['','',False]    
 
         #Step 3: If both best matches are the same, return as best match
-        if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] > 0.5):
+        if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] > 0.85):
             return [best_match_ed[1],best_match_ed[0],True]
         else:
             return ['','',False]
+            
+#nratio
+#pratio
 
     #Create dictionary based on Street-ED pairs for faster lookup using helper function
     df_no_validated_exact_match = df[(df.sm_st_exact_match_bool==False) | (df.sm_ed_match_bool==False)]
@@ -346,3 +352,52 @@ def find_fuzzy_matches(df,city,sm_all_streets,sm_ed_st_dict):
     fuzzy_info = [sm_st_fuzzy_matches, prop_sm_fuzzy_matches, fuzzy_matching_time]
 
     return df, fuzzy_info, problem_EDs
+
+def fix_blank_st(df,city,HN_seq,street):
+    start = time.time()
+    # Track how many blanks have been fixed
+    num_blank_street_fixed = 0
+    # Identify cases with blank street names
+    df_STblank = df[df[street]=='']
+    # Get indices of cases with blank street names
+    STblank_indices = df_STblank.index.values
+    # Create index ranges for lookup purposes
+    seq_ranges = [range(i[0],i[1]+1) for i in HN_seq if len(range(i[0],i[1])) > 0]
+    # Create dictionary with keys = STblank_indices and values = seq_ranges
+    seq_ranges_w_blanks = [i for i in seq_ranges if set(i).intersection(set(STblank_indices))]
+
+    STblank_seq_dict = {i:[x for x in seq_ranges if i in x] for i in STblank_indices if len([x for x in ranges if i in x]) > 0}
+    return STblank_seq_dict
+    for k,v in STblank_seq_dict.items():
+        df_seq_streets = df.ix[v[0]:v[-1],street]
+        # If sequence is two cases then ignore (lack of confidence that ST name is correct)
+        if len(df_seq_streets) == 2:
+            continue
+        seq_street_names = seq_streets.unique()
+        # If sequence has one street name:
+        #   1. Check if that street name is blank (i.e. street name missing for whole sequence)
+        #   2. Otherwise, replace blanks with street name associated with the rest of the sequence 
+        if len(seq_street_names) < 2 and list(seq_street_names)[0] is not '':
+            df.ix[k,street] = seq_street_names[0]
+            num_blank_street_fixed += 1
+
+    cprint("Fuzzy matches (using microdata ED): "+str(sm_st_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(sm_st_fuzzy_matches)/float(num_current_residual_cases),1))+"%)\n",file=AnsiToWin32(sys.stdout))
+
+    end = time.time()
+
+    num_blank_street_names = len(STblank_indices)
+    cprint("%s had %s blank street names\n" % (city,str(blank_street_names)),file=AnsiToWin32(sys.stdout))
+ 
+    num_blank_street_singletons = num_blank_street_names - len(STblank_seq_dict)
+    per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names),1)
+    cprint("Of these blank street names, %s ("+str(per_singletons)+"%) were singletons\n" % (city,str(num_blank_street_singletons)),file=AnsiToWin32(sys.stdout))
+
+    per_blank_street_fixed = round(100*float(num_blank_street_fixed)/float(len(df)),1)
+    cprint("Of non-singleton cases, %s could be fixed using HN sequences, representing %s%"+"of all cases" % (str(num_blank_street_fixed),str(per_blank_street_fixed)),file=AnsiToWin32(sys.stdout))
+
+    blank_fix_time = round(float(end-start)/60,1)
+    cprint("Fixing blank streets for %s took %s\n" % (city,blank_fix_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
+
+    fix_blanks_info = [num_blank_street_names,num_blank_street_singletons,per_singletons,num_blank_street_fixed,per_blank_street_fixed,blank_fix_time]
+
+    return df, fix_blanks_info
