@@ -28,6 +28,7 @@ import fuzzyset
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 from microclean.STstandardize import *
+from microclean.HNclean import *
 
 file_path = '/home/s4-data/LatestCities' 
 
@@ -73,6 +74,10 @@ def load_city(city,state,year):
 
     #The original variable names change from census to census
 
+    #
+    # Street
+    #
+
     if year == 1940:
         df['street_raw'] = df['street']
     if year == 1930:
@@ -81,6 +86,10 @@ def load_city(city,state,year):
         df['street_raw'] = df['indexed_street']
     if year == 1910:
         df['street_raw'] = df['Street']
+
+    #
+    # ED
+    #
 
     if year == 1940:
         df['ed'] = df['derived_enumdist']
@@ -96,14 +105,85 @@ def load_city(city,state,year):
     df['ed'] = df['ed'].str.split('.').str[0]
     df['ed'] = df['ed'].str.lstrip('0')
 
+    #
+    # House number
+    #
+
     if year == 1940:
         df['hn'] = df['housenum']
     if year == 1930:
-        df['hn'] = df['general_house_number_in_cities_o']
+        df['hn'] = df['general_house_number_in_cities_o'].apply(standardize_hn).apply(make_int)
     if year == 1920:
         df['hn'] = df['general_housenumber']
     if year == 1910:
         df['hn'] = df['HouseNumber']    
+
+    #
+    # Image ID
+    #
+
+    if year==1930:
+        df['image_id'] = df['imageid']
+
+    #
+    # Line number
+    #
+
+    if year==1930:
+        df['line_num'] = df['indexed_line_number'].apply(make_int)
+
+    #
+    # Dwelling number
+    #
+    
+    if year==1930:
+        df['dn'] = df['general_dwelling_number']
+
+    #
+    # Family ID
+    #
+ 
+    if year==1930:
+        df['fam_id'] = df['general_family_number']
+
+    #
+    # Block ID
+    #
+ 
+    if year==1930:
+        df['block'] = df['general_block']
+
+    #
+    # Institution (name)
+    #
+ 
+    if year==1930:
+        df['institution'] = df['general_institution']
+
+    #
+    # Rel ID
+    #
+ 
+    if year==1930:
+        df['rel_id'] = df['general_RelID']
+
+    #
+    # Household ID
+    #
+
+    if year==1930:
+        df['hhid'] = df['general_HOUSEHOLD_ID']
+
+    #
+    # PID
+    #    
+
+    if year==1930:
+        df['pid'] = df['pid']
+    
+    # Sort by image_id and line_num (important for HN)
+    df = df.sort_values(['imageid','line_num'])
+    df.index = range(0,len(df))
 
     return df, load_time
 
@@ -291,7 +371,7 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
             return ['','',False]    
 
         #Step 3: If both best matches are the same, return as best match
-        if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.58):
+        if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.5):
             return [best_match_ed[1],best_match_ed[0],True]
         else:
             return ['','',False]
