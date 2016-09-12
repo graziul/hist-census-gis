@@ -336,9 +336,9 @@ def get_ED_HN_OUTLIERS(df):
     		False
     		#do something about ED_STs that could not have z-scores calculated
     		#this will consist of ED_STs that do not have more than 2 valid HNs
-    print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
+#    print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
     return(ED_ST_HN_dict)
-    
+
 def ed_hn_outlier_chk(ed,st,hn) :
     if(st is None or ED_ST_HN_dict[(ed,st)] is None or hn is None or math.isnan(hn)) :
         return -1
@@ -357,8 +357,10 @@ def get_DW_SEQ(df):
 #print(DW_SEQ[:20])
 #print(len(DW_SEQ))
 
-def get_HN_SEQ(df,year,street):
+def get_HN_SEQ(df,year,street,debug=False):
     rename_vars(df,year,street)
+    df = df.sort_values(['imageid','line_num'])
+    df.index = range(0,len(df))
     ED_HN_OUTLIERS = get_ED_HN_OUTLIERS(df)
     ind = 0
     HN_SEQ = []
@@ -368,8 +370,9 @@ def get_HN_SEQ(df,year,street):
         except RuntimeError :
             print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(df,ind))+" on page "+df.ix[ind,'line_num'])
         ind = HN_SEQ[len(HN_SEQ)-1][1]+1
-    avg_seq_len = round(np.mean(np.diff(HN_SEQ)),1)
-    print("Average HN sequence length is %s" % (str(avg_seq_len)))
+    if debug:
+        avg_seq_len = round(np.mean(np.diff(HN_SEQ)),1)
+        print("Average HN sequence length is %s" % (str(avg_seq_len)))
     return HN_SEQ, ED_HN_OUTLIERS
 #HN_SEQ = get_HN_SEQ(df)
 
