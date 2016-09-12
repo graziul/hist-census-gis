@@ -57,25 +57,9 @@ def load_city(city,state,year):
         df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year),file_name), convert_categoricals=False)
     except:
         print('Error loading %s raw data' % (city))
-        return [year, city, state, 0, 
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0, 0,
-    0, 0, 0, 0, 0] 
-
+   
     if len(df) == 0:
-        print('Error loading %s raw data' % (city))
-        return [year, city, state, 0, 
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0, 0,
-    0, 0, 0, 0, 0]   
+        print('Error loading %s raw data' % (city))  
 
     end = time.time()
 
@@ -196,6 +180,15 @@ def load_steve_morse(df,city,state,year,flatten):
 # Step X: Matching steps
 #
 
+def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
+    if (microdata_st is None) or (sm_st_ed_dict[microdata_st] is None):
+        return False
+    else:
+        if microdata_ed in sm_st_ed_dict[microdata_st]:
+            return True
+        else:
+            return False
+
 def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict):
 
     num_records = len(df)
@@ -218,17 +211,7 @@ def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict):
     # Validate exact matches by comparing Steve Morse ED to microdata ED
     #
 
-    #Helper function for checking that microdata ED is in Steve Morse list of EDs for street name
-    def check_ed_match(microdata_ed,microdata_st):
-        if (microdata_st is None) or (sm_st_ed_dict[microdata_st] is None):
-            return False
-        else:
-            if microdata_ed in sm_st_ed_dict[microdata_st]:
-                return True
-            else:
-                return False
-
-    df['sm_ed_match_bool'] = df.apply(lambda s: check_ed_match(s['ed'],s[street]), axis=1)
+    df['sm_ed_match_bool'] = df.apply(lambda s: check_ed_match(s['ed'],s[street],sm_st_ed_dict), axis=1)
 
     #Validation of exact match fails if microdata ED and Steve Morse ED do not match
     failed_validation = df[(df.sm_exact_match_bool==True) & (df.sm_ed_match_bool==False)]
@@ -353,7 +336,7 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
 
     return df, fuzzy_info, problem_EDs
 
-def fix_blank_st(df,city,HN_seq,street):
+def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
     
     HN_seq = HN_seq[street]
 
@@ -363,43 +346,58 @@ def fix_blank_st(df,city,HN_seq,street):
     
     # Identify cases with blank street names
     df_STblank = df[df[street]=='']
-    num_blank_street_names = len(df_STblank)
-    
+    num_blank_street_names = len(df_STblank)    
     # Get indices of cases with blank street names
     STblank_indices = df_STblank.index.values
-    
     # Create index ranges for lookup purposes
     seq_ranges = [range(i[0],i[1]+1) for i in HN_seq if len(range(i[0],i[1])) > 0]
-    
     # Create list of ranges that contain cases with blank street names
     seq_ranges_w_blanks = [i for i in seq_ranges if set(i).intersection(set(STblank_indices))]
-    
-    # Create dictionary with keys = STblank_indices and values = seq_ranges
+    # Create dictionary with {keys = STblank_indices : values = seq_ranges}
     STblank_seq_dict = {i:[x for x in seq_ranges_w_blanks if i in x] for i in STblank_indices if len([x for x in seq_ranges_w_blanks if i in x]) > 0}    
 
-    # Track how many blanks have been fixed
-    num_blank_street_fixed = 0
     df['%sHN' % (street)] =df[street]
     for k,v in STblank_seq_dict.items():
         # Select part of df with the blank street name
-        df_seq_streets = df.ix[v[0][0]:v[0][-1],street]
-        # Collect the street names around the blank street name
-        seq_street_names = df_seq_streets.unique().tolist()
-        seq_street_names.remove('')
-        # If sequence has one street name:
-        #   1. Check if that street name is blank (i.e. street name missing for whole sequence)
-        #   2. Otherwise, replace blanks with street name associated with the rest of the sequence 
+        df_seq_streets = df.ix[v[0][0]:v[0][-1],['ed',street,'hn']]
+        # Collect street names (this will include '')
+        seq_street_names = df_seq_streets[street].unique().tolist()
+        # Count how many cases of each street name, store in dictionary
+        street_count_dict = df_seq_streets.groupby([street]).count().to_dict().values()[0]
+        ed_list = df_seq_streets['ed'].unique().tolist()
+        # If sequence has only blank street names, continue
         if len(seq_street_names) == 1:
-            df.ix[k,'%sHN' % (street)] = seq_street_names[0]
-            num_blank_street_fixed += 1
+            continue
+        # If sequence has one blank and one street name:
+        if len(seq_street_names) == 2:
+            seq_street_names.remove('')
+            potential_street_name = seq_street_names[0]
+            # Only change name if sequence does not span EDs and street-ED can be validated
+            for ed in ed_list:
+                if check_ed_match(ed,potential_street_name,sm_st_ed_dict) or ed == '':
+                    df.ix[k,'%sHN' % (street)] = potential_street_name
+        # If sequence has one blank and more than one street name:
+        else:
+            non_blank_entries = len(df_seq_streets[df_seq_streets[street]!=''])
+            for i in seq_street_names:
+                # Choose a street name only if it constitutes at least 50% of street name entries
+                if float(street_count_dict[i])/float(non_blank_entries) > 0.5:
+                    potential_street_name = i
+                    for ed in ed_list:
+                        if check_ed_match(ed,potential_street_name,sm_st_ed_dict) or ed == '':
+                            df.ix[k,'%sHN' % (street)] = potential_street_name
+
+    df_STblank_post = df[df['%sHN' % (street)]=='']
+    num_blank_street_names_post = len(df_STblank_post)    
+    num_blank_street_fixed = num_blank_street_names - num_blank_street_names_post
 
     end = time.time()
 
-    cprint("%s had %s blank street names" % (city,str(num_blank_street_names)),file=AnsiToWin32(sys.stdout))
+    cprint("Found %s cases with blank street names" % (str(num_blank_street_names)),file=AnsiToWin32(sys.stdout))
  
     num_blank_street_singletons = num_blank_street_names - len(STblank_seq_dict)
     per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names),1)
-    cprint("Of these blank street names, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%) were singletons",file=AnsiToWin32(sys.stdout))
+    cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%) were singletons",file=AnsiToWin32(sys.stdout))
 
     per_blank_street_fixed = round(100*float(num_blank_street_fixed)/float(len(df)),1)
     cprint("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+"%) of all cases) could be fixed using HN sequences",file=AnsiToWin32(sys.stdout))
@@ -407,6 +405,6 @@ def fix_blank_st(df,city,HN_seq,street):
     blank_fix_time = round(float(end-start)/60,1)
     cprint("Fixing blank streets for %s took %s\n" % (city,blank_fix_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
 
-    fix_blanks_info = [num_blank_street_names,num_blank_street_singletons,per_singletons,num_blank_street_fixed,per_blank_street_fixed,blank_fix_time]
+    fix_blanks_info = [num_blank_street_names, num_blank_street_singletons, per_singletons, num_blank_street_fixed, per_blank_street_fixed, blank_fix_time]
 
     return df, fix_blanks_info
