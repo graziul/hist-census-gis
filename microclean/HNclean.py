@@ -325,17 +325,6 @@ def hn_seq_err_fix(df,ind) :
         #even if we can't conclusively fix hn based on digit comparison, we should
         #still keep track of discrepancies with the rest of the sequence, which may also be wrong
 
-def rename_vars(df,year,street):
-    df['street'] = df['%s' % (street)]
-    if year==1930:
-        df['image_id'] = df['imageid']
-        df['line_num'] = df['indexed_line_number'].apply(make_int)
-        df['hn'] = df['general_house_number_in_cities_o'].apply(standardize_hn).apply(make_int)
-        df['dn'] = df['general_dwelling_number']
-        df['fam_id'] = df['general_family_number']
-#        df['rel_id'] = df['general_relid'] #Can't find in 1930?
-        df['ed'] = df['indexed_enumeration_district']
-
 #start_time = time.time()
 ##    eds = [x[7] for x in df]
 ##    for ed in np.unique(eds) :
@@ -372,7 +361,6 @@ def get_DW_SEQ(df):
 #print(len(DW_SEQ))
 
 def get_HN_SEQ(df,year,street,debug=False):
-    rename_vars(df,year,street)
     df = df.sort_values(['imageid','line_num'])
     df.index = range(0,len(df))
     ED_HN_OUTLIERS = get_ED_HN_OUTLIERS(df)
