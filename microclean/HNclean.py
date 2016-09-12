@@ -211,6 +211,7 @@ def seq_match_num(df,ind) :
 
     return [seq_start,seq_end]#[seq_start,seq_end,get_hn(seq_start),get_hn(seq_end)]
 
+#Returns just the NAME component of the street phrase, if any#
 def isolate_st_name(st) :
     if(not (st == None or st == '' or st == -1)) :
 
@@ -221,7 +222,20 @@ def isolate_st_name(st) :
         st = st.strip()
     return st
 
-def st_seq(df,ind) :
+#returns True if st does not share a NAME with any other street in ed
+def st_name_ed_check(st, ed, st_ed_dict) :
+    debug = True
+    NAME = isolate_st_name(st)
+    if(NAME in st_ed_dict.keys()) :
+        for s in st_ed_dict[NAME].keys() :
+            if(s != st and str(ed) in st_ed_dict[NAME][s]) :
+                if(debug) : print("%s is in same ed as %s" %(s,st))
+                return False
+    else :
+        if(debug) : print("could not find %s in dict" %NAME)
+    return True
+
+def st_seq(df,ind,st_ed_dict) :
     global missingTypes
     name = get_name(df,ind)
     i=ind
@@ -230,7 +244,7 @@ def st_seq(df,ind) :
         if(get_name(df,i-1)==name) :
             i = i-1
         else :
-            if(not seq_end_chk(get_hn(df,i),get_hn(df,i-1))[0] and len(get_name(df,i-1)) < len(get_name(df,i))) : #more sophisticated check?
+            if(not seq_end_chk(get_hn(df,i),get_hn(df,i-1))[0] and len(get_name(df,i-1)) < len(get_name(df,i)) and st_name_ed_check(get_name(df,i), get_ed(df,i),st_ed_dict)) : #more sophisticated check?
                 i = i-1
                 #print("at %s changed %s to %s" %(i,get_name(i),name))
                 df.set_value(i, 'street', name)
@@ -245,7 +259,7 @@ def st_seq(df,ind) :
         if(get_name(df,ind+1)==name) :
             ind = ind+1
         else :
-            if(not seq_end_chk(get_hn(df,ind),get_hn(df,ind+1))[0] and len(get_name(df,ind+1)) < len(get_name(df,ind))) : #more sophisticated check?
+            if(not seq_end_chk(get_hn(df,ind),get_hn(df,ind+1))[0] and len(get_name(df,ind+1)) < len(get_name(df,ind)) and st_name_ed_check(get_name(df,ind), get_ed(df,ind),st_ed_dict)) : #more sophisticated check?
                 ind = ind+1
                # print("at %s changed %s to %s" %(ind,get_name(ind),name))
                 missingTypes= missingTypes+1
@@ -320,7 +334,7 @@ def rename_vars(df,year,street):
         df['dn'] = df['general_dwelling_number']
         df['fam_id'] = df['general_family_number']
 #        df['rel_id'] = df['general_relid'] #Can't find in 1930?
-#        df['ed'] = df['indexed_enumeration_district']
+        df['ed'] = df['indexed_enumeration_district']
 
 #start_time = time.time()
 ##    eds = [x[7] for x in df]
@@ -380,12 +394,12 @@ def get_HN_SEQ(df,year,street,debug=False):
 #print(SUBUNIT_HN_ERRORS[:20])
 #print(len(SUBUNIT_HN_ERRORS))
 
-def get_ST_SEQ(df):
+def get_ST_SEQ(df,st_ed_dict):
     missingTypes = 0
     ind = 0
     ST_SEQ = []
     while ind<len(df) :
-        ST_SEQ.append(st_seq(ind))
+        ST_SEQ.append(st_seq(df,ind,st_ed_dict))
         ind = ST_SEQ[len(ST_SEQ)-1][1]+1
     return ST_SEQ
 #ST_SEQ = get_ST_SEQ()	
