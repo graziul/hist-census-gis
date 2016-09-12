@@ -361,8 +361,6 @@ def get_DW_SEQ(df):
 #print(len(DW_SEQ))
 
 def get_HN_SEQ(df,year,street,debug=False):
-    df = df.sort_values(['imageid','line_num'])
-    df.index = range(0,len(df))
     ED_HN_OUTLIERS = get_ED_HN_OUTLIERS(df)
     ind = 0
     HN_SEQ = []
