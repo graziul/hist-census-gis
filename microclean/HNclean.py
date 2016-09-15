@@ -29,7 +29,8 @@ missingTypes=0
 
 
 ### THIS IS A CITYWIDE LIMIT ON THE NUMBER OF PEOPLE THAT CAN LIVE AT A SINGLE ADDRESS ###
-sys.setrecursionlimit(2000)
+# Limit increased - Buffalo Insane Asylum had >2000 cases
+sys.setrecursionlimit(5000)
 
 ### THIS IS MAXIMUM GAP IN HOUSE NUMBER
 MAX_GAP = 100
@@ -342,6 +343,16 @@ def get_ED_HN_OUTLIERS(df):
 #    print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
     return(ED_ST_HN_dict)
 
+def is_HN_OUTLIER(ed,st,hn,ED_ST_HN_dict_r):
+    try:
+        score = ED_ST_HN_dict_r[(ed,st)][hn]
+        if score > 16:
+            return True
+        else:
+            return False
+    except:
+        return True
+
 def ed_hn_outlier_chk(ed,st,hn) :
     if(st is None or ED_ST_HN_dict[(ed,st)] is None or hn is None or math.isnan(hn)) :
         return -1
@@ -361,6 +372,7 @@ def get_DW_SEQ(df):
 #print(len(DW_SEQ))
 
 def get_HN_SEQ(df,year,street,debug=False):
+    df['street'] = df[street]
     ED_HN_OUTLIERS = get_ED_HN_OUTLIERS(df)
     ind = 0
     HN_SEQ = []
@@ -368,11 +380,12 @@ def get_HN_SEQ(df,year,street,debug=False):
         try:
             HN_SEQ.append(seq_match_num(df,ind))
         except RuntimeError :
-            print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(df,ind))+" on page "+df.ix[ind,'line_num'])
+            print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(df,ind))+" on page "+str(df.ix[ind,'line_num']))
         ind = HN_SEQ[len(HN_SEQ)-1][1]+1
     if debug:
         avg_seq_len = round(np.mean(np.diff(HN_SEQ)),1)
         print("Average HN sequence length is %s" % (str(avg_seq_len)))
+    del df['street']
     return HN_SEQ, ED_HN_OUTLIERS
 #HN_SEQ = get_HN_SEQ(df)
 
