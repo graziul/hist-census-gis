@@ -218,8 +218,8 @@ def preclean_street(df,city):
 def load_steve_morse(df,city,state,year,flatten):
 
     #NOTE: This dictionary must be built independently of this script
-    sm_st_ed_dict_file = pickle.load(open(file_path + '/sm_st_ed_dict.pickle','rb'))
-    sm_st_ed_dict = sm_st_ed_dict_file[year][(city,'%s' % (state.lower()))]
+    sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'rb'))
+    sm_st_ed_dict = sm_st_ed_dict_file[(city,'%s' % (state.lower()))]
 
     #Flatten dictionary
     if flatten:
@@ -435,37 +435,38 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
     seq_ranges_w_blanks = [i for i in seq_ranges if set(i).intersection(set(STblank_indices))]
     # Create dictionary with {keys = STblank_indices : values = seq_ranges}
     STblank_seq_dict = {i:[x for x in seq_ranges_w_blanks if i in x] for i in STblank_indices if len([x for x in seq_ranges_w_blanks if i in x]) > 0}    
-
-    df['%sHN' % (street)] =df[street]
-    for k,v in STblank_seq_dict.items():
+    # Create dictionary to hold {keys = frozenset(seq_ranges) : values = <assigned street name> }
+    df['%sHN' % (street)] = df[street]
+    for i in seq_ranges_w_blanks:
         # Select part of df with the blank street name
-        df_seq_streets = df.ix[v[0][0]:v[0][-1],['ed',street,'hn']]
+        df_seq_streets = df.ix[i[0]:i[-1],['ed',street,'hn']]
         # Collect street names (this will include '')
         seq_street_names = df_seq_streets[street].unique().tolist()
         # Count how many cases of each street name, store in dictionary
         street_count_dict = df_seq_streets.groupby([street]).count().to_dict().values()[0]
         ed_list = df_seq_streets['ed'].unique().tolist()
-        # If sequence has only blank street names, continue
+        # If sequence has only blank street names, leave street as blank
         if len(seq_street_names) == 1:
             continue
-        # If sequence has one blank and one street name:
+        # If sequence has one street name, replace blanks with that street name:
         if len(seq_street_names) == 2:
             seq_street_names.remove('')
             potential_street_name = seq_street_names[0]
             # Only change name if sequence does not span EDs and street-ED can be validated
             for ed in ed_list:
                 if check_ed_match(ed,potential_street_name,sm_st_ed_dict) or ed == '':
-                    df.ix[k,'%sHN' % (street)] = potential_street_name
+                    df.ix[i,'%sHN' % (street)] = potential_street_name
+            continue        
         # If sequence has one blank and more than one street name:
         else:
             non_blank_entries = len(df_seq_streets[df_seq_streets[street]!=''])
-            for i in seq_street_names:
-                # Choose a street name only if it constitutes at least 50% of street name entries
-                if float(street_count_dict[i])/float(non_blank_entries) > 0.5:
-                    potential_street_name = i
+            for name in seq_street_names:
+                # Choose a street name only if it constitutes at least 50% of non-blank street name entries
+                if float(street_count_dict[name])/float(non_blank_entries) > 0.5:
+                    potential_street_name = name
                     for ed in ed_list:
                         if check_ed_match(ed,potential_street_name,sm_st_ed_dict) or ed == '':
-                            df.ix[k,'%sHN' % (street)] = potential_street_name
+                            df.ix[i,'%sHN' % (street)] = potential_street_name
 
     df_STblank_post = df[df['%sHN' % (street)]=='']
     num_blank_street_names_post = len(df_STblank_post)    
@@ -477,10 +478,10 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
  
     num_blank_street_singletons = num_blank_street_names - len(STblank_seq_dict)
     per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names),1)
-    cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%) were singletons",file=AnsiToWin32(sys.stdout))
+    cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%% of blanks) were singletons",file=AnsiToWin32(sys.stdout))
 
     per_blank_street_fixed = round(100*float(num_blank_street_fixed)/float(len(df)),1)
-    cprint("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+"%) of all cases) could be fixed using HN sequences",file=AnsiToWin32(sys.stdout))
+    cprint("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+"%% of all cases) could be fixed using HN sequences",file=AnsiToWin32(sys.stdout))
 
     blank_fix_time = round(float(end-start)/60,1)
     cprint("Fixing blank streets for %s took %s\n" % (city,blank_fix_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
