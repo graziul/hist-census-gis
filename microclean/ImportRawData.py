@@ -76,20 +76,25 @@ def convert_raw_to_dta(s):
 				df.to_stata(stata_file_name,encoding='utf-8')
 			else:
 				city_data = df.ix[df['ResidenceCity'].str.findall(c).nonzero()]
-
+		city_data.to_stata(stata_file_name,encoding='utf-8')
 		# Check that population matches official Census records	
-		city_state = c + state_abbr
-		pop_year = 'pop%s' % (str(year))
-		city_pop = city_pop_dict[pop_year][city_state]
-		per_pop_diff = 100*abs((len(city_data) - city_pop)/city_pop)
-		print("Difference in population from official records for %s: %s%%" % (c,str(per_pop_diff)))
-		if per_pop_diff < 1:
-			city_data.to_stata(stata_file_name,encoding='utf-8')
-		if per_pop_diff >= 1:
-			print("Error: Difference greater than 1%")
+#		city_state = c + state_abbr
+#		pop_year = 'pop%s' % (str(year))
+#		city_pop = city_pop_dict[pop_year][city_state]
+#		per_pop_diff = 100*abs((len(city_data) - city_pop)/city_pop)
+#		print("Difference in population from official records for %s: %s%%" % (c,str(per_pop_diff)))
+#		if per_pop_diff < 10:
+#			city_data.to_stata(stata_file_name,encoding='utf-8')
+#		if per_pop_diff >= 10:
+#			print("Error: Difference greater than 10%")
+#		return city_data
 
 def import_year(year):
 	state_info_list = [[s,state_abbr_dict[s],[i[0] for i in city_info_list if i[2] == s],year] for s in states]
 	pool = Pool(4)
 	pool.map(convert_raw_to_dta, state_info_list)
 	pool.close()
+
+year = int(sys.argv[1])
+
+import_year(year)
