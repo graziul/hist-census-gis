@@ -42,20 +42,24 @@ def make_int(s):
     except ValueError:
         return None
 
-def standardize_hn(st):
+def is_none(n) :
+    return n=='' or n==None or math.isnan(n)
 
-    st = re.sub('[0-9]/[0-9]|[Rr]ear','',st)
+def standardize_hn(df,ind,s):
+    orig_s = s
+    s = re.sub('[0-9]/[0-9]|[Rr]ear','',s)
 
     debug = False
-    contHN = re.search("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?-?",st)
-    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
+    contHN = re.search("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?-?",s)
+    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",s)
     
-    st = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',st)
-    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
+    s = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',s)
+    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",s)
     if(rangeHN) :
-        st = rangeHN.group(1)
-    st = st.strip()
-
+        s = rangeHN.group(1)
+    s = s.strip()
+    if(not orig_s == s) :
+        df.set_value[ind,'hn_flag',orig_s]
     return st
 
 def get_linenum(df,ind) :
@@ -160,7 +164,7 @@ def same_hh_chk(df,ind,chk) :
 #evaluative function to determine HN sequences#
 def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in DIFFERENT SEQs
     error_type = 0
-    if(cur_num == None) : #if housenum undefined, consider it the end of seq
+    if(is_none(n)) : #if housenum undefined, consider it the end of seq
         error_type = 1
     elif (not (cur_num+chk_num) % 2 == 0) : #one num even, next odd; or vice-versa
         error_type = 2
@@ -171,41 +175,55 @@ def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in D
   
 #recursive function to walk through HN sequences#
 def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to look
-    cur_num = get_hn(df,ind)
-    end = seq_end_chk(cur_num,chk_num)
-    if(end[0]) : #if cur num doesn't fit in SEQ...
-        nextNum = seq_end_chk(get_hn(df,ind+chk_dir),chk_num) #...see if next num does
-        if(not nextNum[0] and get_name(df,ind)==get_name(df,ind-1) and get_name(df,ind)==get_name(df,ind+1)) :
-        #do we want to check sequence of dwelling nums? e.g. 4584230_01092
-        #seems like an error but is actually correct because non-consecutive dwelling no.
-        #YES. TODO: improve HN swatches using other vars. if stname AND imageid changes, it's probably
-        #the end of the HN swatch even if it could keep going. same goes for stname AND dwelling_num_SEQ changing?
-        #Likewise, if HN swatch would stop but the error is explained by dwelling_num_SEQ changing while stname stays the same
-    
-            SINGLE_HN_ERRORS.append([ind,end[1]])
-            return num_seq(df,ind+chk_dir,chk_num,chk_dir)
-        else :
-            #check places where housenum seq changes, but dwelling# and stname are unchanged
-            if(get_dwelling(df,ind+chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind-chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind)!=-1) :
-                if(chk_dir==1 and get_name(df,ind+chk_dir)==get_name(df,ind) and get_name(df,ind-chk_dir)==get_name(df,ind)) :#HNs may only replace other HNs "downstream"
-                    SUBUNIT_HN_ERRORS.append([ind,ed_hn_outlier_chk(get_ed(df,ind),get_name(df,ind),get_hn(df,ind))])
-                    #HOW TO DEAL WITH THESE
-                    #Reveals places where there are HN typos as well as apt/unit numbers in HN
-                    #Therefore, we can fix based on whether one of the two addresses for a given dw# and stname is obviously an outlier
-                    #However, must deal with false positive problem created by stupid dw#s. Sometimes enumerator just stops updating dw#
-                    #for like a whole page, across multiple STs, etc.
-                    #IF HN IS A SIGNIFICANT OUTLIER
+    if(ind>=0 and ind<len(df)) :
+        cur_num = get_hn(df,ind)
+        end = seq_end_chk(cur_num,chk_num)
+        if(end[0]) : #if cur num doesn't fit in SEQ...
+            nextNum = seq_end_chk(get_hn(df,ind+chk_dir),chk_num) #...see if next num does
+            if(not nextNum[0] and get_name(df,ind)==get_name(df,ind-1) and get_name(df,ind)==get_name(df,ind+1)) :
+            #do we want to check sequence of dwelling nums? e.g. 4584230_01092
+            #seems like an error but is actually correct because non-consecutive dwelling no.
+            #YES. TODO: improve HN swatches using other vars. if stname AND imageid changes, it's probably
+            #the end of the HN swatch even if it could keep going. same goes for stname AND dwelling_num_SEQ changing?
+            #Likewise, if HN swatch would stop but the error is explained by dwelling_num_SEQ changing while stname stays the same
+        
+                SINGLE_HN_ERRORS.append([ind,end[1]])
+                return num_seq(df,ind+chk_dir,chk_num,chk_dir)
+            else :
+                if(end[1]==1) : 
+                
+                    #try to fill in blank HNs#
+                    sameHH = same_hh_chk(ind,ind-chk_dir)
+                    print(str(sameHH)+" "+str(ind))
+                    #check that at least dwelling# and relID are the same, as well as stname...#
+                    if(sameHH[1] and sameHH[3] and get_name(df,ind)==get_name(df,ind-chk_dir)) :
+                        print("at %s changed %s to %s" %(ind,cur_num,chk_num))
+                        df.set_value(ind, 'hn', chk_num)
+                        return num_seq(df,ind+chk_dir,chk_num,chk_dir)
+                    if(False) : # if dwel and relID are not same but dwel is sequential, interpolate HNs #
+                        False
+                elif(get_dwelling(df,ind+chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind-chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind)!=-1) :
+                    if(chk_dir==1 and get_name(df,ind+chk_dir)==get_name(df,ind) and get_name(df,ind-chk_dir)==get_name(df,ind)) :#HNs may only replace other HNs "downstream"
+                        SUBUNIT_HN_ERRORS.append([ind,ed_hn_outlier_chk(get_ed(df,ind),get_name(df,ind),get_hn(df,ind))])
+                        #HOW TO DEAL WITH THESE
+                        #Reveals places where there are HN typos as well as apt/unit numbers in HN
+                        #Therefore, we can fix based on whether one of the two addresses for a given dw# and stname is obviously an outlier
+                        #However, must deal with false positive problem created by stupid dw#s. Sometimes enumerator just stops updating dw#
+                        #for like a whole page, across multiple STs, etc.
+                        #IF HN IS A SIGNIFICANT OUTLIER
 
-                    #This makes weird stuff happen with the Hangover Code, so put it on hold for now:
-                    #return dwel_seq(ind,chk_dir)
-            return ind-chk_dir
+                        #This makes weird stuff happen with the Hangover Code, so put it on hold for now:
+                        #return dwel_seq(ind,chk_dir)
+                return ind-chk_dir
+        else :
+            return num_seq(df,ind+chk_dir,cur_num,chk_dir)
     else :
-        return num_seq(df,ind+chk_dir,cur_num,chk_dir)
+        return ind-chk_dir
 
 #wrapper function for num_seq recursion#
 def seq_match_num(df,ind) : 
     num = get_hn(df,ind)
-    if num == None : #if housenum undefined, consider it a singleton seq
+    if is_none(num) : #if housenum undefined, consider it a singleton seq
         return [ind,ind]
     seq_start = num_seq(df,ind-1,num,-1)
     seq_end = num_seq(df,ind+1,num,1)
