@@ -183,7 +183,7 @@ def standardize_street(st):
                 # TODO: identify corner cases with numbers e.g. "51 and S- Hermit"
                 if re.search("^[0-9]+$",NAME) : #if NAME is only numbers (no suffix)
                     foo = True
-                    suffixes = {'1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th','8':'8th','9':'9th','0':'0th'}
+                    suffixes = {'11':'11th','1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th','8':'8th','9':'9th','0':'0th'}
                     num = re.search("[0-9]$",NAME)
                     NAME = re.sub("[0-9]$",suffixes[num.group(0)],NAME)
                 hnum = re.search("^([0-9]+[ \-]+).+",NAME) #housenum in stname?
