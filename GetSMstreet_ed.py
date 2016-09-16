@@ -4,7 +4,7 @@ import re
 import pickle
 
 # Use one year's CityInfo file to get list of states
-file_path = '/home/s4-data/LatestCities' 
+file_path = '/home/s4-data/LatestCities'
 city_info_file = file_path + '/CityInfo.csv' 
 city_info_df = pd.read_csv(city_info_file)
 
@@ -12,7 +12,7 @@ state_list = city_info_df['state_abbr'].str.lower().unique().tolist()
 city_list = city_info_df['city_name'].tolist()
 
 city_state_iterator = zip(city_info_df['city_name'].tolist(),city_info_df['state_abbr'].str.lower().tolist())
-
+    
 def get_sm_web_abbr(year):
 
     for city_state in city_state_iterator:
@@ -20,8 +20,9 @@ def get_sm_web_abbr(year):
         city_name = city_state[0]
         state_abbr = city_state[1]
 
-        url = "http://www.stevemorse.org/census/%sstates/%s.htm" % (str(year),state_abbr) 
+        sm_web_abbr_dict[year][state_abbr][city_name] = []
 
+        url = "http://stevemorse.org/census/%sstates/%s.htm" % (str(year),state_abbr) 
         url_handle = urllib.urlopen(url)
         sourcetext = url_handle.readlines()
         url_handle.close()
@@ -44,7 +45,7 @@ def get_sm_web_abbr(year):
                     if city == city_name:
                         city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
                         city_abbr = re.sub(r'\$[0-9]','',city_abbr)
-                        sm_web_abbr_dict[year][state_abbr][city_name] = city_abbr + state_abbr
+                        sm_web_abbr_dict[year][state_abbr][city_name].append(city_abbr + state_abbr)
 
 sm_web_abbr_dict = {}
 for year in [1900,1910,1930,1940]:
@@ -57,9 +58,9 @@ pickle.dump(sm_web_abbr_dict,open(file_path + '/sm_web_abbr.pickle','wb'))
 
 def sm_standardize(st) :
     orig_st = st
-    st = re.sub(" [Ee][Xx][Tt][Dd]?$","",st)
-    DIR = re.search(" ([NSEW]+)$",st)
-    st = re.sub(" ([NSEW]+)$","",st)
+    st = re.sub(r" [Ee][Xx][Tt][Dd]?$","",st)
+    DIR = re.search(r" ([NSEW]+)$",st)
+    st = re.sub(r" ([NSEW]+)$","",st)
     if(DIR) :
         DIR = DIR.group(1)
     else :
@@ -94,44 +95,50 @@ def get_sm_st_ed(year):
         city_name = city_state[0]
         state_abbr = city_state[1]
   
-        # Some state-years don't have data on Steve Morse website      
+        sm_st_ed_dict_city = {}
+
         try:
             sm_web_abbr = sm_web_abbr_dict[year][state_abbr][city_name]
         except:
             continue
 
-        url = "http://www.stevemorse.org/census/%scities/%s.htm" % (str(year),sm_web_abbr) 
+        for i in sm_web_abbr:
 
-        url_handle = urllib.urlopen(url)
-        sourcetext = url_handle.readlines()
-        url_handle.close()
+            url = "http://www.stevemorse.org/census/%scities/%s.htm" % (str(year),i) 
 
-        #Change the parsing strings if necessary (CG: Doesn't seem necessary yet)
-        start_num = "value=" 
-        end_num = ">"
-        end_name = "</option>"
+            url_handle = urllib.urlopen(url)
+            sourcetext = url_handle.readlines()
+            url_handle.close()
 
-        sm_st_ed_dict_city = {}
+            #Change the parsing strings if necessary (CG: Doesn't seem necessary yet)
+            start_num = "value=" 
+            end_num = ">"
+            end_name = "</option>"
 
-        for line in sourcetext:
-            #If line has "value=" and "</option>" in it, do stuff
-            if start_num in line and end_name in line:
-                #Ignore header line
-                if "Select Street" in line:
-                    col_line = ""
-                else:
-                    #Extract street name between ">" and "</option>""
-                    st = line[line.find(end_num)+1:line.find(end_name)]
-                    st = sm_standardize(st)
-                    #Initialize dictionary for NAME if it doesn't exist already
-                    NAME = st[2]
-                    sm_st_ed_dict_city[NAME] = sm_st_ed_dict_city.setdefault(NAME, {})
-                    #Extract EDs as one long string
-                    st_str = line[line.find(start_num) + 7 : line.find(end_num)-1]
-                    #Split string of EDs into a list and assign to street name in dictionary
-                    sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
+            for line in sourcetext:
+                #If line has "value=" and "</option>" in it, do stuff
+                if start_num in line and end_name in line:
+                    #Ignore header line
+                    if "Select Street" in line:
+                        col_line = ""
+                    else:
+                        #Extract street name between ">" and "</option>""
+                        st = line[line.find(end_num)+1:line.find(end_name)]
+                        st = sm_standardize(st)
+                        #Initialize dictionary for NAME if it doesn't exist already
+                        NAME = st[2]
+                        sm_st_ed_dict_city[NAME] = sm_st_ed_dict_city.setdefault(NAME, {})
+                        #Extract EDs as one long string
+                        st_str = line[line.find(start_num) + 7 : line.find(end_num)-1]
+                        #Check for street name collisions (e.g. "3rd Pl" and "3rd Pl ext")
+                        if st[0] in sm_st_ed_dict_city[NAME].keys():
+                            for i in list(st_str.split(",")):
+                                if i not in sm_st_ed_dict_city[NAME][st[0]]:
+                                    sm_st_ed_dict_city[NAME][st[0]].append(i)
+                        else:    
+                            #Split string of EDs into a list and assign to street name in dictionary
+                            sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
         sm_st_ed_dict[year][city_state] = sm_st_ed_dict_city
-
 
 sm_st_ed_dict ={}
 for year in [1900,1910,1930,1940]:
@@ -140,4 +147,6 @@ for year in [1900,1910,1930,1940]:
         sm_st_ed_dict[year][city_state] = {}
     get_sm_st_ed(year)
 
-pickle.dump(sm_st_ed_dict,open(file_path + '/sm_st_ed_dict.pickle','wb'))
+for year in [1900,1910,1930,1940]:
+    pickle.dump(sm_st_ed_dict[year],open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'wb'))
+
