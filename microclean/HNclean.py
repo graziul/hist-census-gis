@@ -45,7 +45,23 @@ def make_int(s):
 def is_none(n) :
     return n=='' or n==None or math.isnan(n)
 
-def standardize_hn(df,ind,s):
+def standardize_hn(st):
+
+    st = re.sub('[0-9]/[0-9]|[Rr]ear','',st)
+
+    debug = False
+    contHN = re.search("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?-?",st)
+    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
+    
+    st = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',st)
+    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
+    if(rangeHN) :
+        st = rangeHN.group(1)
+    st = st.strip()
+
+    return st
+
+def standardize_hn1(df,ind,s):
     orig_s = s
     s = re.sub('[0-9]/[0-9]|[Rr]ear','',s)
 
@@ -164,7 +180,7 @@ def same_hh_chk(df,ind,chk) :
 #evaluative function to determine HN sequences#
 def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in DIFFERENT SEQs
     error_type = 0
-    if(is_none(n)) : #if housenum undefined, consider it the end of seq
+    if(is_none(cur_num)) : #if housenum undefined, consider it the end of seq
         error_type = 1
     elif (not (cur_num+chk_num) % 2 == 0) : #one num even, next odd; or vice-versa
         error_type = 2
@@ -175,6 +191,7 @@ def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in D
   
 #recursive function to walk through HN sequences#
 def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to look
+    debug=False
     if(ind>=0 and ind<len(df)) :
         cur_num = get_hn(df,ind)
         end = seq_end_chk(cur_num,chk_num)
@@ -193,11 +210,11 @@ def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction
                 if(end[1]==1) : 
                 
                     #try to fill in blank HNs#
-                    sameHH = same_hh_chk(ind,ind-chk_dir)
-                    print(str(sameHH)+" "+str(ind))
+                    sameHH = same_hh_chk(df,ind,ind-chk_dir)
+                    if debug: print(str(sameHH)+" "+str(ind))
                     #check that at least dwelling# and relID are the same, as well as stname...#
                     if(sameHH[1] and sameHH[3] and get_name(df,ind)==get_name(df,ind-chk_dir)) :
-                        print("at %s changed %s to %s" %(ind,cur_num,chk_num))
+                        if debug: print("at %s changed %s to %s" %(ind,cur_num,chk_num))
                         df.set_value(ind, 'hn', chk_num)
                         return num_seq(df,ind+chk_dir,chk_num,chk_dir)
                     if(False) : # if dwel and relID are not same but dwel is sequential, interpolate HNs #
