@@ -59,7 +59,7 @@ def standardize_street(st):
     #See if a st TYPE can be identified#
     st = re.sub(r'[ \-]+([Ss][Tt][Rr][Ee]?[Ee]?[Tt]?[Ss]?|[Ss][tT]|[Ss]trete|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
     st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|Aveenue|Avn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
-    st = re.sub(r'[ \-]+(Blv\'d|Bl\'v\'d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb]oul[ea]?vard)$',' Blvd',st)
+    st = re.sub(r'[ \-]+(Blv\'d|Bl\'v\'d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb]oul[ea]?v?a?r?d?)$',' Blvd',st)
     st = re.sub(r'[ \-]+([Rr][Dd]|[Rr][Oo][Aa][Dd])$',' Road',st)
     st = re.sub(r'[ \-]+[Dd][Rr]$',' Drive',st)
     st = re.sub(r'[ \-]+([Cc][Oo][Uu]?[Rr][Tt]|[Cc][Tt])$',' Ct',st)
@@ -195,7 +195,7 @@ def standardize_street(st):
             
         else :
             assert(False)
-    st = re.sub(re.escape(match.group(1).strip()),NAME,st)
+    st = re.sub(re.escape(match.group(1).strip()),NAME,st).strip()
     try :
         assert st == (DIR+' '+NAME+' '+TYPE).strip()
     except AssertionError :

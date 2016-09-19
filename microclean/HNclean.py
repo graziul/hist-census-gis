@@ -43,11 +43,15 @@ def make_int(s):
         return None
 
 def is_none(n) :
-    return n=='' or n==None or math.isnan(n)
+    if(type(n)==str) :
+        return n=='' or n==None
+    else :
+        return n==None or math.isnan(n)
 
 def standardize_hn(st):
 
     st = re.sub('[0-9]/[0-9]|[Rr]ear','',st)
+    st = re.sub('\.$','',st)
 
     debug = False
     contHN = re.search("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?-?",st)
@@ -61,13 +65,31 @@ def standardize_hn(st):
 
     return st
 
-def standardize_hn1(df,ind,s):
-    orig_s = s
-    s = re.sub('[0-9]/[0-9]|[Rr]ear','',s)
 
+def standardize_hn1(s):
+# recommended usage:
+# dfHNList = df['general_house_number_in_cities_o'].apply(standardize_hn1,"columns")
+# df['hn']      = [x[0] for x in dfHNList]
+# df['hn_flag'] = [x[1] for x in dfHNList]
     debug = False
-    contHN = re.search("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?-?",s)
-    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",s)
+    if(not type(s) == str) :
+        row = s
+        s = s['hn']
+    orig_s = s
+    s = s.strip()
+    hnFlag = ''
+    s = re.sub('[0-9]/[0-9]|[Rr][Ee][Aa][Rr]','',s)
+    s = re.sub('\.$','',s)
+    s = re.sub('\([0-9]\)','',s)
+    s = s.strip()
+    if(re.search("[0-9][0-9][ \-]+[0-9][A-Za-z]$",s)) :
+        if debug : print("%s became " %s,end="")
+        s = re.sub("[0-9][A-Za-z]$","",s).strip()
+        if debug : print(s)
+    if(re.search("^[0-9][0-9][0-9]+[ \-]?[A-Za-z]$",s)) :
+        if debug : print("%s became " %s,end="")
+        s = re.sub("[ \-]?[A-Za-z]$","",s).strip()
+        if debug : print(s)
     
     s = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',s)
     rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",s)
@@ -75,8 +97,8 @@ def standardize_hn1(df,ind,s):
         s = rangeHN.group(1)
     s = s.strip()
     if(not orig_s == s) :
-        df.set_value[ind,'hn_flag',orig_s]
-    return st
+        hnFlag = orig_s
+    return s, hnFlag
 
 def get_linenum(df,ind) :
     if ind>=0 and ind<len(df) :
@@ -191,11 +213,22 @@ def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in D
   
 #recursive function to walk through HN sequences#
 def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to look
-    debug=False
+    debug=True
     if(ind>=0 and ind<len(df)) :
         cur_num = get_hn(df,ind)
         end = seq_end_chk(cur_num,chk_num)
         if(end[0]) : #if cur num doesn't fit in SEQ...
+            if(end[1]==1) : 
+                #try to fill in blank HNs#
+                sameHH = same_hh_chk(df,ind,ind-chk_dir)
+                #if debug: print(str(sameHH)+" "+str(ind))
+                #check that at least dwelling# and relID are the same, as well as stname...#
+                if(sameHH[1] and sameHH[3] and get_name(df,ind)==get_name(df,ind-chk_dir)) :
+                    if debug: print("at %s changed %s to %s" %(ind,cur_num,chk_num))
+                    df.set_value(ind, 'hn', chk_num)
+                    return num_seq(df,ind+chk_dir,chk_num,chk_dir)
+                if(False) : # if dwel and relID are not same but dwel is sequential, interpolate HNs #
+                    False
             nextNum = seq_end_chk(get_hn(df,ind+chk_dir),chk_num) #...see if next num does
             if(not nextNum[0] and get_name(df,ind)==get_name(df,ind-1) and get_name(df,ind)==get_name(df,ind+1)) :
             #do we want to check sequence of dwelling nums? e.g. 4584230_01092
@@ -207,19 +240,7 @@ def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction
                 SINGLE_HN_ERRORS.append([ind,end[1]])
                 return num_seq(df,ind+chk_dir,chk_num,chk_dir)
             else :
-                if(end[1]==1) : 
-                
-                    #try to fill in blank HNs#
-                    sameHH = same_hh_chk(df,ind,ind-chk_dir)
-                    if debug: print(str(sameHH)+" "+str(ind))
-                    #check that at least dwelling# and relID are the same, as well as stname...#
-                    if(sameHH[1] and sameHH[3] and get_name(df,ind)==get_name(df,ind-chk_dir)) :
-                        if debug: print("at %s changed %s to %s" %(ind,cur_num,chk_num))
-                        df.set_value(ind, 'hn', chk_num)
-                        return num_seq(df,ind+chk_dir,chk_num,chk_dir)
-                    if(False) : # if dwel and relID are not same but dwel is sequential, interpolate HNs #
-                        False
-                elif(get_dwelling(df,ind+chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind-chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind)!=-1) :
+                if(get_dwelling(df,ind+chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind-chk_dir)==get_dwelling(df,ind) and get_dwelling(df,ind)!=-1) :
                     if(chk_dir==1 and get_name(df,ind+chk_dir)==get_name(df,ind) and get_name(df,ind-chk_dir)==get_name(df,ind)) :#HNs may only replace other HNs "downstream"
                         SUBUNIT_HN_ERRORS.append([ind,ed_hn_outlier_chk(get_ed(df,ind),get_name(df,ind),get_hn(df,ind))])
                         #HOW TO DEAL WITH THESE
@@ -378,6 +399,7 @@ def get_ED_HN_OUTLIERS(df):
 #    print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
     return(ED_ST_HN_dict)
 
+    '''
 def is_HN_OUTLIER(ed,st,hn,ED_ST_HN_dict_r):
     try:
         score = ED_ST_HN_dict_r[(ed,st)][hn]
@@ -387,9 +409,10 @@ def is_HN_OUTLIER(ed,st,hn,ED_ST_HN_dict_r):
             return False
     except:
         return True
+    '''
 
 def ed_hn_outlier_chk(ed,st,hn) :
-    if(st is None or ED_ST_HN_dict[(ed,st)] is None or hn is None or math.isnan(hn)) :
+    if(is_none(st) or is_none(hn) or ED_ST_HN_dict[(ed,st)] is None) :
         return -1
     else :
         return ED_ST_HN_dict[(ed,st)][hn]
