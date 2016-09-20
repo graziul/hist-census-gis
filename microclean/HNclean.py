@@ -213,8 +213,7 @@ def seq_end_chk(cur_num,chk_num) : #returns True if cur_num and chk_num are in D
 
   
 #recursive function to walk through HN sequences#
-def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction to look
-    debug=True
+def num_seq(df,ind,chk_num,chk_dir,debug=False) : #chk_dir = 1|-1 depending on the direction to look
     if(ind>=0 and ind<len(df)) :
         cur_num = get_hn(df,ind)
         end = seq_end_chk(cur_num,chk_num)
@@ -224,12 +223,14 @@ def num_seq(df,ind,chk_num,chk_dir) : #chk_dir = 1|-1 depending on the direction
                 sameHH = same_hh_chk(df,ind,ind-chk_dir)
                 #if debug: print(str(sameHH)+" "+str(ind))
                 #check that at least dwelling# and relID are the same, as well as stname...#
-                if(sameHH[1] and sameHH[3] and get_name(df,ind)==get_name(df,ind-chk_dir)) :
-                    if debug: print("at %s changed %s to %s" %(ind,cur_num,chk_num))
-                    df.set_value(ind, 'hn', chk_num)
-                    return num_seq(df,ind+chk_dir,chk_num,chk_dir)
-                if(False) : # if dwel and relID are not same but dwel is sequential, interpolate HNs #
-                    False
+                # Throws error when sameHH = -1
+                if type(sameHH) is not int:
+                    if(sameHH[1] and sameHH[3] and get_name(df,ind)==get_name(df,ind-chk_dir)) :
+                        if debug: print("at %s changed %s to %s" %(ind,cur_num,chk_num))
+                        df.set_value(ind, 'hn', chk_num)
+                        return num_seq(df,ind+chk_dir,chk_num,chk_dir)
+                    if(False) : # if dwel and relID are not same but dwel is sequential, interpolate HNs #
+                        False
             nextNum = seq_end_chk(get_hn(df,ind+chk_dir),chk_num) #...see if next num does
             if(not nextNum[0] and get_name(df,ind)==get_name(df,ind-1) and get_name(df,ind)==get_name(df,ind+1)) :
             #do we want to check sequence of dwelling nums? e.g. 4584230_01092
