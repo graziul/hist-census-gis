@@ -19,8 +19,8 @@ def clean_microdata(city_info):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-	init()
-	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning.log" % (str(year),city.replace(' ','')),'wb')
+#	init()
+#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning.log" % (str(year),city.replace(' ','')+state),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -104,8 +104,8 @@ def clean_microdata(city_info):
 
 	# Save only a subset of variables for students to use when cleaning
 
-	df.replace({'check_hn' : { True : 'Yes', False: 'No'}, 
-		'check_st' : { True : 'Yes', False: 'No'}})
+	df.replace({'check_hn' : { True : 'yes', False: ''}, 
+		'check_st' : { True : 'yes', False: ''}})
 
 	student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st']
 	df_forstudents = df[student_vars]
@@ -121,24 +121,35 @@ def clean_microdata(city_info):
 	num_resid_check_st_hn = len(df[df['check_st'] & df['check_hn']])
 	prop_resid_check_st_hn = float(num_resid_check_st_hn)/num_records
 
-	num_residual_cases = len(df[df['check_st'] | df['check_hn']]) 
-	prop_residual_cases = float(num_residual_cases)/float(num_records)
-	prop_overall_matches = float(num_overall_matches)/float(num_records)
+	num_blank_street_fixed = num_blank_street_fixed1 + num_blank_street_fixed2
+	prop_blank_street_fixed = float(num_blank_street_fixed)/num_records
+
+	num_resid_st = len(df[df['check_st']]) - num_blank_street_fixed 
+	prop_resid_st = float(num_resid_st)/num_records
+#	num_resid_hn = len(df[df['check_hn']])
+#	prop_resid_hn = float(num_resid_hn)/num_records
+#	num_resid_st_hn = len(df[df['check_st'] | df['check_hn']]) 
+#	prop_resid_st_hn = float(num_resid_st_hn)/float(num_records)
+
+	blank_fix_time = blank_fix_time1 + blank_fix_time2
 
 	info = [year, city, state, num_records, 
-		num_passed_validation, prop_passed_validation,
-		num_fuzzy_matches, prop_fuzzy_matches,
-		num_resid_check_st, prop_resid_check_st,
-		num_resid_check_hn, prop_resid_check_hn,
-		num_resid_check_st_hn, prop_resid_check_st_hn,
-		num_residual_cases, prop_residual_cases,
-		num_overall_matches, prop_overall_matches,
-		problem_EDs_present,
-		num_failed_validation, prop_failed_validation,
-		num_pairs_failed_validation, num_pairs, prop_pairs_failed_validation,
-		num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1, num_blank_street_fixed1, per_blank_street_fixed1, 
-		num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2, num_blank_street_fixed2, per_blank_street_fixed2,
-		load_time, preclean_time, exact_matching_time, fuzzy_matching_time, blank_fix_time1, blank_fix_time2, total_time] 
+		prop_passed_validation, prop_fuzzy_matches, prop_resid_st, prop_blank_street_fixed,
+		'', 
+		city, state, num_passed_validation, num_fuzzy_matches, num_blank_street_fixed, num_resid_st,
+		'', 
+		city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_check_st,
+		'',
+		city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_check_st,
+		'',		
+		city, state, problem_EDs_present, num_failed_validation, prop_failed_validation, 
+		num_pairs_failed_validation, num_pairs, prop_pairs_failed_validation, 
+		'',		
+		city, state, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
+		num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2, 
+		'',
+		city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
+		blank_fix_time, total_time] 
 
 	return info 
 
@@ -147,41 +158,45 @@ city_info_file = file_path + '/CityInfo.csv'
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
-year = int(sys.argv[1])
-#year = 1930
+#del city_info_list[-1]
+
+#year = int(sys.argv[1])
+year = 1930
 
 for i in city_info_list:                
 	i.append(year)
 
+temp =[]
+for i in city_info_list:
+	temp.append(clean_microdata(i))
 
-#temp =[]
-#for i in city_info_list:
-#	print(i)
-#	temp.append(clean_microdata(i))
-
-	
+'''	
 pool = Pool(8)
 temp = pool.map(clean_microdata, city_info_list)
 pool.close()
+'''
 
 names = ['Year', 'City', 'State', 'NumCases',
-	'ExactMatchesValidated','propExactMatchesValidated',
-	'FuzzyMatches','propFuzzyMatches',
-	'ResidSt','propResidSt',
-	'ResidHn','propResidHn',
-	'ResidStHn','propResidStHn',
-	'ResidualCases','propResidualCases',
-	'OverallMatches','propOverallMatches',
-	'ProblemEDs',
-	'ExactMatchesFailed','propExactMatchesFailed',
+	'propExactMatchesValidated','propFuzzyMatches','propResidSt','propBlankSTfixed',
+	'',
+	'City', 'State','ExactMatchesValidated','FuzzyMatches','ResidSt','BlankSTfixed',
+	'',
+	'City', 'State','propCheckHn','propCheckStHn','propCheckSt',
+	'',
+	'City', 'State','CheckHn','CheckStHn','CheckSt',
+	'',
+	'City', 'State','ProblemEDs', 'ExactMatchesFailed','propExactMatchesFailed',
 	'StreetEDpairsFailed','StreetEDpairsTotal','propStreedEDpairsFailed',
-	'HnOutliers1','StreetNameBlanks1','BlankSingletons1','PerSingletons1','BlanksFixed1','PerBlanksFixed1',
-	'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2','BlanksFixed2','PerBlanksFixed2',
-	'LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime','BlankFixTime1','BlankFixtime2','TotalTime']
+	'',
+	'City', 'State','HnOutliers1','StreetNameBlanks1','BlankSingletons1','PerSingletons1',
+	'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2',
+	'',
+	'City', 'State','LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime',
+	'BlankFixTime','TotalTime']
 dashboard = pd.DataFrame(temp,columns=names)
 
 csv_file = file_path + '/%s/CleaningSummary%s.csv' % (str(year),str(year))
 dashboard.to_csv(csv_file)
 
-convert_dta_cmd = "stata -b ConvertToStataForStudents%s.do" % (str(year))
-os.system(convert_dta_cmd)
+#convert_dta_cmd = "stata -b do ConvertToStataForStudents%s.do" % (str(year))
+#os.system(convert_dta_cmd)
