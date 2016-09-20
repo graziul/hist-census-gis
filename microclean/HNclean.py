@@ -83,11 +83,12 @@ def standardize_hn1(s):
     s = re.sub('\([0-9]\)','',s)
     s = s.strip()
     if(re.search("[0-9][0-9][ \-]+[0-9][A-Za-z]$",s)) :
-        if debug : print("%s became " %s,end="")
+# Throwing syntax errors
+#        if debug : print("%s became " %s,end="")
         s = re.sub("[0-9][A-Za-z]$","",s).strip()
         if debug : print(s)
     if(re.search("^[0-9][0-9][0-9]+[ \-]?[A-Za-z]$",s)) :
-        if debug : print("%s became " %s,end="")
+#        if debug : print("%s became " %s,end="")
         s = re.sub("[ \-]?[A-Za-z]$","",s).strip()
         if debug : print(s)
     
@@ -399,7 +400,7 @@ def get_ED_HN_OUTLIERS(df):
 #    print("Finding ED_ST_HN outliers took %s seconds ---" % (time.time() - start_time))
     return(ED_ST_HN_dict)
 
-    '''
+# Use until other functions created with similar funcationality (see Clean.py Line 36)
 def is_HN_OUTLIER(ed,st,hn,ED_ST_HN_dict_r):
     try:
         score = ED_ST_HN_dict_r[(ed,st)][hn]
@@ -409,7 +410,7 @@ def is_HN_OUTLIER(ed,st,hn,ED_ST_HN_dict_r):
             return False
     except:
         return True
-    '''
+
 
 def ed_hn_outlier_chk(ed,st,hn) :
     if(is_none(st) or is_none(hn) or ED_ST_HN_dict[(ed,st)] is None) :
