@@ -92,7 +92,9 @@ def load_city(city,state,year):
     #
 
     if year == 1940:
-        df['ed'] = df['derived_enumdist']
+#        df['ed'] = df['derived_enumdist']
+        df['ed'] = df['indexed_enumeration_district']
+        df['ed'] = df['ed'].str.split('-').str[1]
     if year == 1930:
         df['ed'] = df['indexed_enumeration_district']
     if year == 1920:
@@ -110,9 +112,11 @@ def load_city(city,state,year):
     #
 
     if year == 1940:
-        df['hn'] = df['housenum']
+        df['hn'], df['hn_flag'] = zip(*df['general_house_number'].map(standardize_hn1))
+        df['hn'] = df['hn'].apply(make_int)
     if year == 1930:
-        df['hn'] = df['general_house_number_in_cities_o'].apply(standardize_hn).apply(make_int)
+        df['hn'], df['hn_flag'] = zip(*df['general_house_number_in_cities_o'].map(standardize_hn1))
+        df['hn'] = df['hn'].apply(make_int)
     if year == 1920:
         df['hn'] = df['general_housenumber']
     if year == 1910:
@@ -122,6 +126,8 @@ def load_city(city,state,year):
     # Image ID
     #
 
+    if year==1940:
+        df['image_id'] = df['stableurl']
     if year==1930:
         df['image_id'] = df['imageid']
 
@@ -129,13 +135,17 @@ def load_city(city,state,year):
     # Line number
     #
 
+    if year==1940:
+        df['line_num'] = df['general_line_number']
     if year==1930:
         df['line_num'] = df['indexed_line_number'].apply(make_int)
 
     #
     # Dwelling number
     #
-    
+
+    if year==1940:
+        df['dn'] = None    
     if year==1930:
         df['dn'] = df['general_dwelling_number']
 
@@ -143,6 +153,8 @@ def load_city(city,state,year):
     # Family ID
     #
  
+    if year==1940:
+        df['fam_id'] = None
     if year==1930:
         df['fam_id'] = df['general_family_number']
 
@@ -157,6 +169,8 @@ def load_city(city,state,year):
     # Institution (name)
     #
  
+    if year==1940:
+        df['institution'] = df['general_institution']
     if year==1930:
         df['institution'] = df['general_institution']
 
@@ -164,6 +178,8 @@ def load_city(city,state,year):
     # Rel ID
     #
  
+    if year==1940:
+        df['rel_id'] = None
     if year==1930:
         df['rel_id'] = df['general_RelID']
 
@@ -171,6 +187,9 @@ def load_city(city,state,year):
     # Household ID
     #
 
+    if year==1940:
+        df['hhid_raw'] = df['hhid']
+        df['hhid'] = df['hhid_numeric']
     if year==1930:
         df['hhid'] = df['general_HOUSEHOLD_ID']
 
@@ -178,6 +197,8 @@ def load_city(city,state,year):
     # PID
     #    
 
+    if year==1940:
+        df['pid'] = None
     if year==1930:
         df['pid'] = df['pid']
     
