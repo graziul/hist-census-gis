@@ -79,7 +79,7 @@ def load_city(city,state,year):
     #
 
     if year == 1940:
-        df['street_raw'] = df['street']
+        df['street_raw'] = df['indexed_street']
     if year == 1930:
         df['street_raw'] = df['self_residence_place_streetaddre']
     if year == 1920:
@@ -203,7 +203,7 @@ def load_city(city,state,year):
         df['pid'] = df['pid']
     
     # Sort by image_id and line_num (important for HN)
-    df = df.sort_values(['imageid','line_num'])
+    df = df.sort_values(['image_id','line_num'])
     df.index = range(0,len(df))
 
     return df, load_time
@@ -423,6 +423,11 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
     end = time.time()
     fuzzy_matching_time = round(float(end-start)/60,1)
 
+    #Need to make sure "Unnamed" street not fuzzy matches (but can be HN_seq matched)
+#   df.loc[df[street]=='Unnamed','sm_fuzzy_match'] = 'Unnamed'
+#   df.loc[df[street]=='Unnamed','sm_fuzzy_match_score'] = ''
+#   df.loc[df[street]=='Unnamed','sm_fuzzy_match_bool'] = 'False'
+
     #Compute number of cases without validated exact match
     passed_validation = df[(df.sm_exact_match_bool==True) & (df.sm_ed_match_bool==True)]
     num_passed_validation = len(passed_validation)
@@ -438,8 +443,6 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
     return df, fuzzy_info, problem_EDs
 
 def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
-    
-    HN_seq = HN_seq[street]
 
     cprint("Fixing blank street names using house number sequences\n",attrs=['underline'],file=AnsiToWin32(sys.stdout))
 
@@ -450,12 +453,20 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
     num_blank_street_names = len(df_STblank)    
     # Get indices of cases with blank street names
     STblank_indices = df_STblank.index.values
-    # Create index ranges for lookup purposes
-    seq_ranges = [range(i[0],i[1]+1) for i in HN_seq if len(range(i[0],i[1])) > 0]
+    # Create dictionary {k = index of blank street name : v = house number sequence}
+    def get_range(blank_index):
+        for i in HN_seq[street]:
+            if i[0] <= blank_index <= i[1]:
+                return i
+    STblank_HNseq_dict = {}
+    for blank_index in STblank_indices:
+        STblank_HNseq_dict[blank_index] = get_range(blank_index)
     # Create list of ranges that contain cases with blank street names
-    seq_ranges_w_blanks = [i for i in seq_ranges if set(i).intersection(set(STblank_indices))]
-    # Create dictionary with {keys = STblank_indices : values = seq_ranges}
-    STblank_seq_dict = {i:[x for x in seq_ranges_w_blanks if i in x] for i in STblank_indices if len([x for x in seq_ranges_w_blanks if i in x]) > 0}    
+    HNseq_w_blanks = [list(x) for x in set(tuple(x) for x in STblank_HNseq_dict.values())]
+    # Create list of HNseq ranges with blanks
+    seq_ranges_w_blanks = [range(i[0],i[1]+1) for i in HNseq_w_blanks]
+    # Create singleton list
+    singleton_list = [i for i in STblank_indices if len(range(STblank_HNseq_dict[i][0],STblank_HNseq_dict[i][1])) == 0]    
     # Create dictionary to hold {keys = frozenset(seq_ranges) : values = <assigned street name> }
     df['%sHN' % (street)] = df[street]
     for i in seq_ranges_w_blanks:
@@ -497,7 +508,7 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 
     cprint("Found %s cases with blank street names" % (str(num_blank_street_names)),file=AnsiToWin32(sys.stdout))
  
-    num_blank_street_singletons = num_blank_street_names - len(STblank_seq_dict)
+    num_blank_street_singletons = len(singleton_list)
     per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names),1)
     cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%% of blanks) were singletons",file=AnsiToWin32(sys.stdout))
 
