@@ -463,6 +463,8 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
         STblank_HNseq_dict[blank_index] = get_range(blank_index)
     # Create list of ranges that contain cases with blank street names
     HNseq_w_blanks = [list(x) for x in set(tuple(x) for x in STblank_HNseq_dict.values())]
+    # Create list of HNseq ranges with blanks
+    seq_ranges_w_blanks = [range(i[0],i[1]+1) for i in HNseq_w_blanks]
     # Create singleton list
     singleton_list = [i for i in STblank_indices if len(range(STblank_HNseq_dict[i][0],STblank_HNseq_dict[i][1])) == 0]    
     # Create dictionary to hold {keys = frozenset(seq_ranges) : values = <assigned street name> }
