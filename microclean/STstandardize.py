@@ -15,7 +15,7 @@ def standardize_street(st):
     ###Remove Punctuation, extraneous words at end of stname###
     st = re.sub(r'[\.,]','',st)
     st = re.sub('\\\\','',st)
-    st = re.sub(r' \(?([Cc]on[\'t]*d?|[Cc]ontinued)\)?$','',st)
+    st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
     #consider extended a diff stname#
     #st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
 
@@ -57,20 +57,20 @@ def standardize_street(st):
         DIR = 'E'
 
     #See if a st TYPE can be identified#
-    st = re.sub(r'[ \-]+([Ss][Tt][Rr][Ee]?[Ee]?[Tt]?[Ss]?|[Ss][tT]|[Ss]trete|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
+    st = re.sub(r'[ \-]+([Ss][Tt][Rr]?[Ee]?[Ee]?[Tt]?[SsEe]?|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
     st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|Aveenue|Avn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
-    st = re.sub(r'[ \-]+(Blv\'d|Bl\'v\'d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb]oul[ea]?v?a?r?d?)$',' Blvd',st)
+    st = re.sub(r'[ \-]+([Bb]\'?[Ll][Vv]\'?[Dd]|Bl\'?v\'?d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb][Oo][Uu][Ll][EeAa]?[Vv]?[Aa]?[Rr]?[Dd]?)$',' Blvd',st)
     st = re.sub(r'[ \-]+([Rr][Dd]|[Rr][Oo][Aa][Dd])$',' Road',st)
-    st = re.sub(r'[ \-]+[Dd][Rr]$',' Drive',st)
+    st = re.sub(r'[ \-]+[Dd][Rr][Ii]?[Vv]?[Ee]?$',' Drive',st)
     st = re.sub(r'[ \-]+([Cc][Oo][Uu]?[Rr][Tt]|[Cc][Tt])$',' Ct',st)
-    st = re.sub(r'[ \-]+([Pp]lace|[Pp][Ll])$',' Pl',st)
-    st = re.sub(r'[ \-]+([Ss]quare|[Ss][Qq])$',' Sq',st)
+    st = re.sub(r'[ \-]+([Pp][Ll][Aa]?[Cc]?[Ee]?)$',' Pl',st)
+    st = re.sub(r'[ \-]+([Ss][Qq][Uu]?[Aa]?[Rr]?[Ee]?)$',' Sq',st)
     st = re.sub(r'[ \-]+[Cc]ircle$',' Cir',st)
     st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kway|[Pp]ky|[Pp]arkwy|[Pp]rakway|[Pp]rkwy|[Pp]wy)$',' Pkwy',st)
     st = re.sub(r'[ \-]+[Ww][Aa][Yy]$',' Way',st)
     st = re.sub(r'[ \-]+[Aa][Ll][Ll]?[Ee]?[Yy]?$',' Aly',st)
-    st = re.sub(r'[ \-]+[Tt](err|errace)$',' Ter',st)
-    st = re.sub(r'[ \-]+[Ll][Aa][Nn][Ee]$',' Ln',st)
+    st = re.sub(r'[ \-]+[Tt][Ee][Rr]+[EeAa]?[Cc]?[Ee]?$',' Ter',st)
+    st = re.sub(r'[ \-]+([Ll][Aa][Nn][Ee]|[Ll][Nn])$',' Ln',st)
     st = re.sub(r'[ \-]+([Pp]lzaz|[Pp][Ll][Aa][Zz][Aa])$',' Plaza',st)
 
     # "Park" is not considered a valid TYPE because it should probably actually be part of NAME #
@@ -165,7 +165,7 @@ def standardize_street(st):
         
     match = re.search(DIR+'(.+)'+TYPE,st)
     if NAME=='' :
-        
+        #If NAME is not 'North', 'West', etc...
         if match :
             NAME = match.group(1).strip()
             if re.search("[0-9]+",NAME) :
@@ -195,6 +195,8 @@ def standardize_street(st):
             
         else :
             assert(False)
+        # Standardize "Saint ____ Ave" -> "St ____ Ave" #
+        NAME = re.sub("^([Ss][Tt]\.?|[Ss][Aa][Ii][Nn][Tt])[ \-]","St ",NAME)
     st = re.sub(re.escape(match.group(1).strip()),NAME,st).strip()
     try :
         assert st == (DIR+' '+NAME+' '+TYPE).strip()
