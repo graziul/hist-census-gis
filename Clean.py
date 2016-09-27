@@ -19,8 +19,8 @@ def clean_microdata(city_info):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-#	init()
-#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning.log" % (str(year),city.replace(' ','')+state),'wb')
+	init()
+	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning.log" % (str(year),city.replace(' ','')+state),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -55,7 +55,7 @@ def clean_microdata(city_info):
 	df[street_var] = df['street_precleanedHN']
 	df.loc[df['sm_fuzzy_match_bool'],street_var] = df['sm_fuzzy_match']
 
-	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var)
+	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
 	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
 
 	# Use house number sequences to fill in blank street names
@@ -107,7 +107,14 @@ def clean_microdata(city_info):
 	df.replace({'check_hn' : { True : 'yes', False: ''}, 
 		'check_st' : { True : 'yes', False: ''}})
 
-	student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st']
+	df['check_ed'] = ''
+	df.loc[(df['sm_exact_match_bool']==True) & (df['sm_ed_match_bool']==False),'check_ed'] = 'yes'
+
+	if year==1940:
+		student_vars = ['image_id','line_num','institution','ed','hhid','hhorder','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st']
+	if year==1930:
+		student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st']
+	
 	df_forstudents = df[student_vars]
 	file_name_students = file_path + '/%s/forstudents/%s_ForStudents.csv' % (str(year),city_file_name)
 	df_forstudents.to_csv(file_name_students)
@@ -131,17 +138,26 @@ def clean_microdata(city_info):
 #	num_resid_st_hn = len(df[df['check_st'] | df['check_hn']]) 
 #	prop_resid_st_hn = float(num_resid_st_hn)/float(num_records)
 
+	num_resid_hn_total = num_resid_check_hn + num_resid_check_st_hn
+	prop_resid_hn_total = prop_resid_check_hn + prop_resid_check_st_hn
+	num_resid_total = num_resid_check_st + num_resid_check_st_hn + num_resid_check_hn
+	prop_resid_total = prop_resid_check_st + prop_resid_check_st_hn + prop_resid_check_hn
+
 	blank_fix_time = blank_fix_time1 + blank_fix_time2
 
 	info = [year, city, state, num_records, 
-		prop_passed_validation, prop_fuzzy_matches, prop_resid_st, prop_blank_street_fixed,
+		prop_passed_validation, prop_fuzzy_matches, prop_blank_street_fixed, prop_resid_st,
 		'', 
 		city, state, num_passed_validation, num_fuzzy_matches, num_blank_street_fixed, num_resid_st,
 		'', 
-		city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_check_st,
+		city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_hn_total,
 		'',
-		city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_check_st,
+		city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_hn_total,
 		'',		
+		city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_check_st, prop_resid_total,
+		'',
+		city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_check_st, num_resid_total,
+		'',
 		city, state, problem_EDs_present, num_failed_validation, prop_failed_validation, 
 		num_pairs_failed_validation, num_pairs, prop_pairs_failed_validation, 
 		'',		
@@ -158,32 +174,34 @@ city_info_file = file_path + '/CityInfo.csv'
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
-#del city_info_list[-1]
-
-#year = int(sys.argv[1])
-year = 1930
+year = int(sys.argv[1])
+#year = 1930
 
 for i in city_info_list:                
 	i.append(year)
 
+'''
 temp =[]
 for i in city_info_list:
 	temp.append(clean_microdata(i))
-
 '''	
+
 pool = Pool(8)
 temp = pool.map(clean_microdata, city_info_list)
 pool.close()
-'''
 
 names = ['Year', 'City', 'State', 'NumCases',
-	'propExactMatchesValidated','propFuzzyMatches','propResidSt','propBlankSTfixed',
+	'propExactMatchesValidated','propFuzzyMatches','propBlankSTfixed','propResidSt',
 	'',
-	'City', 'State','ExactMatchesValidated','FuzzyMatches','ResidSt','BlankSTfixed',
+	'City', 'State','ExactMatchesValidated','FuzzyMatches','BlankSTfixed','ResidSt',
 	'',
-	'City', 'State','propCheckHn','propCheckStHn','propCheckSt',
+	'City', 'State','propCheckHn','propCheckStHn','propCheckHnTotal',
 	'',
-	'City', 'State','CheckHn','CheckStHn','CheckSt',
+	'City', 'State','CheckHn','CheckStHn','CheckHnTotal',
+	'',
+	'City', 'State','propCheckHn','propCheckStHn','propCheckSt','propCheckTotal',
+	'',
+	'City', 'State','CheckHn','CheckStHn','CheckSt','CheckTotal',
 	'',
 	'City', 'State','ProblemEDs', 'ExactMatchesFailed','propExactMatchesFailed',
 	'StreetEDpairsFailed','StreetEDpairsTotal','propStreedEDpairsFailed',
@@ -193,7 +211,20 @@ names = ['Year', 'City', 'State', 'NumCases',
 	'',
 	'City', 'State','LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime',
 	'BlankFixTime','TotalTime']
-dashboard = pd.DataFrame(temp,columns=names)
+df = pd.DataFrame(temp,columns=names)
+
+dfSTprop = df.ix[:,1:9].sort_values(by='propResidSt').reset_index()
+dfSTnum = df.ix[:,9:16].sort_values(by='ResidSt',ascending=False).reset_index()
+dfHNprop = df.ix[:,16:22].sort_values(by='propCheckHnTotal').reset_index()
+dfHNnum = df.ix[:,22:28].sort_values(by='CheckHnTotal',ascending=False).reset_index()
+dfRprop =df.ix[:,28:35].sort_values(by='propCheckTotal').reset_index()
+dfRnum = df.ix[:,35:42].sort_values(by='CheckTotal',ascending=False).reset_index()
+dfED = df.ix[:,42:52].reset_index()
+dfFixBlank = df.ix[:,52:63].reset_index()
+dfTime = df.ix[:,63:71].sort_values(by='TotalTime',ascending=False).reset_index()
+
+dashboard = pd.concat([dfSTprop,dfSTnum,dfHNprop,dfHNnum,dfRprop,dfRnum,dfED,dfFixBlank,dfTime],axis=1)
+del dashboard['index']
 
 csv_file = file_path + '/%s/CleaningSummary%s.csv' % (str(year),str(year))
 dashboard.to_csv(csv_file)
