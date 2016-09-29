@@ -7,6 +7,9 @@ from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 from microclean.STclean import *
 from microclean.HNclean import *
+from microclean.SetPriority import *
+
+datestr = time.strftime("%Y_%m_%d")
 
 def clean_microdata(city_info):
 
@@ -19,8 +22,8 @@ def clean_microdata(city_info):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-#	init()
-#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning.log" % (str(year),city.replace(' ','')+state),'wb')
+	init()
+	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -80,107 +83,17 @@ def clean_microdata(city_info):
 	num_overall_matches = np.sum(df['overall_match_bool'])
 	cprint("Overall matches: "+str(num_overall_matches)+" of "+str(num_records)+" total cases ("+str(round(100*float(num_overall_matches)/float(num_records),1))+"%)\n",file=AnsiToWin32(sys.stdout))
 
-	end_total = time.time()
-	total_time = round(float(end_total-start_total)/60,1)
-	cprint("Total processing time for %s: %s\n" % (city,total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
-
-	problem_EDs = list(set(problem_EDs))
-	print("Problem EDs: %s" % (problem_EDs))
-
-	#	sys.stdout.close()
-
-	problem_EDs_present = False
-	if len(problem_EDs) > 0:
-		problem_EDs_present = True
-
-	df['check_hn'] = df['hn_outlier2']
-	df['check_st'] = ~df['overall_match_bool']
-	df['check_ed'] = np.where(df['sm_exact_match_bool'] & ~df['sm_ed_match_bool'],True,False)
-
 	# Set priority level for residual cases
-
-	def enum_check_seq(df):
-
-		df['check_bool'] = np.where(df['check_hn'] | df['check_st'],True,False)
-		df['enum_seq'] = 0
-
-		prev = 0
-		splits = np.append(np.where(np.diff(df['check_bool']) != 0)[0],len(df['check_bool'])-1)
-
-		num = 0
-		enum_check_list = []
-		for split in splits:
-		    enum_check_list.append(np.arange(1,df['check_bool'].size+1,1)[prev:split])
-		    prev = split
-		
-		for i in range(len(enum_check_list)):
-			df.ix[list(enum_check_list[i]),'enum_seq'] = i
-
-		return df
-
-	df = enum_check_seq(df)
-
-	resid_case_counts = df.groupby(['enum_seq'])
-	enum_seq_counts_dict = resid_case_counts.size().to_dict()
-	enum_seq_check_dict = resid_case_counts['check_bool'].mean().to_dict()
-
-	#	Clean_priority: 
-	#
-	#	1 = >100 cases in sequence (either HN or ST)
-	#	2 = >50 cases in sequence (either HN or ST)
-	#	3 = >20 cases in sequence (either HN or ST)
-	#	4 = >10 cases in sequence (either HN or ST)
-	#	5 = >5 cases in sequence (either HN or ST)
-	# 	6 = >1 case in sequence (either HN or ST)
-	#	7 = 1 case in sequence (either HN or ST)
-	#	9 = Blank HN and blank ST
-
-	def assign_priority(enum):
-		count = enum_seq_counts_dict[enum]
-		check = enum_seq_check_dict[enum]
-		if check:
-			if count == 1:
-				priority = 7	
-			if count > 1:
-				priority = 6	
-			if count >= 5:
-				priority = 5
-			if count >= 10:
-				priority = 4
-			if count >= 20:
-				priority = 3	
-			if count >= 50:
-				priority = 2																				
-			if count >= 100:
-				priority = 1
-		else:
-			priority = None		
-		return priority	
-
-	priority = {}
-	for enum,_ in resid_case_counts:
-		priority[enum] = assign_priority(enum)
- 
-	num_priority = {}
-	for i in range(1,8):
-		num_priority[i] = len([k for k,v in priority.items() if v == i])
-
-	df['clean_priority'] = df['enum_seq'].apply(assign_priority)
-
-#	df['st_and_hn_blank'] = False
-#	df.loc[(np.isnan(df['hn'])) & (df['street_precleanedHN']==''), 'st_and_hn_blank'] = True
-#	df.loc[df['st_and_hn_blank'],'clean_priority'] = 9
-
-	priority_counts = df.groupby(['clean_priority']).size().to_dict()
+	df, priority_counts, num_priority, priority_time = set_priority(df)
 
 	# Save full dataset 
 	city_file_name = city.replace(' ','') + state
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned.csv' % (str(year),city_file_name)
+	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,datestr)
 	df.to_csv(file_name_all)
 
 	# Save only a subset of variables for students to use when cleaning
 
-	df = df.replace({'check_hn' : { True : 'yes', False: ''}, 
+	df_forstudents = df.replace({'check_hn' : { True : 'yes', False: ''}, 
 		'check_st' : { True : 'yes', False: ''},
 		'check_ed' : { True : 'yes', False: ''}})
 
@@ -189,11 +102,18 @@ def clean_microdata(city_info):
 	if year==1930:
 		student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','clean_priority']
 	
-	df_forstudents = df[student_vars]
-	file_name_students = file_path + '/%s/forstudents/%s_ForStudents.csv' % (str(year),city_file_name)
+	df_forstudents = df_forstudents[student_vars]
+	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,datestr)
 	df_forstudents.to_csv(file_name_students)
 
 	# Generate remaining dashboard variables
+
+	problem_EDs = list(set(problem_EDs))
+	print("Problem EDs: %s" % (problem_EDs))
+
+	problem_EDs_present = False
+	if len(problem_EDs) > 0:
+		problem_EDs_present = True
 
 	num_hn_outliers1 = 	df['hn_outlier1'].sum()  
 	num_hn_outliers2 = 	df['hn_outlier2'].sum() 
@@ -221,6 +141,10 @@ def clean_microdata(city_info):
 
 	blank_fix_time = blank_fix_time1 + blank_fix_time2
 
+	end_total = time.time()
+	total_time = round(float(end_total-start_total)/60,1)
+	cprint("Total processing time for %s: %s\n" % (city,total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
+
 	info = [year, city, state, num_records, 
 		prop_passed_validation, prop_fuzzy_matches, prop_blank_street_fixed, prop_resid_st,
 		'', 
@@ -245,7 +169,7 @@ def clean_microdata(city_info):
 		num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2, 
 		'',
 		city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
-		blank_fix_time, total_time] 
+		blank_fix_time, priority_time, total_time] 
 
 	return info 
 
@@ -285,7 +209,7 @@ names = ['Year', 'City', 'State', 'NumCases',
 	'',
 	'City', 'State','100+','50-99','20-49','10-19','5-9','2-4','1','TotalPriority',
 	'',
-	'City', 'State','st 100+','st 50-99','st 20-49','st 10-19','st 5-9','st 2-4','st 1','StTotalPriority'
+	'City', 'State','st 100+','st 50-99','st 20-49','st 10-19','st 5-9','st 2-4','st 1','StTotalPriority',
 	'',
 	'City', 'State','ProblemEDs', 'ExactMatchesFailed','propExactMatchesFailed',
 	'StreetEDpairsFailed','StreetEDpairsTotal','propStreedEDpairsFailed',
@@ -294,7 +218,8 @@ names = ['Year', 'City', 'State', 'NumCases',
 	'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2',
 	'',
 	'City', 'State','LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime',
-	'BlankFixTime','TotalTime']
+	'BlankFixTime','PriorityTime','TotalTime']
+
 df = pd.DataFrame(temp,columns=names)
 
 dfSTprop = df.ix[:,1:9].sort_values(by='propResidSt').reset_index()
@@ -305,14 +230,14 @@ dfRprop =df.ix[:,28:35].sort_values(by='propCheckTotal').reset_index()
 dfRnum = df.ix[:,35:42].sort_values(by='CheckTotal',ascending=False).reset_index()
 dfPriority = df.ix[:,42:53].sort_values(by='TotalPriority',ascending=False).reset_index()
 dfnumPriority = df.ix[:,53:64].sort_values(by='StTotalPriority',ascending=False).reset_index()
-dfED = df.ix[:,64:74].reset_index()
-dfFixBlank = df.ix[:,74:85].reset_index()
-dfTime = df.ix[:,85:93].sort_values(by='TotalTime',ascending=False).reset_index()
+dfED = df.ix[:,64:73].reset_index()
+dfFixBlank = df.ix[:,73:84].reset_index()
+dfTime = df.ix[:,84:93].sort_values(by='TotalTime',ascending=False).reset_index()
 
 dashboard = pd.concat([dfSTprop,dfSTnum,dfHNprop,dfHNnum,dfRprop,dfRnum,dfPriority,dfED,dfFixBlank,dfTime],axis=1)
 del dashboard['index']
 
-csv_file = file_path + '/%s/CleaningSummary%s.csv' % (str(year),str(year))
+csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(year),str(year),datestr)
 dashboard.to_csv(csv_file)
 
 #convert_dta_cmd = "stata -b do ConvertToStataForStudents%s.do" % (str(year))
