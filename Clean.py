@@ -28,8 +28,12 @@ def clean_microdata(city_info):
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 	# Load city
+#	d, load_time = load_city(city.replace(' ',''),state,year)
 	df, load_time = load_city(city.replace(' ',''),state,year)
 
+	# Take out only the variables we need right now
+#	variables = ['street_raw','hn','ed','dn','hhid','rel_id','fam_id']
+#	df = d[variables]
 	# Pre-clean street names
 	df, preclean_time = preclean_street(df,city)    
 
@@ -83,6 +87,8 @@ def clean_microdata(city_info):
 	num_overall_matches = np.sum(df['overall_match_bool'])
 	cprint("Overall matches: "+str(num_overall_matches)+" of "+str(num_records)+" total cases ("+str(round(100*float(num_overall_matches)/float(num_records),1))+"%)\n",file=AnsiToWin32(sys.stdout))
 
+	return df 
+
 	# Set priority level for residual cases
 	df, priority_counts, num_priority, priority_time = set_priority(df)
 
@@ -90,21 +96,6 @@ def clean_microdata(city_info):
 	city_file_name = city.replace(' ','') + state
 	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,datestr)
 	df.to_csv(file_name_all)
-
-	# Save only a subset of variables for students to use when cleaning
-
-	df_forstudents = df.replace({'check_hn' : { True : 'yes', False: ''}, 
-		'check_st' : { True : 'yes', False: ''},
-		'check_ed' : { True : 'yes', False: ''}})
-
-	if year==1940:
-		student_vars = ['image_id','line_num','institution','ed','hhid','hhorder','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','clean_priority']
-	if year==1930:
-		student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','clean_priority']
-	
-	df_forstudents = df_forstudents[student_vars]
-	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,datestr)
-	df_forstudents.to_csv(file_name_students)
 
 	# Generate remaining dashboard variables
 
@@ -170,6 +161,20 @@ def clean_microdata(city_info):
 		'',
 		city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
 		blank_fix_time, priority_time, total_time] 
+
+	# Save only a subset of variables for students to use when cleaning
+	df = df.replace({'check_hn' : { True : 'yes', False: ''}, 
+		'check_st' : { True : 'yes', False: ''},
+		'check_ed' : { True : 'yes', False: ''}})
+
+	if year==1940:
+		student_vars = ['image_id','line_num','institution','ed','hhid','hhorder','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','check_ed','clean_priority']
+	if year==1930:
+		student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','clean_priority']
+	
+	df = df[student_vars]
+	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,datestr)
+	df.to_csv(file_name_students)
 
 	return info 
 
