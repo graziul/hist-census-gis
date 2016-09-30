@@ -36,17 +36,15 @@ def set_priority(df):
 
 	prev = 0
 	splits = np.append(np.where((np.diff(df['enum_street']) != 0) | (np.diff(df['check_bool']) != 0))[0],len(df['enum_street'])-1)
-
-	num = 0
-	enum_check_list = []
-	for split in splits:
-	    enum_check_list.append(np.arange(1,df['enum_street'].size+1,1)[prev:split])
-	    prev = split
+	splits = np.insert(splits+1,0,0)
 	
-	for i in range(len(enum_check_list)):
-		df.ix[list(enum_check_list[i]),'enum_seq'] = i
+	#Generator crucial for reducing memory usage (Boston at 150gb+ without it)
+	enum_check_list = (np.arange(0,df['enum_street'].size+1,1)[splits[i]:splits[i+1]] for i in range(0,len(splits)-1))
 
-	resid_case_counts = df.groupby(['enum_seq'])
+	for i in range(len(splits)-1):
+		df.ix[list(enum_check_list.next()),'enum_seq'] = i
+
+	resid_case_counts = df[['check_bool','enum_seq']].groupby(['enum_seq'])
 	enum_seq_counts_dict = resid_case_counts.size().to_dict()
 	enum_seq_check_dict = resid_case_counts['check_bool'].mean().to_dict()
 
@@ -59,7 +57,6 @@ def set_priority(df):
 	#	5 = >5 cases in sequence (either HN or ST)
 	# 	6 = >1 case in sequence (either HN or ST)
 	#	7 = 1 case in sequence (either HN or ST)
-	#	9 = Blank HN and blank ST
 
 	def assign_priority(enum):
 		count = enum_seq_counts_dict[enum]
