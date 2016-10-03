@@ -58,15 +58,16 @@ pickle.dump(sm_web_abbr_dict,open(file_path + '/sm_web_abbr.pickle','wb'))
 
 def sm_standardize(st) :
     orig_st = st
-    st = re.sub(r" [Ee][Xx][Tt][Dd]?$","",st)
-    DIR = re.search(r" ([NSEW]+)$",st)
-    st = re.sub(r" ([NSEW]+)$","",st)
+    st = re.sub(r" [Ee][Xx][Tt][Ee]?[Nn]?[Dd]?[Ee]?[Dd]?$","",st)
+    DIR = re.search(r" ([NSEW ]+)$",st)
+    st = re.sub(r" ([NSEW ]+)$","",st)
     if(DIR) :
         DIR = DIR.group(1)
+        DIR = re.sub(" ","",DIR)
     else :
         DIR = ""
 
-    TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Rd|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+    TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
     
     if(TYPE) :
         st = re.sub(TYPE.group(0),"",st)
@@ -84,8 +85,8 @@ def sm_standardize(st) :
     
     NAME = st
     st = (DIR+" "+NAME+" "+TYPE).strip()
-#    print(orig_st)
-#    print("changed to "+st)
+    #print(orig_st)
+    #print("changed to "+st)
     return [st,DIR,NAME,TYPE]
 
 def get_sm_st_ed(year):
