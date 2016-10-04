@@ -93,6 +93,6 @@ def set_priority(df):
 
 	end_priority = time.time()
 	priority_time = round(float(end_priority-start_priority)/60,1)
-	cprint('Setting cleaning priority took %s' % (priority_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	cprint('Setting priority took %s \n' % (priority_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
 	return df, priority_counts, num_priority, priority_time
