@@ -365,6 +365,20 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
     #Keep track of problem EDs
     problem_EDs = []
 
+    #Function to check if street names differ by one character
+    def diff_by_one_char(st1,st2):
+        if len(st1) == len(st2):
+            st1chars = list(st1)
+            st2chars = list(st2)
+            #Check how many characters differ, return True if only 1 character difference
+            if sum([st1chars[i]!=st2chars[i] for i in range(len(st1chars))]) == 1:
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    #Fuzzy matching algorithm
     def sm_fuzzy_match(street,ed):
         
         #Return null if street is blank
@@ -393,7 +407,12 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
 
         #Step 3: If both best matches are the same, return as best match
         if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.5):
-            return [best_match_ed[1],best_match_ed[0],True]
+            #Check how many other streets in ED differ by one character
+            too_similar = sum([diff_by_one_char(st,best_match_ed[1]) for st in sm_ed_streets])
+            if too_similar == 0:
+                return [best_match_ed[1],best_match_ed[0],True]
+            else:
+                return['','',False]
         else:
             return ['','',False]
 
