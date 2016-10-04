@@ -42,10 +42,13 @@ def get_sm_web_abbr(year):
                     continue
                 else:
                     city = line[line.find(end_num)+1:line.find("(")].rstrip().replace('.','')
-                    if city == city_name:
+                    if city_name in city:
                         city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
-                        city_abbr = re.sub(r'\$[0-9]','',city_abbr)
-                        sm_web_abbr_dict[year][state_abbr][city_name].append(city_abbr + state_abbr)
+                        city_abbr = re.sub(r'\$[0-9]|\*[0-9]','',city_abbr)
+                        sm_web_abbr = city_abbr + state_abbr
+                        if sm_web_abbr not in sm_web_abbr_dict[year][state_abbr][city_name].values():
+                            sm_web_abbr_dict[year][state_abbr][city_name].append(sm_web_abbr)
+
 
 sm_web_abbr_dict = {}
 for year in [1900,1910,1930,1940]:
