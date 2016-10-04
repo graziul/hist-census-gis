@@ -5,12 +5,16 @@
 #   Date:   7/17/16
 #
 
+from __future__ import print_function
 import re
+
 
 def standardize_street(st):
     runAgain = False
     st = st.rstrip('\n')
     orig_st = st
+    
+    st = st.lower()
 
     ###Remove Punctuation, extraneous words at end of stname###
     st = re.sub(r'[\.,]','',st)
@@ -28,7 +32,7 @@ def standardize_street(st):
     NAME = ''
     TYPE = ''
  
-    # Combinations of directions (has to be run first)
+    # Combinations of directions at end of stname (has to be run first)
     if re.search(r' ([Nn][\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)$',st):
         st = "NE "+re.sub(r' ([Nn][\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth[\s]+?[Ee]ast)$','',st)
         DIR = 'NE'
@@ -58,7 +62,8 @@ def standardize_street(st):
 
     #See if a st TYPE can be identified#
     st = re.sub(r'[ \-]+([Ss][Tt][Rr]?[Ee]?[Ee]?[Tt]?[SsEe]?|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
-    st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|Aveenue|Avn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
+    st = re.sub(r'[ \-]+[Ss]tr?e?e?t?[ \-]',' St ',st) # Fix things like "4th Street Place"
+    st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|[aA]veenue|[Aa]vn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
     st = re.sub(r'[ \-]+([Bb]\'?[Ll][Vv]\'?[Dd]|Bl\'?v\'?d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb][Oo][Uu][Ll][EeAa]?[Vv]?[Aa]?[Rr]?[Dd]?)$',' Blvd',st)
     st = re.sub(r'[ \-]+([Rr][Dd]|[Rr][Oo][Aa][Dd])$',' Road',st)
     st = re.sub(r'[ \-]+[Dd][Rr][Ii]?[Vv]?[Ee]?$',' Drive',st)
@@ -78,34 +83,50 @@ def standardize_street(st):
     if match :
         TYPE = match.group(1)
 
-    #Combinations of directions (assumes no streets named "Northeast Ave" or similar)
-    if re.search(r'^([Nn][\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+',st):
-        st = "NE "+re.sub(r'^([Nn][\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+','',st)
-        DIR = 'NE'
-    if re.search(r'^([Nn][\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+',st):
-        st = "NW "+re.sub(r' ([Nn][\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+','',st)
-        DIR = 'NW'
-    if re.search(r'^([Ss][\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+',st):
-        st = "SE "+re.sub(r'^([Ss][\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+','',st)
-        DIR = 'SE'
-    if re.search(r'^([Ss][\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+',st):
-        st = "SW "+re.sub(r'^([Ss][\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+','',st)
-        DIR = 'SW'
+    #Combinations of directions
+    match = re.search(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+',st)
+    if match :
+        if st == match.group(0)+TYPE :
+            NAME = 'Northeast'
+        else :
+            st = "NE "+re.sub(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+','',st)
+            DIR = 'NE'
+    match = re.search(r'^([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+',st)
+    if match :
+        if st == match.group(0)+TYPE :
+            NAME = 'Northwest'
+        else :
+            st = "NW "+re.sub(r' ([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+','',st)
+            DIR = 'NW'
+    match = re.search(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+',st)
+    if match :
+        if st == match.group(0)+TYPE :
+            NAME = 'Southeast'
+        else :
+            st = "SE "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+','',st)
+            DIR = 'SE'
+    match = re.search(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+',st)
+    if match :
+        if st == match.group(0)+TYPE :
+            NAME = 'Southwest'
+        else :
+            st = "SW "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+','',st)
+            DIR = 'SW'
         
     #See if there is a st DIR. again, make sure that it's the DIR and not actually the NAME (e.g. North Ave)
-    match =  re.search(r'^([nN]|N\.|No|No\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+',st)
+    match =  re.search(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+',st)
     if match :
         if st==match.group(0)+TYPE:
             NAME = 'North'
         else :
-            st = "N "+re.sub(r'^([nN]|N\.|No|No\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+','',st)
+            st = "N "+re.sub(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+','',st)
             DIR = 'N'
-    match =  re.search(r'^([sS]|S\.|So|So\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+',st)
+    match =  re.search(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+',st)
     if match :
         if st==match.group(0)+TYPE:
             NAME = 'South'
         else :
-            st = "S "+re.sub(r'^([sS]|S\.|So|So\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+','',st)
+            st = "S "+re.sub(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+','',st)
             DIR = 'S'
     match =  re.search(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+',st)
     if match :
@@ -114,56 +135,56 @@ def standardize_street(st):
         else :
             st = "W "+re.sub(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+','',st)
             DIR = 'W'
-    match =  re.search(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|Ea[Ss]?)[ \-]+',st)
+    match =  re.search(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+',st)
     if match :
         if st==match.group(0)+TYPE:
             NAME = 'East'
         else :
-            st = "E "+re.sub(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|Ea[Ss]?)[ \-]+','',st)
+            st = "E "+re.sub(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+','',st)
             DIR = 'E'
     
     #get the st NAME and standardize it
     #convert written-out numbers to digits
     #TODO: Make these work for all exceptions (go thru text file with find)
-    if re.search("[Tt]enth|Eleven(th)?|[Tt]wel[f]?th|[Tt]hirteen(th)?|Fourt[h]?een(th)?|[Ff]ift[h]?een(th)?|[Ss]event[h]?een(th)?|[Ss]event[h]?een(th)?|[eE]ighteen(th)?|[Nn]inet[h]?een(th)?|[Tt]wentieth|[Tt]hirtieth|[Ff]o[u]?rtieth|[Ff]iftieth|[Ss]ixtieth|[Ss]eventieth|[Ee]ightieth|[Nn]inetieth|Twenty[ \-]?|Thirty[ \-]?|Forty[ \-]?|Fifty[ \-]?|Sixty[ \-]?|Seventy[ \-]?|Eighty[ \-]?|Ninety[ \-]?|[Ff]irst|[Ss]econd|[Tt]hird|[Ff]ourth|[Ff]ifth|[Ss]ixth|[Ss]eventh|[Ee]ighth|[Nn]inth",st) :
-        st = re.sub("[Tt]enth","10th",st)
-        st = re.sub("[Ee]leven(th)?","11th",st)
-        st = re.sub("[Tt]wel[f]?th","12th",st)
-        st = re.sub("[Tt]hirteen(th)?","13th",st)
-        st = re.sub("[Ff]ourt[h]?een(th)?","14th",st)
-        st = re.sub("[Ff]ift[h]?een(th)?","15th",st)
-        st = re.sub("[Ss]ixt[h]?een(th)?","16th",st)
-        st = re.sub("[Ss]event[h]?een(th)?","17th",st)
-        st = re.sub("[eE]ighteen(th)?","18th",st)
-        st = re.sub("[Nn]inet[h]?een(th)?","19th",st)
-        st = re.sub("[Tt]wentieth","20th",st)
-        st = re.sub("[Tt]hirtieth","30th",st)
-        st = re.sub("[Ff]o[u]?rtieth","40th",st)
-        st = re.sub("[Ff]iftieth", "50th",st)
-        st = re.sub("[Ss]ixtieth", "60th",st)
-        st = re.sub("[Ss]eventieth", "70th",st)
-        st = re.sub("[Ee]ightieth", "80th",st)
-        st = re.sub("[Nn]inetieth", "90th",st)
+    #if re.search("[Tt]enth|Eleven(th)?|[Tt]wel[f]?th|[Tt]hirteen(th)?|Fourt[h]?een(th)?|[Ff]ift[h]?een(th)?|[Ss]event[h]?een(th)?|[Ss]event[h]?een(th)?|[eE]ighteen(th)?|[Nn]inet[h]?een(th)?|[Tt]wentieth|[Tt]hirtieth|[Ff]o[u]?rtieth|[Ff]iftieth|[Ss]ixtieth|[Ss]eventieth|[Ee]ightieth|[Nn]inetieth|Twenty[ \-]?|Thirty[ \-]?|Forty[ \-]?|Fifty[ \-]?|Sixty[ \-]?|Seventy[ \-]?|Eighty[ \-]?|Ninety[ \-]?|[Ff]irst|[Ss]econd|[Tt]hird|[Ff]ourth|[Ff]ifth|[Ss]ixth|[Ss]eventh|[Ee]ighth|[Nn]inth",st) :
+    st = re.sub("[Tt]enth","10th",st)
+    st = re.sub("[Ee]leven(th)?","11th",st)
+    st = re.sub("[Tt]wel[f]?th","12th",st)
+    st = re.sub("[Tt]hirteen(th)?","13th",st)
+    st = re.sub("[Ff]ourt[h]?een(th)?","14th",st)
+    st = re.sub("[Ff]ift[h]?een(th)?","15th",st)
+    st = re.sub("[Ss]ixt[h]?een(th)?","16th",st)
+    st = re.sub("[Ss]event[h]?een(th)?","17th",st)
+    st = re.sub("[eE]ighteen(th)?","18th",st)
+    st = re.sub("[Nn]inet[h]?een(th)?","19th",st)
+    st = re.sub("[Tt]went[iy]eth","20th",st)
+    st = re.sub("[Tt]hirt[iy]eth","30th",st)
+    st = re.sub("[Ff]o[u]?rt[iy]eth","40th",st)
+    st = re.sub("[Ff]ift[iy]eth", "50th",st)
+    st = re.sub("[Ss]ixt[iy]eth", "60th",st)
+    st = re.sub("[Ss]event[iy]eth", "70th",st)
+    st = re.sub("[Ee]ight[iy]eth", "80th",st)
+    st = re.sub("[Nn]inet[iy]eth", "90th",st)
 
-        st = re.sub("Twenty[ \-]?","2",st)
-        st = re.sub("Thirty[ \-]?","3",st)
-        st = re.sub("Forty[ \-]?","4",st)
-        st = re.sub("Fifty[ \-]?","5",st)
-        st = re.sub("Sixty[ \-]?","6",st)
-        st = re.sub("Seventy[ \-]?","7",st)
-        st = re.sub("Eighty[ \-]?","8",st)
-        st = re.sub("Ninety[ \-]?","9",st)
-        st = re.sub("[Ff]irst","1st",st)
-        st = re.sub("[Ss]econd","2nd",st)
-        st = re.sub("[Tt]hird","3rd",st)
-        st = re.sub("[Ff]our(th)?","4th",st)
-        st = re.sub("[Ff]ifth","5th",st)
-        st = re.sub("[Ss]ix(th)?","6th",st)
-        st = re.sub("[Ss]even(th)?","7th",st)
-        st = re.sub("[Ee]ighth?","8th",st)
-        st = re.sub("[Nn]in(th|e)","9th",st)
+    st = re.sub("[Tt]wenty[ \-]*","2",st)
+    st = re.sub("[Tt]hirty[ \-]*","3",st)
+    st = re.sub("[Ff]orty[ \-]*","4",st)
+    st = re.sub("[Ff]ifty[ \-]*","5",st)
+    st = re.sub("[Ss]ixty[ \-]*","6",st)
+    st = re.sub("[Ss]eventy[ \-]*","7",st)
+    st = re.sub("[Ee]ighty[ \-]*","8",st)
+    st = re.sub("[Nn]inety[ \-]*","9",st)
+    st = re.sub("[Ff]irst","1st",st)
+    st = re.sub("[Ss]econd","2nd",st)
+    st = re.sub("[Tt]hird","3rd",st)
+    st = re.sub("[Ff]our(th)?","4th",st)
+    st = re.sub("[Ff]ifth","5th",st)
+    st = re.sub("[Ss]ix(th)?","6th",st)
+    st = re.sub("[Ss]even(th)?","7th",st)
+    st = re.sub("[Ee]igh?th?","8th",st)
+    st = re.sub("[Nn]in(th|e)","9th",st)
         
-    match = re.search(DIR+'(.+)'+TYPE,st)
+    match = re.search('^'+DIR+'(.+)'+TYPE+'$',st)
     if NAME=='' :
         #If NAME is not 'North', 'West', etc...
         if match :
@@ -181,13 +202,25 @@ def standardize_street(st):
                     NAME = re.sub("[Tt][Hh]","th",NAME)     
                 '''             
                 # TODO: identify corner cases with numbers e.g. "51 and S- Hermit"
-                if re.search("^[0-9]+$",NAME) : #if NAME is only numbers (no suffix)
+                if re.search("^[0-9]+$",NAME) : #if NAME is only numbers (no suffix), add the correct suffix
                     foo = True
-                    suffixes = {'11':'11th','1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th','8':'8th','9':'9th','0':'0th'}
-                    num = re.search("[0-9]$",NAME)
-                    NAME = re.sub("[0-9]$",suffixes[num.group(0)],NAME)
+                    suffixes = {'11':'11th','12':'12th','13':'13th','1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th','8':'8th','9':'9th','0':'0th'}
+                    num = re.search("[0-9]+$",NAME).group(0)
+                    suff = ''
+                    # if num is not found in suffixes dict, remove leftmost digit until it is found... 113 -> 13 -> 13th;    24 -> 4 -> 4th
+                    while(suff=='') :
+                        try :
+                            suff = suffixes[num]
+                        except KeyError :
+                            num = num[1:]
+                            if len(num) == 0 :
+                                break
+                    if not suff == '' :
+                        NAME = re.sub(num+'$',suff,NAME)
+                # This \/ is a bit overzealous...! #
                 hnum = re.search("^([0-9]+[ \-]+).+",NAME) #housenum in stname?
                 if hnum : 
+                    #False
                     NAME = re.sub(hnum.group(1),"",NAME) #remove housenum. May want to update housenum field, maybe not though.
                     runAgain = True
             else :
