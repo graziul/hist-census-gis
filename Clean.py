@@ -11,6 +11,24 @@ from microclean.SetPriority import *
 
 datestr = time.strftime("%Y_%m_%d")
 
+def create_overall_match_variables(df):
+
+	df['overall_match'] = ''
+	df['overall_match_type'] = 'NoMatch'
+	df['overall_match_bool'] = False
+
+	df.loc[df['sm_fuzzy_match_bool'],'overall_match'] = df['street_post_fuzzy']
+	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match'] = df['street_precleanedHN']
+
+	df.loc[df['sm_fuzzy_match_bool'],'overall_match_type'] = 'FuzzySM'
+	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match_type'] = 'ExactSM'
+
+	df.loc[(df['overall_match_type'] == 'ExactSM') | (df['overall_match_type'] == 'FuzzySM'),'overall_match_bool'] = True 
+
+	num_overall_matches = np.sum(df['overall_match_bool'])
+
+	return df, num_overall_matches
+
 def clean_microdata(city_info):
 
 	city = city_info[0]
@@ -22,18 +40,14 @@ def clean_microdata(city_info):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-	init()
-	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
+#	init()
+#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 	# Load city
-#	d, load_time = load_city(city.replace(' ',''),state,year)
 	df, load_time = load_city(city.replace(' ',''),state,year)
 
-	# Take out only the variables we need right now
-#	variables = ['street_raw','hn','ed','dn','hhid','rel_id','fam_id']
-#	df = d[variables]
 	# Pre-clean street names
 	df, preclean_time = preclean_street(df,city)    
 
@@ -71,26 +85,14 @@ def clean_microdata(city_info):
 
 	cprint("Overall matches of any kind\n",attrs=['underline'],file=AnsiToWin32(sys.stdout))
 
-	# Initialize cases as having no match
-	df['overall_match'] = ''
-	df['overall_match_type'] = 'NoMatch'
-	df['overall_match_bool'] = False
-
-	df.loc[df['sm_fuzzy_match_bool'],'overall_match'] = df['street_post_fuzzy']
-	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match'] = df['street_precleanedHN']
-
-	df.loc[df['sm_fuzzy_match_bool'],'overall_match_type'] = 'FuzzySM'
-	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match_type'] = 'ExactSM'
-
-	df.loc[(df['overall_match_type'] == 'ExactSM') | (df['overall_match_type'] == 'FuzzySM'),'overall_match_bool'] = True 
-
-	num_overall_matches = np.sum(df['overall_match_bool'])
+	# Create overall match variables
+	df, num_overall_matches = create_overall_match_variables(df)
 	cprint("Overall matches: "+str(num_overall_matches)+" of "+str(num_records)+" total cases ("+str(round(100*float(num_overall_matches)/float(num_records),1))+"%)\n",file=AnsiToWin32(sys.stdout))
-
-	return df 
 
 	# Set priority level for residual cases
 	df, priority_counts, num_priority, priority_time = set_priority(df)
+	for i in range(1,8):
+		cprint('Priority ' + str(i) + ' cases to check: ' + str(priority_counts[i]) + ' (' + str(round(100*float(priority_counts[i])/num_records,1)) + '% of all cases)',file=AnsiToWin32(sys.stdout))
 
 	# Save full dataset 
 	city_file_name = city.replace(' ','') + state
@@ -151,6 +153,14 @@ def clean_microdata(city_info):
 		'',
 		city, state, priority_counts[1],priority_counts[2],priority_counts[3],priority_counts[4],priority_counts[5],priority_counts[6],priority_counts[7],sum(priority_counts.values()),
 		'',
+		city, state, float(priority_counts[1])/num_records,
+		float(priority_counts[2])/num_records,
+		float(priority_counts[3])/num_records,
+		float(priority_counts[4])/num_records,
+		float(priority_counts[5])/num_records,
+		float(priority_counts[6])/num_records,
+		float(priority_counts[7])/num_records,sum(priority_counts.values()),
+		'',
 		city, state, num_priority[1],num_priority[2],num_priority[3],num_priority[4],num_priority[5],num_priority[6],num_priority[7],sum(num_priority.values()),
 		'',
 		city, state, problem_EDs_present, num_failed_validation, prop_failed_validation, 
@@ -168,9 +178,9 @@ def clean_microdata(city_info):
 		'check_ed' : { True : 'yes', False: ''}})
 
 	if year==1940:
-		student_vars = ['image_id','line_num','institution','ed','hhid','hhorder','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','check_ed','clean_priority']
+		student_vars = ['image_id','line_num','institution','ed','hhid','hhorder','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_ed','clean_priority']
 	if year==1930:
-		student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','clean_priority']
+		student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','check_ed','clean_priority']
 	
 	df = df[student_vars]
 	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,datestr)
@@ -195,7 +205,7 @@ for i in city_info_list:
 	temp.append(clean_microdata(i))
 '''	
 
-pool = Pool(8)
+pool = Pool(processes=4,maxtasksperchild=1)
 temp = pool.map(clean_microdata, city_info_list)
 pool.close()
 
@@ -212,7 +222,9 @@ names = ['Year', 'City', 'State', 'NumCases',
 	'',
 	'City', 'State','CheckHn','CheckStHn','CheckSt','CheckTotal',
 	'',
-	'City', 'State','100+','50-99','20-49','10-19','5-9','2-4','1','TotalPriority',
+	'City', 'State','100+ Cases','50-99 Cases','20-49 Cases','10-19 Cases','5-9 Cases','2-4 Cases','1 Case','TotalPriority',
+	'',
+	'City', 'State','100+ Cases (%)','50-99 Cases (%)','20-49 Cases (%)','10-19 Cases (%)','5-9 Cases (%)','2-4 Cases (%)','1 Case (%)','TotalPriority',
 	'',
 	'City', 'State','st 100+','st 50-99','st 20-49','st 10-19','st 5-9','st 2-4','st 1','StTotalPriority',
 	'',
@@ -232,14 +244,15 @@ dfSTnum = df.ix[:,9:16].sort_values(by='ResidSt',ascending=False).reset_index()
 dfHNprop = df.ix[:,16:22].sort_values(by='propCheckHnTotal').reset_index()
 dfHNnum = df.ix[:,22:28].sort_values(by='CheckHnTotal',ascending=False).reset_index()
 dfRprop =df.ix[:,28:35].sort_values(by='propCheckTotal').reset_index()
-dfRnum = df.ix[:,35:42].sort_values(by='CheckTotal',ascending=False).reset_index()
+dfRnumber = df.ix[:,35:42].sort_values(by='CheckTotal',ascending=False).reset_index()
 dfPriority = df.ix[:,42:53].sort_values(by='TotalPriority',ascending=False).reset_index()
-dfnumPriority = df.ix[:,53:64].sort_values(by='StTotalPriority',ascending=False).reset_index()
-dfED = df.ix[:,64:73].reset_index()
-dfFixBlank = df.ix[:,73:84].reset_index()
-dfTime = df.ix[:,84:93].sort_values(by='TotalTime',ascending=False).reset_index()
+dfperPriority = df.ix[:,53:64].sort_values(by='TotalPriority',ascending=False).reset_index()
+dfstPriority = df.ix[:,64:75].sort_values(by='StTotalPriority',ascending=False).reset_index()
+dfED = df.ix[:,75:84].reset_index()
+dfFixBlank = df.ix[:,84:95].reset_index()
+dfTime = df.ix[:,95:104].sort_values(by='TotalTime',ascending=False).reset_index()
 
-dashboard = pd.concat([dfSTprop,dfSTnum,dfHNprop,dfHNnum,dfRprop,dfRnum,dfPriority,dfED,dfFixBlank,dfTime],axis=1)
+dashboard = pd.concat([dfSTprop,dfSTnum,dfHNprop,dfHNnum,dfRprop,dfRnumber,dfPriority,dfperPriority,dfstPriority,dfED,dfFixBlank,dfTime],axis=1)
 del dashboard['index']
 
 csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(year),str(year),datestr)
