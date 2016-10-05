@@ -90,6 +90,11 @@ def set_priority(df):
 
 	df['clean_priority'] = df['enum_seq'].apply(assign_priority)
 	priority_counts = df.groupby(['clean_priority']).size().to_dict()
+	for i in range(1,8):
+		try:
+			priority_counts[i]
+		except KeyError:
+			priority_counts[i] = 0
 
 	end_priority = time.time()
 	priority_time = round(float(end_priority-start_priority)/60,1)
