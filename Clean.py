@@ -49,15 +49,12 @@ def clean_microdata(city_info):
 	df, load_time = load_city(city.replace(' ',''),state,year)
 
 	# Pre-clean street names
-	df, preclean_time = preclean_street(df,city)    
+	df, sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time = preclean_street(df,city,state,year)    
 
 	# Use pre-cleaned street names to get house number sequences
 	street_var = 'street_precleaned'
 	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
 	df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
-
-	# Load Steve Morse Street-ED data
-	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict = load_steve_morse(df,city,state,year,flatten=True)
 
 	# Use house number sequences to fill in blank street names
 	df, fix_blanks_info1 = fix_blank_st(df,city,HN_SEQ,'street_precleaned',sm_st_ed_dict)
@@ -87,22 +84,22 @@ def clean_microdata(city_info):
 
 	# Create overall match variables
 	df, num_overall_matches = create_overall_match_variables(df)
-	cprint("Overall matches: "+str(num_overall_matches)+" of "+str(num_records)+" total cases ("+str(round(100*float(num_overall_matches)/float(num_records),1))+"%)\n",file=AnsiToWin32(sys.stdout))
+	cprint("Overall matches: "+str(num_overall_matches)+" of "+str(num_records)+" total cases ("+str(round(100*float(num_overall_matches)/float(num_records),1))+"%)\n",'green',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
 	# Set priority level for residual cases
 	df, priority_counts, num_priority, priority_time = set_priority(df)
 	for i in range(1,8):
 		cprint('Priority ' + str(i) + ' cases to check: ' + str(priority_counts[i]) + ' (' + str(round(100*float(priority_counts[i])/num_records,1)) + '% of all cases)',file=AnsiToWin32(sys.stdout))
-
+	cprint('\nTotal cases to check: ' + str(sum(priority_counts.values())) + ' (' + str(round(100*float(sum(priority_counts.values()))/num_records,1)) + '%)','red',file=AnsiToWin32(sys.stdout))
 	# Save full dataset 
 	city_file_name = city.replace(' ','') + state
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,datestr)
+	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V1')
 	df.to_csv(file_name_all)
 
 	# Generate remaining dashboard variables
 
 	problem_EDs = list(set(problem_EDs))
-	print("Problem EDs: %s" % (problem_EDs))
+	print("\nProblem EDs: %s" % (problem_EDs))
 
 	problem_EDs_present = False
 	if len(problem_EDs) > 0:
@@ -136,7 +133,7 @@ def clean_microdata(city_info):
 
 	end_total = time.time()
 	total_time = round(float(end_total-start_total)/60,1)
-	cprint("Total processing time for %s: %s\n" % (city,total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
+	cprint("\nTotal processing time for %s: %s\n" % (city,total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
 	info = [year, city, state, num_records, 
 		prop_passed_validation, prop_fuzzy_matches, prop_blank_street_fixed, prop_resid_st,
@@ -183,7 +180,7 @@ def clean_microdata(city_info):
 		student_vars = ['index','image_id','line_num','institution','ed','block','hhid','rel_id','pid','dn','hn','street_raw','street_precleanedHN','check_hn','check_st','check_ed','clean_priority']
 	
 	df = df[student_vars]
-	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,datestr)
+	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,'V1')
 	df.to_csv(file_name_students)
 
 	return info 
