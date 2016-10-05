@@ -212,48 +212,68 @@ def load_city(city,state,year):
 # Step 2: Preclean data
 #
 
-def preclean_street(df,city):
+def preclean_street(df,city,state,year):
 
     start = time.time()
+
     #Create dictionary for (and run precleaning on) unique street names
     grouped = df.groupby(['street_raw'])
     cleaning_dict = {}
     for name,_ in grouped:
         cleaning_dict[name] = standardize_street(name)
+    
     #Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
     df['street_precleaned'] = df['street_raw'].apply(lambda s: cleaning_dict[s][0])
     df['DIR'] = df['street_raw'].apply(lambda s: cleaning_dict[s][1])
     df['NAME'] = df['street_raw'].apply(lambda s: cleaning_dict[s][2])
     df['TYPE'] = df['street_raw'].apply(lambda s: cleaning_dict[s][3])
-    end = time.time()
-    preclean_time = round(float(end-start)/60,1)
 
-    cprint('Precleaning street names for %s took %s\n' % (city,preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+    sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(df,city,state,year)
 
-    return df, preclean_time
-
-#
-# Step 3: Get Steve Morse street-ed data
-#
-
-def load_steve_morse(df,city,state,year,flatten):
-
-    #NOTE: This dictionary must be built independently of this script
-    sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'rb'))
-    sm_st_ed_dict = sm_st_ed_dict_file[(city,'%s' % (state.lower()))]
-
-    #Flatten dictionary
-    if flatten:
-        sm_st_ed_dict = {k:v for d in [v for k,v in sm_st_ed_dict.items()] for k,v in d.items()}
-
-    #Capture all Steve Morse streets in one list
-    sm_all_streets = sm_st_ed_dict.keys()
-
+    #Create dictionary {NAME:num_NAME_versions}
+    num_NAME_versions = {k:len(v) for k,v in sm_st_ed_dict_nested.items()}
+    #Flatten for use elsewhere
+    sm_st_ed_dict = {k:v for d in [v for k,v in sm_st_ed_dict_nested.items()] for k,v in d.items()}
     #For bookkeeping when validating matches using ED 
     microdata_all_streets = np.unique(df['street_precleaned'])
     for st in microdata_all_streets:
         if st not in sm_all_streets:
             sm_st_ed_dict[st] = None
+
+    #If no TYPE, check if NAME is unique (and so we can assume TYPE = "St")
+    def replace_singleton_names_w_st(st,NAME,TYPE):
+        try:
+            if num_NAME_versions[NAME] == 1 & TYPE == '':
+                TYPE = "St"
+                st = st + " St"
+            return st, TYPE    
+        except:
+            return st, TYPE
+
+    df['street_precleaned'], df['DIR'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'],x['NAME'],x['TYPE']), axis=1))
+
+    end = time.time()
+    preclean_time = round(float(end-start)/60,1)
+
+    cprint('Precleaning street names for %s took %s\n' % (city,preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+
+    return df, sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
+
+#
+# Step 3: Get Steve Morse street-ed data
+#
+
+def load_steve_morse(df,city,state,year):
+
+    #NOTE: This dictionary must be built independently of this script
+    sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'rb'))
+    sm_st_ed_dict_nested = sm_st_ed_dict_file[(city,'%s' % (state.lower()))]
+
+    #Flatten dictionary
+    temp = {k:v for d in [v for k,v in sm_st_ed_dict_nested.items()] for k,v in d.items()}
+
+    #Capture all Steve Morse streets in one list
+    sm_all_streets = temp.keys()
 
     #
     # Build a Steve Morse (sm) ED-to-Street (ed_st) dictionary (dict)
@@ -262,7 +282,7 @@ def load_steve_morse(df,city,state,year,flatten):
     sm_ed_st_dict = {}
     #Initialize a list of street names without an ED in Steve Morse
     sm_ed_st_dict[''] = []
-    for st, eds in sm_st_ed_dict.items():
+    for st, eds in temp.items():
         #If street name has no associated EDs (i.e. street name not found in Steve Morse) 
         #then add to dictionary entry for no ED
         if eds is None:
@@ -275,7 +295,7 @@ def load_steve_morse(df,city,state,year,flatten):
                 #Add street name to the list of streets
                 sm_ed_st_dict[ed].append(st)
 
-    return sm_all_streets, sm_st_ed_dict, sm_ed_st_dict
+    return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
 
 #
 # Step X: Matching steps
