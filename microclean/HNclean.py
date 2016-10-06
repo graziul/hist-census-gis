@@ -48,25 +48,7 @@ def is_none(n) :
     else :
         return n==None or math.isnan(n)
 
-def standardize_hn(st):
-
-    st = re.sub('[0-9]/[0-9]|[Rr]ear','',st)
-    st = re.sub('\.$','',st)
-
-    debug = False
-    contHN = re.search("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?-?",st)
-    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
-    
-    st = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',st)
-    rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",st)
-    if(rangeHN) :
-        st = rangeHN.group(1)
-    st = st.strip()
-
-    return st
-
-
-def standardize_hn1(s):
+def standardize_hn(s):
 # recommended usage:
 # dfHNList = df['general_house_number_in_cities_o'].apply(standardize_hn1,"columns")
 # df['hn']      = [x[0] for x in dfHNList]
