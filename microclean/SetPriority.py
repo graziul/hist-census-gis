@@ -24,7 +24,6 @@ def set_priority(df):
 	df['check_st'] = ~df['overall_match_bool']
 	df['check_ed'] = np.where(df['sm_exact_match_bool'] & ~df['sm_ed_match_bool'],True,False)
 	df['check_bool'] = np.where(df['check_hn'] | df['check_st'] | df['check_ed'],True,False)
-
 	df['enum_seq'] = 0
 
 	#Convert street name into numeric value (so np.diff works)
@@ -44,9 +43,19 @@ def set_priority(df):
 	for i in range(len(splits)-1):
 		df.ix[list(enum_check_list.next()),'enum_seq'] = i
 
-	resid_case_counts = df[['check_bool','enum_seq']].groupby(['enum_seq'])
+	#Multiple sequences of same street in single ED 
+	def gen_list(x):
+		t = list(np.unique(x))
+		return t
+
+	same_st_ed_dict = df.groupby(['street_raw','ed','check_bool'])['enum_seq'].apply(gen_list).to_dict()
+	df['enum_seq1'] = df.apply(lambda x: min(same_st_ed_dict[x['street_raw'],x['ed'],x['check_bool']]) if (x['street_raw'] is not '') else x['enum_seq'],axis=1)
+	#PROBLEM: It's tagging ALL cases in sequence, not just ones with check_bool == True??
+
+	resid_case_counts = df[['check_bool','enum_seq1']].groupby(['enum_seq1'])
 	enum_seq_counts_dict = resid_case_counts.size().to_dict()
 	enum_seq_check_dict = resid_case_counts['check_bool'].mean().to_dict()
+
 
 	#	Clean_priority: 
 	#
@@ -88,7 +97,8 @@ def set_priority(df):
 	for i in range(1,8):
 		num_priority[i] = len([k for k,v in priority.items() if v == i])
 
-	df['clean_priority'] = df['enum_seq'].apply(assign_priority)
+	df['clean_priority'] = df['enum_seq1'].apply(assign_priority)
+
 	priority_counts = df.groupby(['clean_priority']).size().to_dict()
 	for i in range(1,8):
 		try:
@@ -96,8 +106,113 @@ def set_priority(df):
 		except KeyError:
 			priority_counts[i] = 0
 
+	num_records = len(df)
+	for i in range(1,8):
+		cprint('Priority ' + str(i) + ' cases to check: ' + str(priority_counts[i]) + ' (' + str(round(100*float(priority_counts[i])/num_records,1)) + '% of all cases)',file=AnsiToWin32(sys.stdout))
+	cprint('\nTotal cases to check: ' + str(sum(priority_counts.values())) + ' (' + str(round(100*float(sum(priority_counts.values()))/num_records,1)) + '%)','red',file=AnsiToWin32(sys.stdout))
+
 	end_priority = time.time()
 	priority_time = round(float(end_priority-start_priority)/60,1)
 	cprint('Setting priority took %s \n' % (priority_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	priority_info = priority_counts, num_priority, priority_time
 
-	return df, priority_counts, num_priority, priority_time
+	return df, priority_info
+
+def create_overall_match_variables(df):
+
+	df['sm_fuzzy_match_blank_fix'] = df['street_post_fuzzyHN'] != df['street_post_fuzzy']
+	df['sm_fuzzy_match_boolHN'] = np.where(df['sm_fuzzy_match_bool'] | df['sm_fuzzy_match_blank_fix'],True,False)
+
+	df['overall_match'] = ''
+	df['overall_match_type'] = 'NoMatch'
+	df['overall_match_bool'] = False
+
+	df.loc[df['sm_fuzzy_match_boolHN'],'overall_match'] = df['street_post_fuzzyHN']
+	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match'] = df['street_precleanedHN']
+
+	df.loc[df['sm_fuzzy_match_boolHN'],'overall_match_type'] = 'FuzzySM'
+	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match_type'] = 'ExactSM'
+
+	df.loc[(df['overall_match_type'] == 'ExactSM') | (df['overall_match_type'] == 'FuzzySM'),'overall_match_bool'] = True 
+
+	return df
+
+def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, priority_info, times):
+
+	num_records, num_passed_validation, prop_passed_validation, num_failed_validation, prop_failed_validation, num_pairs_failed_validation, num_pairs, prop_pairs_failed_validation, exact_matching_time = exact_info 
+	num_fuzzy_matches, prop_fuzzy_matches, fuzzy_matching_time, problem_EDs = fuzzy_info
+	num_blank_street_names1, num_blank_street_singletons1, per_singletons1, num_blank_street_fixed1, per_blank_street_fixed1, blank_fix_time1 = fix_blanks_info1
+	num_blank_street_names2, num_blank_street_singletons2, per_singletons2, num_blank_street_fixed2, per_blank_street_fixed2, blank_fix_time2 = fix_blanks_info2
+	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time = preclean_info
+	priority_counts, num_priority, priority_time = priority_info
+	load_time,total_time = times
+
+	blank_fix_time = blank_fix_time1 + blank_fix_time2
+
+	problem_EDs = list(set(problem_EDs))
+	print("\nProblem EDs: %s" % (problem_EDs))
+
+	problem_EDs_present = False
+	if len(problem_EDs) > 0:
+		problem_EDs_present = True
+
+	num_overall_matches = df['overall_match_bool'].sum()
+
+	num_hn_outliers1 = 	df['hn_outlier1'].sum()  
+	num_hn_outliers2 = 	df['hn_outlier2'].sum() 
+
+	num_resid_check_st = len(df[df['check_st'] & ~df['check_hn']])
+	num_resid_check_hn = len(df[~df['check_st'] & df['check_hn']])
+	num_resid_check_st_hn = len(df[df['check_st'] & df['check_hn']])
+
+	num_blank_street_fixed = num_blank_street_fixed1 + num_blank_street_fixed2
+
+	num_resid_st = len(df[df['check_st']]) 
+	num_resid_hn_total = num_resid_check_hn + num_resid_check_st_hn
+	num_resid_total = num_resid_check_st + num_resid_check_st_hn + num_resid_check_hn
+
+	prop_resid_check_st = float(num_resid_check_st)/num_records
+	prop_resid_check_hn = float(num_resid_check_hn)/num_records
+	prop_resid_check_st_hn = float(num_resid_check_st_hn)/num_records
+	prop_blank_street_fixed = float(num_blank_street_fixed)/num_records
+	prop_resid_st = float(num_resid_st)/num_records
+	prop_resid_hn_total = prop_resid_check_hn + prop_resid_check_st_hn
+	prop_resid_total = prop_resid_check_st + prop_resid_check_st_hn + prop_resid_check_hn
+
+	blank_fix_time = blank_fix_time1 + blank_fix_time2
+
+	header = [year, city, state, num_records]
+	STprop = [prop_passed_validation, prop_fuzzy_matches, prop_blank_street_fixed, prop_resid_st]
+	STnum = [city, state, num_passed_validation, num_fuzzy_matches, num_blank_street_fixed, num_resid_st]
+	HNprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_hn_total]
+	HNnum = [city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_hn_total]
+	Rprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_check_st, prop_resid_total]
+	Rnum = [city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_check_st, num_resid_total]
+	Priority = [city, state, priority_counts[1],priority_counts[2],priority_counts[3],priority_counts[4],priority_counts[5],priority_counts[6],priority_counts[7],sum(priority_counts.values())]
+	perPriority = [city, state, float(priority_counts[1])/num_records,
+		float(priority_counts[2])/num_records,
+		float(priority_counts[3])/num_records,
+		float(priority_counts[4])/num_records,
+		float(priority_counts[5])/num_records,
+		float(priority_counts[6])/num_records,
+		float(priority_counts[7])/num_records,float(sum(priority_counts.values()))/num_records]
+	seqPriority = [city, state, num_priority[1],num_priority[2],num_priority[3],num_priority[4],num_priority[5],num_priority[6],num_priority[7],sum(num_priority.values())]
+	num_seqs = len(np.unique(df['enum_seq1']))
+	perseqPriority = [city, state, float(priority_counts[1])/num_seqs,
+		float(num_priority[2])/num_seqs,
+		float(num_priority[3])/num_seqs,
+		float(num_priority[4])/num_seqs,
+		float(num_priority[5])/num_seqs,
+		float(num_priority[6])/num_seqs,
+		float(num_priority[7])/num_seqs,float(sum(num_priority.values()))/num_seqs]
+	ED = [city, state, problem_EDs_present, num_failed_validation, prop_failed_validation, 
+		num_pairs_failed_validation, num_pairs, prop_pairs_failed_validation]
+	FixBlank = [city, state, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
+		num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2]
+	Time = [city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
+		blank_fix_time, priority_time, total_time]
+
+	sp = ['']
+	info = header + STprop + sp + STnum + sp + HNprop + sp + HNnum + sp + Rprop + sp + Rnum + sp + Priority + sp + perPriority + sp + seqPriority + sp + perseqPriority + sp + ED + sp + FixBlank + sp + Time
+
+	return info
