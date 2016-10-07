@@ -112,15 +112,16 @@ def load_city(city,state,year):
     #
 
     if year == 1940:
-        df['hn'], df['hn_flag'] = zip(*df['general_house_number'].map(standardize_hn1))
-        df['hn'] = df['hn'].apply(make_int)
+        df['hn_raw'] = df['general_house_number']
     if year == 1930:
-        df['hn'], df['hn_flag'] = zip(*df['general_house_number_in_cities_o'].map(standardize_hn1))
-        df['hn'] = df['hn'].apply(make_int)
+        df['hn_raw'] = df['general_house_number_in_cities_o']
     if year == 1920:
-        df['hn'] = df['general_housenumber']
+        df['hn_raw'] = df['general_housenumber']
     if year == 1910:
-        df['hn'] = df['HouseNumber']    
+        df['hn_raw'] = df['HouseNumber']    
+
+    df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
+    df['hn'] = df['hn'].apply(make_int)  
 
     #
     # Image ID
@@ -256,8 +257,10 @@ def preclean_street(df,city,state,year):
     preclean_time = round(float(end-start)/60,1)
 
     cprint('Precleaning street names for %s took %s\n' % (city,preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+    
+    preclean_info = sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
 
-    return df, sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
+    return df, preclean_info
 
 #
 # Step 3: Get Steve Morse street-ed data
@@ -367,7 +370,7 @@ def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict):
 
     return df, exact_info
 
-def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
+def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_similar=False):
 
     num_records = len(df)
 
@@ -428,58 +431,57 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
         #Step 3: If both best matches are the same, return as best match
         if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.5):
             #Check how many other streets in ED differ by one character
-            too_similar = sum([diff_by_one_char(st,best_match_ed[1]) for st in sm_ed_streets])
-            if too_similar == 0:
+            if check_too_similar:
+                too_similar = sum([diff_by_one_char(st,best_match_ed[1]) for st in sm_ed_streets])
+                if too_similar == 0:
+                    return [best_match_ed[1],best_match_ed[0],True]
+                else:
+                    return['','',False]
+            else: 
                 return [best_match_ed[1],best_match_ed[0],True]
-            else:
-                return['','',False]
         else:
             return ['','',False]
 
-#nratio
-#pratio
-
     #Create dictionary based on Street-ED pairs for faster lookup using helper function
-    df_no_validated_exact_match = df[(df.sm_exact_match_bool==False) | (df.sm_ed_match_bool==False)]
+    df_no_validated_exact_match = df[~(df['sm_exact_match_bool'] & df['sm_ed_match_bool'])]
     df_grouped = df_no_validated_exact_match.groupby([street,'ed'])
     sm_fuzzy_match_dict = {}
     for st_ed,_ in df_grouped:
     	sm_fuzzy_match_dict[st_ed] = sm_fuzzy_match(st_ed[0],st_ed[1])
 
     #Helper function (necessary since dictionary built only for cases without validated exact matches)
-    def get_fuzzy_match(ed,street):
-        try:
-            return sm_fuzzy_match_dict[street,ed]
-        except:
+    def get_fuzzy_match(exact_match,ed_match,street,ed):
+        #Only look at cases without validated exact match
+        if not (exact_match & ed_match):
+            #Need to make sure "Unnamed" street doesn't get fuzzy matched
+            if 'Unnamed' in street:
+                return ['','',False]
+            #Get fuzzy match    
+            else:
+                return sm_fuzzy_match_dict[street,ed]
+        #Return null if exact validated match
+        else:
             return ['','',False]
-       
-    #Get fuzzy matches and replace missing data with null values
-    df['sm_fuzzy_match'] = df.apply(lambda s: get_fuzzy_match(s['ed'],s[street])[0], axis=1)
-    df['sm_fuzzy_match_score'] = df.apply(lambda s: get_fuzzy_match(s['ed'],s[street])[1], axis=1)
-    df['sm_fuzzy_match_bool'] = df.apply(lambda s: get_fuzzy_match(s['ed'],s[street])[2], axis=1)
-    sm_fuzzy_matches = np.sum(df['sm_fuzzy_match_bool'])
 
-    end = time.time()
-    fuzzy_matching_time = round(float(end-start)/60,1)
-
-    #Need to make sure "Unnamed" street not fuzzy matches (but can be HN_seq matched)
-#   df.loc[df[street]=='Unnamed','sm_fuzzy_match'] = 'Unnamed'
-#   df.loc[df[street]=='Unnamed','sm_fuzzy_match_score'] = ''
-#   df.loc[df[street]=='Unnamed','sm_fuzzy_match_bool'] = 'False'
+    #Get fuzzy matches 
+    df['sm_fuzzy_match'], df['sm_fuzzy_match_score'], df['sm_fuzzy_match_bool'] = zip(*df.apply(lambda x: get_fuzzy_match(x['sm_exact_match_bool'],x['sm_ed_match_bool'],x[street],x['ed']), axis=1))
 
     #Compute number of cases without validated exact match
     passed_validation = df[(df.sm_exact_match_bool==True) & (df.sm_ed_match_bool==True)]
     num_passed_validation = len(passed_validation)
     num_current_residual_cases = num_records - num_passed_validation
 
-    cprint("Fuzzy matches (using microdata ED): "+str(sm_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(sm_fuzzy_matches)/float(num_current_residual_cases),1))+"%)\n",file=AnsiToWin32(sys.stdout))
+    #Generate fuzzy_info
+    num_fuzzy_matches = np.sum(df['sm_fuzzy_match_bool'])
+    prop_sm_fuzzy_matches = float(num_fuzzy_matches)/num_records
+    end = time.time()
+    fuzzy_matching_time = round(float(end-start)/60,1)
+    fuzzy_info = [num_fuzzy_matches, prop_sm_fuzzy_matches, fuzzy_matching_time, problem_EDs]
+
+    cprint("Fuzzy matches (using microdata ED): "+str(num_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(num_current_residual_cases),1))+"%)\n",file=AnsiToWin32(sys.stdout))
     cprint("Fuzzy matching for %s took %s\n" % (city,fuzzy_matching_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
 
-    prop_sm_fuzzy_matches = float(sm_fuzzy_matches)/float(num_records)
-
-    fuzzy_info = [sm_fuzzy_matches, prop_sm_fuzzy_matches, fuzzy_matching_time]
-
-    return df, fuzzy_info, problem_EDs
+    return df, fuzzy_info
 
 def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 
