@@ -9,6 +9,8 @@ from microclean.STclean import *
 from microclean.HNclean import *
 from microclean.SetPriority import *
 
+version = 2
+
 datestr = time.strftime("%Y_%m_%d")
 
 def clean_microdata(city_info):
@@ -22,8 +24,8 @@ def clean_microdata(city_info):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-#	init()
-#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
+	init()
+	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -68,7 +70,7 @@ def clean_microdata(city_info):
 
 	# Save full dataset 
 	city_file_name = city.replace(' ','') + state
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V1')
+	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V'+str(version))
 	df.to_csv(file_name_all)
 
 	end_total = time.time()
@@ -88,7 +90,7 @@ def clean_microdata(city_info):
 		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','check_ed','clean_priority']
 	
 	df = df[student_vars]
-	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,'V1')
+	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,'V'+str(version))
 	df.to_csv(file_name_students)
 
 	return info 
