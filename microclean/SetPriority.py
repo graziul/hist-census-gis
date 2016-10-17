@@ -120,7 +120,7 @@ def set_priority(df):
 
 def create_overall_match_variables(df):
 
-	df['sm_fuzzy_match_blank_fix'] = df['street_post_fuzzyHN'] != df['street_post_fuzzy']
+	df['sm_fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
 	df['sm_fuzzy_match_boolHN'] = np.where(df['sm_fuzzy_match_bool'] | df['sm_fuzzy_match_blank_fix'],True,False)
 
 	df['overall_match'] = ''
