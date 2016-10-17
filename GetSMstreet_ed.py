@@ -1,3 +1,4 @@
+from openpyxl import Workbook
 import urllib
 import pandas as pd
 import re
@@ -13,6 +14,7 @@ city_list = city_info_df['city_name'].tolist()
 
 city_state_iterator = zip(city_info_df['city_name'].tolist(),city_info_df['state_abbr'].str.lower().tolist())
     
+# Get the city_state abbreviation for Steve Morse    
 def get_sm_web_abbr(year):
 
     for city_state in city_state_iterator:
@@ -46,7 +48,7 @@ def get_sm_web_abbr(year):
                         city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
                         city_abbr = re.sub(r'\$[0-9]|\*[0-9]','',city_abbr)
                         sm_web_abbr = city_abbr + state_abbr
-                        if sm_web_abbr not in sm_web_abbr_dict[year][state_abbr][city_name].values():
+                        if sm_web_abbr not in sm_web_abbr_dict[year][state_abbr][city_name]:
                             sm_web_abbr_dict[year][state_abbr][city_name].append(sm_web_abbr)
 
 
@@ -59,6 +61,7 @@ for year in [1900,1910,1930,1940]:
 
 pickle.dump(sm_web_abbr_dict,open(file_path + '/sm_web_abbr.pickle','wb'))
 
+#Standardize Steve Morse street names
 def sm_standardize(st) :
     orig_st = st
     st = re.sub(r" [Ee][Xx][Tt][Ee]?[Nn]?[Dd]?[Ee]?[Dd]?$","",st)
@@ -92,6 +95,7 @@ def sm_standardize(st) :
     #print("changed to "+st)
     return [st,DIR,NAME,TYPE]
 
+# Get Steve Morse street-ed information
 def get_sm_st_ed(year):
         
     for city_state in city_state_iterator:
@@ -154,3 +158,90 @@ for year in [1900,1910,1930,1940]:
 for year in [1900,1910,1930,1940]:
     pickle.dump(sm_st_ed_dict[year],open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'wb'))
 
+# Create usable ST-ED and ED-ST lists
+
+sm_ed_st_dict = {}
+for year in [1900,1910,1930,1940]:
+    sm_ed_st_dict[year] = {}
+    for city_state in city_state_iterator:
+        sm_ed_st_dict[year][city_state] = {}
+        sm_st_ed_dict_nested = sm_st_ed_dict[year][city_state] 
+        #Flatten dictionary
+        temp = {k:v for d in [v for k,v in sm_st_ed_dict_nested.items()] for k,v in d.items()}
+        #Initialize a list of street names without an ED in Steve Morse
+        sm_ed_st_dict[year][city_state][''] = []
+        for st, eds in temp.items():
+            #If street name has no associated EDs (i.e. street name not found in Steve Morse) 
+            #then add to dictionary entry for no ED
+            if eds is None:
+                sm_ed_st_dict[year][city_state][''].append(st)
+            else:
+                #For every ED associated with a street name...
+                for ed in eds:
+                    #Initalize an empty list if ED has no list of street names yet
+                    sm_ed_st_dict[year][city_state][ed] = sm_ed_st_dict[year][city_state].setdefault(ed, [])
+                    #Add street name to the list of streets
+                    sm_ed_st_dict[year][city_state][ed].append(st)
+
+def output_usable_list(sm_st_ed_dict,year):
+
+    sm_dict = sm_st_ed_dict[year]
+
+    for city_state in city_state_iterator:
+        c_s = city_state[0] + city_state[1].upper()
+        file_name = file_path + '/' + str(year) + '/sm_lists/' + c_s + '_SM.xlsx'
+        wb = Workbook()
+
+        temp = sm_dict[city_state]
+        sm_st_ed_dict_city = {k:v for d in [v for k,v in temp.items()] for k,v in d.items()}
+
+        #Save street-to-ED sheet
+        ws_st = wb.active
+        ws_st.title = '1930 Street to ED' 
+        ws_st.append([str(year) + ' Street',str(year) + ' EDs'])
+        dictlist = []
+        keylist = sm_st_ed_dict_city.keys()
+        keylist.sort()
+        for k in keylist:
+            t = [i.replace("'","") for i in sm_st_ed_dict_city[k]]
+            ws_st.append([k]+t)        
+
+        #Save ED-to-street sheet
+        ws_ed = wb.create_sheet('1930 ED to Street')
+        ws_ed.append([str(year) + ' ED',str(year) + ' Streets'])
+
+        sm_ed_st_dict_city = {}
+        for st, eds in sm_st_ed_dict_city.items():
+            for ed in eds:
+                #Initalize an empty list if ED has no list of street names yet
+                sm_ed_st_dict_city[ed] = sm_ed_st_dict_city.setdefault(ed, [])
+                #Add street name to the list of streets
+                sm_ed_st_dict_city[ed].append(st)
+
+        dictlist = []
+        keylist = sm_ed_st_dict_city.keys()
+        keylist.sort()
+        for k in keylist:
+            t = [i.replace("'","") for i in sm_ed_st_dict_city[k]]
+            ws_ed.append([k]+t)       
+
+        #If 1930, also include list of 1940 SM streets
+        if year == 1930:
+            ws_st1940 = wb.create_sheet('1940 Streets')
+            ws_st1940.append(['1940 Streets'])
+            streetlist = sm_st_ed_dict[1940][city_state].keys()
+            streetlist.sort()
+            for s in streetlist:
+                ws_st1940.append([s])
+
+        wb.save(file_name)
+
+'''
+                col = 1         
+                for i in sm_dict_city[k]:
+                    row.write(k, col, i.replace("'",""))
+                    col += 1    
+'''
+
+for year in [1900,1910,1930,1940]:
+    output_usable_list(sm_st_ed_dict,year)
