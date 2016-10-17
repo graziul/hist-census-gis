@@ -535,7 +535,7 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
             non_blank_entries = len(df_seq_streets[df_seq_streets[street]!=''])
             for name in seq_street_names:
                 # Choose a street name only if it constitutes at least 50% of non-blank street name entries
-                if float(street_count_dict[name])/float(non_blank_entries) > 0.5:
+                if float(street_count_dict[name])/float(non_blank_entries) > 0.51:
                     potential_street_name = name
                     for ed in ed_list:
                         if check_ed_match(ed,potential_street_name,sm_st_ed_dict) or ed == '':
@@ -543,7 +543,10 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 
     df_STblank_post = df[df['%sHN' % (street)]=='']
     num_blank_street_names_post = len(df_STblank_post)    
+    #NOTE: This is just blanks changed. Function will also change street names based on HN seq!
     num_blank_street_fixed = num_blank_street_names - num_blank_street_names_post
+    temp = df['%sHN' % (street)] != df[street]
+    num_street_changes_total = temp.sum()
 
     end = time.time()
 
@@ -553,8 +556,10 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
     per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names),1)
     cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%% of blanks) were singletons",file=AnsiToWin32(sys.stdout))
 
-    per_blank_street_fixed = round(100*float(num_blank_street_fixed)/float(len(df)),1)
+    per_blank_street_fixed = round(100*float(num_blank_street_fixed)/len(df),1)
+    per_street_changes_total = round(100*float(num_street_changes_total)/len(df),1)
     cprint("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+"%% of all cases) could be fixed using HN sequences",file=AnsiToWin32(sys.stdout))
+    cprint("A total of "+str(num_street_changes_total)+" ("+str(per_street_changes_total)+"%% of all cases) were changed",file=AnsiToWin32(sys.stdout))
 
     blank_fix_time = round(float(end-start)/60,1)
     cprint("Fixing blank streets for %s took %s\n" % (city,blank_fix_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
