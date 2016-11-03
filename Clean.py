@@ -24,8 +24,8 @@ def clean_microdata(city_info):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-	init()
-	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
+#	init()
+#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -87,7 +87,7 @@ def clean_microdata(city_info):
 	if year==1940:
 		student_vars = ['hhid','hhorder','institution','rel_id','dn','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','check_ed','clean_priority']
 	if year==1930:
-		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','check_ed','clean_priority']
+		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','clean_priority']
 	
 	df = df[student_vars]
 	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,'V'+str(version))
@@ -152,7 +152,7 @@ dfseqPriority = df.ix[:,64:75].sort_values(by='seqTotal').reset_index()
 dfperseqPriority = df.ix[:,75:86].sort_values(by='perseqTotal').reset_index()
 dfED = df.ix[:,86:95].sort_values(by='propExactMatchesFailed',ascending=False).reset_index()
 dfFixBlank = df.ix[:,95:106].reset_index()
-dfTime = df.ix[:,106:117].sort_values(by='TotalTime',ascending=False).reset_index()
+dfTime = df.ix[:,106:117].sort_values(by='TotalTime').reset_index()
 
 dashboard = pd.concat([dfSTprop,dfSTnum,dfHNprop,dfHNnum,dfRprop,dfRnum,dfperPriority,dfPriority,dfseqPriority,dfperseqPriority,dfED,dfFixBlank,dfTime],axis=1)
 del dashboard['index']
