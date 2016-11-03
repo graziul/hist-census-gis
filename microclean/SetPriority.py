@@ -23,7 +23,8 @@ def set_priority(df):
 	df['check_hn'] = df['hn_outlier2']
 	df['check_st'] = ~df['overall_match_bool']
 	df['check_ed'] = np.where(df['sm_exact_match_bool'] & ~df['sm_ed_match_bool'],True,False)
-	df['check_bool'] = np.where(df['check_hn'] | df['check_st'] | df['check_ed'],True,False)
+#	df['check_bool'] = np.where(df['check_hn'] | df['check_st'] | df['check_ed'],True,False)
+	df['check_bool'] = np.where(df['check_hn'] | df['check_st'],True,False)
 	df['enum_seq'] = 0
 
 	#Convert street name into numeric value (so np.diff works)
@@ -128,10 +129,12 @@ def create_overall_match_variables(df):
 	df['overall_match_bool'] = False
 
 	df.loc[df['sm_fuzzy_match_boolHN'],'overall_match'] = df['street_post_fuzzyHN']
-	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match'] = df['street_precleanedHN']
+#	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match'] = df['street_precleanedHN']
+	df.loc[df['sm_exact_match_bool'],'overall_match'] = df['street_precleanedHN']
 
 	df.loc[df['sm_fuzzy_match_boolHN'],'overall_match_type'] = 'FuzzySM'
-	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match_type'] = 'ExactSM'
+#	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match_type'] = 'ExactSM'
+	df.loc[df['sm_exact_match_bool'],'overall_match_type'] = 'ExactSM'
 
 	df.loc[(df['overall_match_type'] == 'ExactSM') | (df['overall_match_type'] == 'FuzzySM'),'overall_match_bool'] = True 
 
@@ -141,8 +144,8 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 
 	num_records, num_passed_validation, prop_passed_validation, num_failed_validation, prop_failed_validation, num_pairs_failed_validation, num_pairs, prop_pairs_failed_validation, exact_matching_time = exact_info 
 	num_fuzzy_matches, prop_fuzzy_matches, fuzzy_matching_time, problem_EDs = fuzzy_info
-	num_blank_street_names1, num_blank_street_singletons1, per_singletons1, num_blank_street_fixed1, per_blank_street_fixed1, blank_fix_time1 = fix_blanks_info1
-	num_blank_street_names2, num_blank_street_singletons2, per_singletons2, num_blank_street_fixed2, per_blank_street_fixed2, blank_fix_time2 = fix_blanks_info2
+	num_street_changes1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1, num_blank_street_fixed1, per_blank_street_fixed1, blank_fix_time1 = fix_blanks_info1
+	num_street_changes2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2, num_blank_street_fixed2, per_blank_street_fixed2, blank_fix_time2 = fix_blanks_info2
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time = preclean_info
 	priority_counts, num_priority, priority_time = priority_info
 	load_time,total_time = times
@@ -162,28 +165,39 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	num_hn_outliers2 = 	df['hn_outlier2'].sum() 
 
 	num_resid_check_st = len(df[df['check_st'] & ~df['check_hn']])
-	num_resid_check_hn = len(df[~df['check_st'] & df['check_hn']])
-	num_resid_check_st_hn = len(df[df['check_st'] & df['check_hn']])
+	prop_resid_check_st = float(num_resid_check_st)/num_records
 
-	num_blank_street_fixed = num_blank_street_fixed1 + num_blank_street_fixed2
+	num_resid_check_hn = len(df[~df['check_st'] & df['check_hn']])
+	prop_resid_check_hn = float(num_resid_check_hn)/num_records
+
+	num_resid_check_st_hn = len(df[df['check_st'] & df['check_hn']])
+	prop_resid_check_st_hn = float(num_resid_check_st_hn)/num_records
+
+	num_street_changes_total = num_street_changes1 + num_street_changes2
+	prop_street_changes_total = float(num_street_changes_total)/num_records
+
+	#Have to back this out of num/prop_exact_match (e.g. prop_passed_validation + prop_failed_validation)
+	prop_blank_street_fixed1 =	float(num_blank_street_fixed1)/num_records
+
+	num_blank_street_fixed_total = num_blank_street_fixed1 + num_blank_street_fixed2
+	prop_blank_street_fixed_total = float(num_blank_street_fixed_total)/num_records
 
 	num_resid_st = len(df[df['check_st']]) 
-	num_resid_hn_total = num_resid_check_hn + num_resid_check_st_hn
-	num_resid_total = num_resid_check_st + num_resid_check_st_hn + num_resid_check_hn
-
-	prop_resid_check_st = float(num_resid_check_st)/num_records
-	prop_resid_check_hn = float(num_resid_check_hn)/num_records
-	prop_resid_check_st_hn = float(num_resid_check_st_hn)/num_records
-	prop_blank_street_fixed = float(num_blank_street_fixed)/num_records
 	prop_resid_st = float(num_resid_st)/num_records
+
+	num_resid_hn_total = num_resid_check_hn + num_resid_check_st_hn
 	prop_resid_hn_total = prop_resid_check_hn + prop_resid_check_st_hn
+
+	num_resid_total = num_resid_check_st + num_resid_check_st_hn + num_resid_check_hn
 	prop_resid_total = prop_resid_check_st + prop_resid_check_st_hn + prop_resid_check_hn
 
-	blank_fix_time = blank_fix_time1 + blank_fix_time2
-
 	header = [year, city, state, num_records]
-	STprop = [prop_passed_validation, prop_fuzzy_matches, prop_blank_street_fixed, prop_resid_st]
-	STnum = [city, state, num_passed_validation, num_fuzzy_matches, num_blank_street_fixed, num_resid_st]
+	#Back out first blank fixing since it occurs before exact matching
+	STprop = [prop_passed_validation+prop_failed_validation-prop_blank_street_fixed1, 
+		prop_fuzzy_matches, prop_blank_street_fixed_total, prop_resid_st]
+	#Back out first blank fixing since it occurs before exact matching
+	STnum = [city, state, num_passed_validation+num_failed_validation-num_blank_street_fixed1, 
+		num_fuzzy_matches, num_blank_street_fixed_total, num_resid_st]
 	HNprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_hn_total]
 	HNnum = [city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_hn_total]
 	Rprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_check_st, prop_resid_total]
