@@ -564,6 +564,6 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
     blank_fix_time = round(float(end-start)/60,1)
     cprint("Fixing blank streets for %s took %s\n" % (city,blank_fix_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
 
-    fix_blanks_info = [num_blank_street_names, num_blank_street_singletons, per_singletons, num_blank_street_fixed, per_blank_street_fixed, blank_fix_time]
+    fix_blanks_info = [num_street_changes_total, num_blank_street_names, num_blank_street_singletons, per_singletons, num_blank_street_fixed, per_blank_street_fixed, blank_fix_time]
 
     return df, fix_blanks_info
