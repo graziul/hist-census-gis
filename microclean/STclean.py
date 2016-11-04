@@ -53,6 +53,7 @@ def load_city(city,state,year):
 
     start = time.time()
 
+    # Try to load file, return error if can't load or file has no cases
     try:
         file_name = city + state
         df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year),file_name), convert_categoricals=False)
@@ -63,11 +64,99 @@ def load_city(city,state,year):
         print('Error loading %s raw data' % (city))  
 
     end = time.time()
+    load_time = round(float(end-start)/60,1)
 
     num_records = len(df)
-
-    load_time = round(float(end-start)/60,1)
     cprint('Loading data for %s took %s' % (city,load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+    
+    # Standardize variable names
+    df = rename_variables(df)
+
+    #
+    # Duplicates
+    #
+
+    def removekey(d, key):
+        r = dict(d)
+        del r[key]
+        return r
+
+    def unique_sequences(seq): 
+       # order preserving
+       noDupes = []
+       [noDupes.append(i) for i in seq if not noDupes.count(i)]
+       return noDupes
+
+    def num_blank(x):
+        return sum(x == '')
+
+    start = time.time()
+
+    # Remove cases if line_num, street_raw, name_last, and name_first are all blank
+    len1 = len(df)
+    df = df[~(df['line_num'].isnull() & (df['street_raw'] == '') & (df['name_last'] == '') & (df['name_first'] == ''))]
+    len2 = len(df)
+    cprint('%s line number blanks removed' % (len1-len2), file=AnsiToWin32(sys.stdout))
+
+    # Remove if pages are duplicates (using sequences of age/gender)
+    image_id = df[['image_id','self_residence_info_age','self_empty_info_gender']]
+    image_id_chunks = image_id.groupby('image_id')
+    image_id_chunks_dict = {name:np.array(group[['self_residence_info_age','self_empty_info_gender']]).tolist() for name, group in image_id_chunks}
+    repeat = {k:v for k,v in image_id_chunks_dict.items() if v in removekey(image_id_chunks_dict,k).values() and len(v) > 2}
+
+    # Identify and remove image_id where all age/gender values are blank ('')
+    blank = []
+    for k,v in repeat.items():
+        if set([i for s in v for i in s]) == {''}:
+            blank.append(k)
+            repeat = removekey(repeat,k)
+
+    # Identify unique sequences of age/gender that are repeated
+    sequence_list = unique_sequences(repeat.values())
+
+    # Create list of image_id sharing the same age/gender sequence 
+    repeat_list = []
+    df_list = []
+    for i in range(len(sequence_list)):
+        repeat_list.append([k for k,v in repeat.items() if v == sequence_list[i]])
+        df_list.append(df[df['image_id'].isin(repeat_list[i])])
+
+    # Pick the page with the fewest blanks in the data
+    drop_imageids = []
+    for df_temp in df_list:
+        image_ids = np.unique(df_temp['image_id'])
+        blanks_dict = {}
+        for image in image_ids:
+            blanks_dict[image] = df_temp[df_temp['image_id']==image].apply(num_blank).sum()
+        min_blanks = min(blanks_dict.values())
+        max_blanks = max(blanks_dict.values())
+        if min_blanks == max_blanks:
+            drop_imageids.append(blanks_dict.keys()[1:])
+        else:
+            #Have to make sure only one image_id is saved since multiple may have max_blanks
+            temp = [k for k,v in blanks_dict.items() if v != max_blanks]
+            if temp is list:
+                temp = temp[0]
+            drop_imageids.append(temp)
+    drop_imageids = [i for s in drop_imageids for i in s]
+
+    len1 = len(df)
+    df = df[~df['image_id'].isin(drop_imageids)]
+    len2 = len(df)
+    cprint('%s cases removed due to duplicate pages' % (len1-len2), file=AnsiToWin32(sys.stdout))
+
+    end = time.time()
+    search_time = round(float(end-start)/60,1)
+    print('Searching for duplicates took %s minutes for %s cases using image ID' % (search_time,str(len(df))))
+
+    # Sort by image_id and line_num (important for HN)
+    df = df.sort_values(['image_id','line_num'])
+    df.index = range(0,len(df))
+
+    return df, load_time
+
+def rename_variables(df):
+
 
     #Save a pristine copy for debugging
     #df_save = df
@@ -202,13 +291,16 @@ def load_city(city,state,year):
         df['pid'] = None
     if year==1930:
         df['pid'] = df['pid']
-    
-    # Sort by image_id and line_num (important for HN)
-    df = df.sort_values(['image_id','line_num'])
-    df.index = range(0,len(df))
 
-    return df, load_time
+    #
+    # Name
+    #
 
+    if year==1930:
+        df['name_last'] = df['self_empty_name_surname']
+        df['name_first'] = df['self_empty_name_given']
+
+    return df
 #
 # Step 2: Preclean data
 #
