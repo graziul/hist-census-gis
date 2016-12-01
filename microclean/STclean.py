@@ -56,7 +56,10 @@ def load_city(city,state,year):
     # Try to load file, return error if can't load or file has no cases
     try:
         file_name = city + state
-        df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year),file_name), convert_categoricals=False)
+        if year == 1930:
+            df = pd.read_stata(file_path + '/%s/raw/%s.dta' % (str(year),file_name), convert_categoricals=False)
+        else:
+            df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year),file_name), convert_categoricals=False)
     except:
         print('Error loading %s raw data' % (city))
    
@@ -70,7 +73,7 @@ def load_city(city,state,year):
     cprint('Loading data for %s took %s' % (city,load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
     
     # Standardize variable names
-    df = rename_variables(df)
+    df = rename_variables(df,year)
 
     #
     # Duplicates
@@ -143,11 +146,11 @@ def load_city(city,state,year):
     len1 = len(df)
     df = df[~df['image_id'].isin(drop_imageids)]
     len2 = len(df)
-    cprint('%s cases removed due to duplicate pages' % (len1-len2), file=AnsiToWin32(sys.stdout))
+    cprint('%s cases removed due to duplicate pages\n' % (len1-len2), file=AnsiToWin32(sys.stdout))
 
     end = time.time()
     search_time = round(float(end-start)/60,1)
-    print('Searching for duplicates took %s minutes for %s cases using image ID' % (search_time,str(len(df))))
+    cprint('Searching for duplicates took %s minutes\n' % (search_time,str(len(df))), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
     # Sort by image_id and line_num (important for HN)
     df = df.sort_values(['image_id','line_num'])
@@ -155,7 +158,7 @@ def load_city(city,state,year):
 
     return df, load_time
 
-def rename_variables(df):
+def rename_variables(df,year):
 
 
     #Save a pristine copy for debugging
