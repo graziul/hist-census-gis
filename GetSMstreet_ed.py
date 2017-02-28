@@ -73,7 +73,7 @@ def sm_standardize(st) :
     else :
         DIR = ""
 
-    TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+    TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
     
     if(TYPE) :
         st = re.sub(TYPE.group(0),"",st)
@@ -84,6 +84,8 @@ def sm_standardize(st) :
             TYPE = "Road"
         if(TYPE=="Dr") :
             TYPE = "Drive"
+        if(TYPE=="La") :
+            TYPE = "Ln"            
         if(re.match("All?e?y?",TYPE)) :
             TYPE = "Aly"
     else :
@@ -183,11 +185,16 @@ for year in [1900,1910,1930,1940]:
                     #Add street name to the list of streets
                     sm_ed_st_dict[year][city_state][ed].append(st)
 
+def ignore_unicode(chars):
+    chars = unicode(chars,errors='ignore')
+    return chars
+
 def output_usable_list(sm_st_ed_dict,year):
 
     sm_dict = sm_st_ed_dict[year]
 
     for city_state in city_state_iterator:
+
         c_s = city_state[0] + city_state[1].upper()
         file_name = file_path + '/' + str(year) + '/sm_lists/' + c_s + '_SM.xlsx'
         wb = Workbook()
@@ -197,17 +204,17 @@ def output_usable_list(sm_st_ed_dict,year):
 
         #Save street-to-ED sheet
         ws_st = wb.active
-        ws_st.title = '1930 Street to ED' 
+        ws_st.title = '%s Street to ED' % (str(year)) 
         ws_st.append([str(year) + ' Street',str(year) + ' EDs'])
         dictlist = []
         keylist = sm_st_ed_dict_city.keys()
         keylist.sort()
         for k in keylist:
             t = [i.replace("'","") for i in sm_st_ed_dict_city[k]]
-            ws_st.append([k]+t)        
+            ws_st.append([ignore_unicode(k)]+t)        
 
         #Save ED-to-street sheet
-        ws_ed = wb.create_sheet('1930 ED to Street')
+        ws_ed = wb.create_sheet('%s ED to Street' % (str(year)))
         ws_ed.append([str(year) + ' ED',str(year) + ' Streets'])
 
         sm_ed_st_dict_city = {}
@@ -222,7 +229,7 @@ def output_usable_list(sm_st_ed_dict,year):
         keylist = sm_ed_st_dict_city.keys()
         keylist.sort()
         for k in keylist:
-            t = [i.replace("'","") for i in sm_ed_st_dict_city[k]]
+            t = [ignore_unicode(i).replace("'","") for i in sm_ed_st_dict_city[k]]
             ws_ed.append([k]+t)       
 
         #If 1930, also include list of 1940 SM streets
@@ -231,17 +238,10 @@ def output_usable_list(sm_st_ed_dict,year):
             ws_st1940.append(['1940 Streets'])
             streetlist = sm_st_ed_dict[1940][city_state].keys()
             streetlist.sort()
-            for s in streetlist:
-                ws_st1940.append([s])
+            for i in streetlist:
+                ws_st1940.append([i])
 
         wb.save(file_name)
-
-'''
-                col = 1         
-                for i in sm_dict_city[k]:
-                    row.write(k, col, i.replace("'",""))
-                    col += 1    
-'''
 
 for year in [1900,1910,1930,1940]:
     output_usable_list(sm_st_ed_dict,year)
