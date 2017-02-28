@@ -1,7 +1,6 @@
 from multiprocessing import Pool
 import pandas as pd
-import rpy2.robjects as robjects
-import sys, os
+import sys, os, subprocess
 import time
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
@@ -9,7 +8,31 @@ from microclean.STclean import *
 from microclean.HNclean import *
 from microclean.SetPriority import *
 
-version = 2
+# Version number
+version = 4
+
+# Changelog
+#
+# V4
+#	- New Steve Morse dictionary ("La" -> "Ln")
+#	- Include best fuzzy match even if doesn't meet threshold (for students to use)
+#
+# V3
+#	- Integrated new raw data
+#	- Implemented sequential street/hn checking for both old and new raw data
+#	- Implemented code to select best street given old and new raw data
+#	- Flagged street where old raw street and new raw street do not match
+#	- Flagged hn where old raw hn and new raw hn do no match
+#	- Implemented code to find DIR given ED if no DIR in microdata
+#
+# V2 
+#	- Removed cases where line_num, street_raw, name_last, and name_first are all blank
+#	- Removed duplicate pages, keeping page with most information (used age/gender sequences > 2)
+#	- Fixed multiple hn/st cleaning issues found through manual cleaning (e.g. street direction issues)
+#	- Removed checking for ED matches
+#	- Note: Hangover code did NOT make it into this version
+#
+# V1 - Original run
 
 datestr = time.strftime("%Y_%m_%d")
 
@@ -19,6 +42,14 @@ def clean_microdata(city_info):
 	state = city_info[1]
 	year = city_info[2]
 	start_total = time.time()
+
+	city_file_name = city.replace(' ','') + state
+	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V'+str(version))
+	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year),city_file_name,'V'+str(version))
+
+	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
+		print("%s is done" % (city))
+		return 
 
 	HN_SEQ = {}
 	ED_ST_HN_dict = {}
@@ -54,12 +85,12 @@ def clean_microdata(city_info):
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df['street_precleanedHN']
 	df.loc[df['sm_fuzzy_match_bool'],street_var] = df['sm_fuzzy_match']
+	HN_SEQ_new = {}
 	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
 	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
 
 	# Use house number sequences to fill in blank street names
 	df, fix_blanks_info2 = fix_blank_st(df,city,HN_SEQ,'street_post_fuzzy',sm_st_ed_dict)
-	cprint("Overall matches of any kind\n",attrs=['underline'],file=AnsiToWin32(sys.stdout))
 
 	# Create overall match and all check variables
 	df = create_overall_match_variables(df)
@@ -75,7 +106,7 @@ def clean_microdata(city_info):
 
 	end_total = time.time()
 	total_time = round(float(end_total-start_total)/60,1)
-	cprint("\nTotal processing time for %s: %s\n" % (city,total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
+	cprint("Total processing time for %s: %s\n" % (city,total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
 	#Generate dashbaord info
 	times = [load_time,total_time]
@@ -87,13 +118,27 @@ def clean_microdata(city_info):
 	if year==1940:
 		student_vars = ['hhid','hhorder','institution','rel_id','dn','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','check_ed','clean_priority']
 	if year==1930:
-		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','clean_priority']
-	
+		df['street_fuzzy_match'] = ''
+		df.loc[~df['overall_match_bool'],'street_fuzzy_match'] = df['sm_fuzzy_match']		
+		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','street_fuzzy_match','overall_match','clean_priority']
+
 	df = df[student_vars]
 	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,'V'+str(version))
 	df.to_csv(file_name_students)
 
+	# Set do-file information
+	dofile = file_path + "/ConvertCsvToDta.do"
+	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year),city_file_name,'V'+str(version))
+	cmd = ["stata","-b","do", dofile, file_name_students, file_name_stata,"&"]
+	# Run do-file
+	subprocess.call(cmd) 
+
+	# Remove .csv's
+	os.remove(file_name_students)
+
 	return info 
+
+#clean_microdata(['San Antonio','TX',1930,False,False])
 
 file_path = '/home/s4-data/LatestCities' 
 city_info_file = file_path + '/CityInfo.csv' 
@@ -101,18 +146,11 @@ city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
 year = int(sys.argv[1])
-#year = 1930
 
 for i in city_info_list:                
 	i.append(year)
 
-'''
-temp =[]
-for i in city_info_list:
-	temp.append(clean_microdata(i))
-'''	
-
-pool = Pool(processes=8,maxtasksperchild=1)
+pool = Pool(processes=4,maxtasksperchild=1)
 temp = pool.map(clean_microdata, city_info_list)
 pool.close()
 
@@ -159,6 +197,3 @@ del dashboard['index']
 
 csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(year),str(year),datestr)
 dashboard.to_csv(csv_file)
-
-#convert_dta_cmd = "stata -b do ConvertToStataForStudents%s.do" % (str(year))
-#os.system(convert_dta_cmd)
