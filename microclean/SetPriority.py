@@ -22,7 +22,7 @@ def set_priority(df):
 
 	df['check_hn'] = df['hn_outlier2']
 	df['check_st'] = ~df['overall_match_bool']
-	df['check_ed'] = np.where(df['sm_exact_match_bool'] & ~df['sm_ed_match_bool'],True,False)
+#	df['check_ed'] = np.where(df['sm_exact_match_bool'] & ~df['sm_ed_match_bool'],True,False)
 #	df['check_bool'] = np.where(df['check_hn'] | df['check_st'] | df['check_ed'],True,False)
 	df['check_bool'] = np.where(df['check_hn'] | df['check_st'],True,False)
 	df['enum_seq'] = 0
@@ -119,24 +119,30 @@ def set_priority(df):
 
 	return df, priority_info
 
-def create_overall_match_variables(df):
+def create_overall_match_variables(df,street_post_fuzzy=None):
+	if street_post_fuzzy is None:
+		street_post_fuzzy = 'street_post_fuzzy'
+	try:
+		post = '_' + street_post_fuzzy.split('_')[3].split('HN')[0]
+	except:
+		post = ''
 
-	df['sm_fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
-	df['sm_fuzzy_match_boolHN'] = np.where(df['sm_fuzzy_match_bool'] | df['sm_fuzzy_match_blank_fix'],True,False)
+	df['sm_fuzzy_match_blank_fix'+post] = (df[street_post_fuzzy] == '') & (df[street_post_fuzzy+'HN'] != df[street_post_fuzzy])
+	df['sm_fuzzy_match_bool'+post+'HN'] = np.where(df['sm_fuzzy_match_bool'+post] | df['sm_fuzzy_match_blank_fix'+post],True,False)
 
-	df['overall_match'] = ''
-	df['overall_match_type'] = 'NoMatch'
-	df['overall_match_bool'] = False
+	df['overall_match'+post] = ''
+	df['overall_match_type'+post] = ''
+	df['overall_match_bool'+post] = False
 
-	df.loc[df['sm_fuzzy_match_boolHN'],'overall_match'] = df['street_post_fuzzyHN']
+	df.loc[df['sm_fuzzy_match_bool'+post+'HN'],'overall_match'+post] = df['street_post_fuzzy'+post+'HN']
 #	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match'] = df['street_precleanedHN']
-	df.loc[df['sm_exact_match_bool'],'overall_match'] = df['street_precleanedHN']
+	df.loc[df['sm_exact_match_bool'+post],'overall_match'+post] = df['street_precleaned'+post+'HN']
 
-	df.loc[df['sm_fuzzy_match_boolHN'],'overall_match_type'] = 'FuzzySM'
+	df.loc[df['sm_fuzzy_match_bool'+post+'HN'],'overall_match_type'+post] = 'Fuzzy'
 #	df.loc[df['sm_exact_match_bool'] & df['sm_ed_match_bool'],'overall_match_type'] = 'ExactSM'
-	df.loc[df['sm_exact_match_bool'],'overall_match_type'] = 'ExactSM'
+	df.loc[df['sm_exact_match_bool'+post],'overall_match_type'+post] = 'Exact'
 
-	df.loc[(df['overall_match_type'] == 'ExactSM') | (df['overall_match_type'] == 'FuzzySM'),'overall_match_bool'] = True 
+	df.loc[(df['overall_match_type'+post] == 'Exact') | (df['overall_match_type'+post] == 'Fuzzy'),'overall_match_bool'+post] = True 
 
 	return df
 
