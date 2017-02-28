@@ -174,7 +174,7 @@ def standardize_street(st):
             #if re.search("[Tt]enth|Eleven(th)?|[Tt]wel[f]?th|[Tt]hirteen(th)?|Fourt[h]?een(th)?|[Ff]ift[h]?een(th)?|[Ss]event[h]?een(th)?|[Ss]event[h]?een(th)?|[eE]ighteen(th)?|[Nn]inet[h]?een(th)?|[Tt]wentieth|[Tt]hirtieth|[Ff]o[u]?rtieth|[Ff]iftieth|[Ss]ixtieth|[Ss]eventieth|[Ee]ightieth|[Nn]inetieth|Twenty[ \-]?|Thirty[ \-]?|Forty[ \-]?|Fifty[ \-]?|Sixty[ \-]?|Seventy[ \-]?|Eighty[ \-]?|Ninety[ \-]?|[Ff]irst|[Ss]econd|[Tt]hird|[Ff]ourth|[Ff]ifth|[Ss]ixth|[Ss]eventh|[Ee]ighth|[Nn]inth",st) :
             NAME = re.sub("^[Tt]enth","10th",NAME)
             NAME = re.sub("^[Ee]leven(th)?","11th",NAME)
-            NAME = re.sub("^[Tt]wel[f]?th","12th",NAME)
+            NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
             NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
             NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
             NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
