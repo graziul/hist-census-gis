@@ -1,0 +1,93 @@
+Variables Issue
+- comparing _n vars in Stata for default sorting vs imageid linenum yields places where the linenum is missing or duplicated, as well as patches where one ordering is off by one observation from the other
+-using ycord instead of linenum yields fewer discrepancies with default sorting -still duplicates
+-general_household_id usually but not always equals family number
+
+
+
+House Num Cleaning Notes
+
+
+STUFF TO THINK ABOUT FROM OLD DOCUMENT ("cleaning and interpolating IPUMS")
+-carryforward/backward missing house numbers (based on all available vars checking out)
+-interpolating missing numbers based on previous/subsequent HNs in other cases?
+-consider home-ownership (home_owned_or_rented, relation_to_head, etc.)
+-outlier housenums on a street segment: check other (intersecting) streets in ED, could belong there?
+-SEQUENCES (st and HN) and error checking should be ED-sensitive: should never roll over from one ED to the next
+-weird house number stuff in stname variable: "rear", "(132) Thayer St"
+-SAVE all extraneous info from stname and HN
+-Use old method for 1940: special decade, lots of extra data sources (block descriptions, census maps)
+-Justify cray Z-scores
+-Morse-to-Std algorithm: "Broadway St"?!
+
+
+Filling in / interpolating HNs
+-John wants the HomeOwner var to be used
+
+-SERIAL NUMBER FROM ORIGINAL IPUMS ORDERING
+-relid is perhaps most reliable hhid-like var
+-home_owned_or_rented var 
+
+PreClean Algorithm Additions:
+-#### "Benefit St (Formerly Magnolia)" / "Benefit St (Magnolia Ave)" ####
+-"Avenue C" -> "C Ave"
+-### What do we want to do with this hnum in stname?
+-ext(d)?
+
+
+
+THINGS TO IMPLEMENT PER JOHN
+-housenum in the stname!
+	-IDing it is done, what now?
+-apartment numbers in housenum
+	-FIND WHERE NUMBERS switch even-/odd-ness a lot within same (or undefined) dwelling num
+	-has to support up to 4-digit apt. numbers (esp. in cities like Chicago)
+-whole pages that are missing stname
+
+
+THINGS TO IMPLEMENT PER CHRIS
+-categorizing error types, ESPECIALLY ones we can't deal with
+-POWER POINT of programming logic (explaining all the steps of hangover identification, etc.)
+-READ CSV into pandas df (one-liner?)
+-keep track of the certainty with which errors are flagged
+-PRE CLEANING
+	-suffixes of numbered STs: "th" "rd"
+		-fix capitalization
+		-add them in when missing
+	-identify/fix housenums in stname
+
+- #? in code
+- keep track of all changes to vars and how change was made
+- do error flagging when building HN SEQs (according to nums before and after e.g 18, 20, 122, 24)
+- check default sorting compared to imageid linenum personid
+- LEARN/INSTALL PANDAS
+
+
+PROBLEMS THAT ARE KNOWN
+-can't use HHID to collapse by household: street address can vary within HHID (and will do so esp. when there is an error)
+	-instead tag(stname housenum dwellingnum) ?
+
+
+
+Use BlockID as well?
+Also HHID : Collapse address data to each physical address
+
+Problems:
+-How do we know which data is correct - HN or SN?
+	-for a particular inconsistency, either the st swatch or the HN swatch will be the correct one
+
+ex.: case at line 887. we have a st swatch with one illegal address gap, intersecting a num swatch with one "illegal" stname. The num swatch is the correct one
+
+
+
+END OF DAY!
+
+Stuff is working. Incorporate dwelling number check to make sure identified thing ("probable wrong stname") is actually that and not a random transcription error
+
+OK. So this should work, (according to 1930 census instructions), except for duplexes ("A building with a solid partition wall through it and a front door for each of the two parts") which will have different dwelling nos. for same address. Can these be identified as such?
+	-> If two households share same address and both listed as owning house, we can flag error
+	- this won't work either: found a correctly labelled case where two households both owned their houses and lived at the same address!? 
+http://interactive.ancestry.com/6224/4608260_00054#?imageId=4531882_00466
+
+this was original case that made me try to get dwelling no.
+http://interactive.ancestry.com/6224/4608260_00054#?imageId=4531882_00456
