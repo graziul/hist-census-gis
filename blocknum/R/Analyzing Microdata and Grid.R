@@ -16,17 +16,22 @@ trim <- function( x ) {
   gsub("(^[[:space:]]+|[[:space:]]+$)", "", x)
 }
 
-#grid40<-read.dbf("Z:/Users/Matt/SanAntonio/GIS/SanAntonio_1940_stgrid.dbf")
-  Points<-read.dbf("Z:/Users/Matt/SanAntonio/GIS/SanAntonio_Points30.dbf")
+args <- commandArgs(trailingOnly = TRUE)
+dir_path <- paste(args[1],"\\GIS\\",sep="")
+city_name <- args[2]
+
+#Bring in Points
+  points_dbf_file<-paste(dir_path,city_name,"_1930_Points30.dbf",sep="")
+  Points<-read.dbf(points_dbf_file)
 #Bring in Street Grid
-  grid30<-read.dbf("Z:/Projects/1940Census/Block Creation/San Antonio/San Antonio_1930_stgrid.dbf")
+  grid_dbf_file<-paste(dir_path,city_name,"_1930_stgrid",sep="")
+  grid30<-read.dbf(grid_dbf_file)
   
 #Street Name Change List from Steve Morse
   #Bring In Street Name Change File
   is.odd <- function(x) x %% 2 != 0
   
-  City<-"SanAntonio"
-  theurl<-paste("http://stevemorse.org/census/changes/",City,"Changes.htm", sep="")
+  theurl<-paste("http://stevemorse.org/census/changes/",city_name,"Changes.htm", sep="")
   html<- read_html(theurl)
   List<-html_nodes(html, xpath= "//td")
   List2<-html_text(List)
@@ -54,10 +59,10 @@ trim <- function( x ) {
   Even<-plyr::rename(Even, c("List5[c(F, T), ]"="New"))
   
   new<-cbind(Odd, Even)
-  write(new, "Z:/Projects/1940Census/Block Creation/San Antonio/StName_Change.csv")
+  write(new, paste(dir_path,city_name,"_StName_Change.csv",sep=""))
 
 #Microdata file
-  mdata<-read.csv("Z:/Projects/1940Census/Block Creation/San Antonio/Add_30.csv", stringsAsFactors = F)
+  mdata<-read.csv(paste(dir_path,city_name,"_Add_30.csv",sep=""), stringsAsFactors = F)
   #Count how many people are on each unique street
   mdata$Person<-car::recode(mdata$city,"\" \"=0; else=1")
   cnt<-tapply(mdata$Person, INDEX=list(mdata$fullname), FUN=sum)
@@ -128,7 +133,7 @@ trim <- function( x ) {
   m$old_name_evidence<-st %in% old
   m$new_name_evidence<-st %in% newest
   
-  write.csv(m, "Z:/Projects/1940Census/Block Creation/San Antonio/Streets_To_Check.csv")
+  write.csv(m, paste(dir_path,city_name,"_Streets_To_Check.csv",sep=""))
   
 #Marking Streets in the grid, but not in the microdata
   grid$indata<-grid1 %in% m_st1
@@ -136,13 +141,6 @@ trim <- function( x ) {
   g<-grid[which(grid$indata=="FALSE"),]
   myvars<-c("fullname")
   g<-g[myvars]
-  write.csv(g, "Z:/Projects/1940Census/Block Creation/San Antonio/Streets_InGrid_NotInMdata.csv")
-  
-########FOR SAN ANTONIO ONLY #########
-  fix<-read.csv("Z:/Projects/1940Census/Block Creation/San Antonio/Streets To Be Changed.csv")
-  stf<-fix$From
-  stm<-m$fullname
-  m$fix<-stm %in% stf
-  m<-m[which(m$fix=="FALSE"),]
-  
+  write.csv(g, paste(dir_path,city_name,"_Streets_InGrid_NotInMdata.csv",sep=""))
+
   
