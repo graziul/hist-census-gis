@@ -1,30 +1,28 @@
-library(Hmisc)
-library(DataCombine)
 library(readstata13)
-library(foreign)
-library(car)
 library(plyr)
-library(seg)
-library(spdep)
-library(reshape)
-library(reshape2)
-library(rJava)
-library(xlsx)
-library(maptools)
-library(rgdal)
-library(haven)
 
-sa<-read.csv("Z:/Projects/1940Census/Block Creation/San Antonio/SA_AutoClean30.csv")
-names(sa)<-tolower(names(sa))
+args <- commandArgs(trailingOnly = TRUE)
+dir_path <- args[1]
+city_name <- args[2]
+file_name <- args[3]
+state_abbr <- args[4]
+
+if (substr(file_name,nchar(file_name)-3+1,nchar(file_name)) == "dta") {
+  city<-read.dta13(file_name)
+} else {
+  city<-read.csv(file_name)
+}
+ 
+names(city)<-tolower(names(city))
 
 vars<-c("overall_match", "ed", "type", "block","hn")
-sa30<-sa[vars]
+city30<-city[vars]
 
-sa30<-plyr::rename(sa30, c(block="Mblk", overall_match="fullname"))
-sa30$state<-"TX"
-sa30$city<-"San Antonio"
-sa30$address<-paste(sa30$hn, sa30$fullname, sep=" ")
-names(sa30)
-View(sa30)
+city30<-plyr::rename(city30, c(block="Mblk", overall_match="fullname"))
+city30$state<-state_abbr
+city30$city<-city_name
+city30$address<-paste(city30$hn, city30$fullname, sep=" ")
+#names(city30)
+#View(city30)
 
-write.csv(sa30, "Z:/Projects/1940Census/Block Creation/San Antonio/Add_30.csv")
+write.csv(city30, paste(dir_path,"\\GIS\\Add_30.csv",sep=""))
