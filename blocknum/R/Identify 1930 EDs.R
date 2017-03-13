@@ -14,13 +14,18 @@ library(rgdal)
 library(rJava)
 library(xlsx) 
 
+args <- commandArgs(trailingOnly = TRUE)
+dir_path <- paste(args[1],"\\GIS\\",sep="")
+city_name <- args[2]
+
 #Functions used:
 trim <- function( x ) {
   gsub("(^[[:space:]]+|[[:space:]]+$)", "", x)
 }
 
 #Bring in microdata points
-  Points<-read.dbf("Z:/Projects/1940Census/Block Creation/San Antonio/San Antonio_1930_Pblk_Points.dbf")
+  dbf_file<-paste(dir_path,city_name,"_1930_Pblk_Points.dbf",sep="")
+  Points<-read.dbf(dbf_file)
 #Make variable names lowercase
   names(Points)<-tolower(names(Points))
   names(Points)
@@ -126,12 +131,11 @@ trim <- function( x ) {
   Combo<-subset(Combo, !duplicated(Combo$pblk_id))
   
 #WRITE FILE  
-  write.csv(Combo, file="Z:/Projects/1940Census/Block Creation/ED Boundary Creation/ED_Choices.csv", row.names=F)
+  write.csv(Combo, file=paste(dir_path,city_name,"_ED_Choices.csv",sep=""), row.names=F)
   
 #Attach to Original Shapefile
   library(shapefiles)
-  setwd("Z:/Projects/1940Census/Block Creation/San Antonio/")
-  BlockMap<-readOGR(dsn=getwd(), layer="San Antonio_1930_Pblk")
+  BlockMap<-readOGR(paste(dir_path,city_name,"_1930_Pblk.shp",sep=""))
   names(BlockMap)<-tolower(names(BlockMap))
   detach("package:shapefiles", unload=TRUE)
   
@@ -159,6 +163,5 @@ trim <- function( x ) {
   BlockMap$FirstE<-as.numeric(BlockMap$FirstE)
   
   #Export Map
-  setwd("Z:/Projects/1940Census/Block Creation/ED Boundary Creation/")
-  writeOGR(BlockMap, dsn=getwd(),layer="ED_Choice_Map", driver="ESRI Shapefile")
+  writeOGR(BlockMap, paste(dir_path,city_name,"_ED_Choice_Map.shp",sep=""), driver="ESRI Shapefile")
   
