@@ -14,17 +14,18 @@ trim <- function( x ) {
   gsub("(^[[:space:]]+|[[:space:]]+$)", "", x)
 }
 
+args <- commandArgs(trailingOnly = TRUE)
+dir_path <- paste(args[1],"\\GIS\\",sep="")
+city_name <- args[2]
+file_name <- args[3]
 
 #Bring in New 1930 Street Grid
-  #grid30<-read.dbf("Z:/Projects/1940Census/Block Creation/San Antonio/San Antonio_1930_stgrid.dbf")
-  
   library(shapefiles)
-  setwd("Z:/Projects/1940Census/Block Creation/San Antonio/")
-  grid30<-readOGR(dsn=getwd(), layer="San Antonio_1930_stgrid")
+  grid30<-readOGR(paste(dir_path,city_name,"_1930_stgrid.shp",sep=""))
   detach("package:shapefiles", unload=TRUE)
   
 #Bring in Clean Microdata File  
-  mdata<-read.csv("Z:/Projects/1940Census/Block Creation/San Antonio/SA_AutoClean30.csv")
+  mdata<-read.dta(file_name)
   names(mdata)<-tolower(names(mdata))
   vars<-c("overall_match", "ed", "type", "block","hn")
   mdata<-mdata[vars]
@@ -34,7 +35,7 @@ trim <- function( x ) {
   mdata$address<-paste(mdata$hn, mdata$fullname, sep=" ")
   
 #Street Name Change List from Steve Morse
-  change<-read.csv("Z:/Projects/1940Census/Block Creation/San Antonio/StName_Change.csv")
+  change<-read.csv(paste(dir_path,city_name,"_StName_Change.csv",sep=""))
   change$New<-trim(gsub("[*]", "", change$New, perl=T))  
 
 #Make variable names lowercase and Change Type to String
@@ -141,6 +142,5 @@ trim <- function( x ) {
     new_grid<-rbind(grid30_nochange, grid30_change)
     
     #Export Map
-    setwd("Z:/Projects/1940Census/Block Creation/San Antonio/")
-    writeOGR(new_grid, dsn=getwd(),layer="San Antonio_1930_stgrid_edit", driver="ESRI Shapefile")
+    writeOGR(paste(dir_path,city_name,"San Antonio_1930_stgrid_edit",sep=""), driver="ESRI Shapefile")
     
