@@ -3,12 +3,12 @@
 % algorithm
 %
 
-files = dir('C:\Users\cgraziul\Documents\*.tif');
+function OCRblocknums(image_path)
 
-i = 1;
+files = dir(char(strcat(image_path,string('*.tif'))));
+
 for f = files'
     [I,plot,p] = DigitizeMap(char(strcat(f.folder,string('\'),f.name)));
-    shapewrite(p,char(strcat(f.folder,string('\'),string(i),string('.shp'))));
-    i = i + 1;
+    shapewrite(p,char(strcat(f.folder,string('\'),strrep(f.name,'.tif','.shp'))));
 end
 
