@@ -5,7 +5,7 @@ import arcpy
 import os
 import sys
 
-dir_path = sys.argv[1] + "\\GIS\\"
+dir_path = sys.argv[1] + "\\GIS_edited\\"
 name = sys.argv[2]
 state = sys.argv[3]
 
@@ -31,11 +31,12 @@ in_field_map='''
 'Right parity' <None> VISIBLE NONE;'Left Additional Field' <None> VISIBLE NONE;'Right Additional Field' <None> VISIBLE NONE;'Altname JoinID' <None> VISIBLE NONE;'''
 add_locator = dir_path + name + "_addloc"
 #'Add_30' originates from 'Create 1930 and 1940 Address Files.R' code
-addresses = dir_path + "Add_30.csv"
+addresses = dir_path + name + "_1930_Addresses.csv"
 address_fields="Street address;City city;State state"
-points30 = dir_path + name + "_Points30.shp"
+points30 = dir_path + name + "_1930_Points.shp"
 pblk_points = dir_path + name + "_1930_Pblk_Points.shp"
 
+'''
 #Add CITY and STATE if it doens't exist yet
 fields = arcpy.ListFields(grid)
 if 'CITY' not in fields:
@@ -48,6 +49,7 @@ if 'STATE' not in fields:
 	cur = arcpy.UpdateCursor(grid)
 	for row in cur:
 		row.setValue('STATE',state)
+'''
 
 #Make sure address locator doesn't already exist - if it does, delete it
 add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addloc")]
