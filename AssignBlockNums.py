@@ -33,7 +33,7 @@ except subprocess.CalledProcessError:
 # Step 2: Create blocks and block points
 cprint("Starting Step 2: Create blocks and block points\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call(["python",script_path+"\\blocknum\\Python\\Create Blocks and Block Points.py",file_path,city_name,state_abbr])
+	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\Create Blocks and Block Points.py",file_path,city_name,state_abbr])
 	if t != 0:
 		cprint("Error creating blocks and block points for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -44,7 +44,7 @@ except subprocess.CalledProcessError:
 # Step 3: Identify 1930 EDs
 cprint("Starting Step 3: Identify 1930 EDs\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 EDs.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 EDs.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		cprint("Error identifying 1930 EDs for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -55,7 +55,7 @@ except subprocess.CalledProcessError:
 # Step 4: Analyze microdata and grid
 cprint("Starting Step 4: Analyze microdata and grids\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		cprint("Error analyzing microdata and grid for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -66,7 +66,7 @@ except subprocess.CalledProcessError:
 # Step 5: Add ranges to new grid
 cprint("Starting Step 5: Add ranges to new grid\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Add Ranges to New Grid.R',file_path,city_name,file_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Add Ranges to New Grid.R',file_path,city_name,file_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		cprint("Error adding ranges to new grid for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -81,7 +81,7 @@ except subprocess.CalledProcessError:
 # Step 6: Create 1930 address (2nd round)
 cprint("Starting Step 6: Create 1930 address (2nd round)\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Create 1930 Address_2nd.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Create 1930 Address_2nd.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		cprint("Error creating 1930 address (2nd round) for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -98,7 +98,7 @@ cprint("Skipping Step 6 for now\n", 'cyan', file=AnsiToWin32(sys.stdout))
 # Step 7: Create blocks and block points (2nd round)
 cprint("Starting Step 7: Create blocks and block points (2nd round)\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call(["python",script_path+"\\blocknum\\Python\\Blocks and Block Points_2nd.py",city_name,file_path])
+	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\Blocks and Block Points_2nd.py",city_name,file_path])
 	if t != 0:
 		cprint("Error creating blocks and block points (2nd round) for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -111,7 +111,7 @@ cprint("Skipping Step 7 for now\n", 'cyan', file=AnsiToWin32(sys.stdout))
 # Step 8: Identify 1930 blocks
 cprint("Starting Step 8: Identify 1930 blocks\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 Blocks.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 Blocks.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		cprint("Error identifying 1930 blocks for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -122,7 +122,7 @@ except subprocess.CalledProcessError:
 # Step 9: Run Matlab OCR script
 cprint("Starting Step 9: Run Matlab OCR script\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call(["python",script_path+"\\blocknum\\Python\\RunOCR.py",file_path])
+	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunOCR.py",file_path,script_path])
 	if t != 0:
 		cprint("Error running Matlab OCR script for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
@@ -133,7 +133,7 @@ except subprocess.CalledProcessError:
 # Step 10: Integrate R and Matlab block numbering results
 cprint("Starting Step 10: Integrate R and Matlab block numbering results\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	subprocess.call(["python",script_path+"\\blocknum\\Python\\Create Blocks and Block Points.py",city_name,file_path])
+	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\MapOCRintegration.py",city_name,file_path])
 	if t != 0:
 		cprint("Error integrating R and Matlab block numbering results for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:
