@@ -6,10 +6,9 @@ import glob
 import shapefile
 import simpledbf
 
-file_path = r"C:\Users\cgraziul\Documents\MapOCR"
-files = glob.glob(file_path + "\*.shp")
-arcpy.env.workspace = file_path
-arcpy.env.overwriteOutput=True
+
+image_path = sys.argv[1] + "\\GIS_edited\\1930 ED Maps\\"
+file_name = sys.argv[2]
 
 def convert_block(block):
 	try:
@@ -36,11 +35,11 @@ names = ['Hartford']
 for name in names:
 	print "Working On: " + name
 	#Create Paths to be used throughout Process
-	reference_data = "'S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_1930_stgrid.shp' 'Primary Table'"
-	grid = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_1930_stgrid.shp"
-	dissolve_grid = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_1930_stgrid_Dissolve.shp"
-	split_grid = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_1930_stgrid_Split.shp"
-	pblocks = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_1930_Pblk.shp"
+	reference_data = image_path + name + "_1930_stgrid.shp' 'Primary Table'"
+	grid = image_path + name + "_1930_stgrid.shp"
+	dissolve_grid = image_path+ name + "_1930_stgrid_Dissolve.shp"
+	split_grid = image_path+ name + "_1930_stgrid_Split.shp"
+	pblocks = image_path+ name + "_1930_Pblk.shp"
 	in_field_map='''
 	"'Feature ID' FID VISIBLE NONE;'*From Left' LFROMADD VISIBLE NONE;'*To Left' LTOADD VISIBLE NONE;'*From Right' RFROMADD VISIBLE NONE;
 	'*To Right' RTOADD VISIBLE NONE;'Prefix Direction' <None> VISIBLE NONE;'Prefix Type' <None> VISIBLE NONE;'*Street Name' FULLNAME VISIBLE NONE;
@@ -49,20 +48,19 @@ for name in names:
 	'Right Street ID' <None> VISIBLE NONE;'Display X' <None> VISIBLE NONE;'Display Y' <None> VISIBLE NONE;'Min X value for extent' <None> VISIBLE NONE;
 	'Max X value for extent' <None> VISIBLE NONE;'Min Y value for extent' <None> VISIBLE NONE;'Max Y value for extent' <None> VISIBLE NONE;'Left parity' <None> VISIBLE NONE;
 	'Right parity' <None> VISIBLE NONE;'Left Additional Field' <None> VISIBLE NONE;'Right Additional Field' <None> VISIBLE NONE;'Altname JoinID' <None> VISIBLE NONE;'''
-	add_locator = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_addloc"
+	add_locator = image_path+ name + "_addloc"
 	#'Add_30' originates from 'Create 1930 and 1940 Address Files.R' code
 	addresses = "S:\Projects\\1940Census\Block Creation\\" + name + "\\Add_30.csv"
 	address_fields="Street address;City city;State state"
-	points30 = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_Points30.shp"
-	pblk_points = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_1930_Pblk_Points.shp"
-	blocks_algo_file = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + "Block_Choice_Map.shp"
-	eds_algo_file = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + "ED_Choice_Map.shp"
-	ocr_pblk = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_OCR_Pblk.shp"
-	ocr_ed = "S:\Projects\\1940Census\Block Creation\\" + name + "\\" + name + "_OCR_ED.shp"
-	temp = "S:\Projects\\1940Census\\Block Creation\\" + name + "\\" + name + "_temp.shp"
+	points30 = image_path+ name + "_Points30.shp"
+	pblk_points = image_path+ name + "_1930_Pblk_Points.shp"
+	blocks_algo_file = image_path+ "Block_Choice_Map.shp"
+	eds_algo_file = image_path+ "ED_Choice_Map.shp"
+	ocr_pblk = image_path+ name + "_OCR_Pblk.shp"
+	ocr_ed = image_path+ name + "_OCR_ED.shp"
+	temp = image_path + name + "_temp.shp"
 
-fileDta = r"C:\Users\cgraziul\Documents\HartfordCT_StudAuto.dta"
-df = pd.read_stata(fileDta)
+df = pd.read_stata(file_name)
 
 #Get block list from microdata
 df_no_empty_blocks = df[df['block']!="."]
@@ -80,7 +78,6 @@ print("Entirely numeric blocks (micro): " + str(len(blocks_micro_numeric)) + "\n
 #Load blocks shapefile to get block list
 sf_blocks = shapefile.Reader(blocks_algo_file)
 fields = sf_blocks.fields[1:] 
-#fields
 
 #Get block list from algorithm
 #blocks_algo = [r.record[-7] for r in sf_blocks.shapeRecords()]
@@ -102,7 +99,7 @@ print("Algorithm identified " + str(numeric_algo) + " of " + str(numeric_micro) 
 blocks_to_find = [i for i in blocks_micro_numeric if i not in blocks_algo_numeric]
 #print(blocks_to_find)
 
-current_image = "S:\Projects\\1940Census\\Block Creation\\" + name + "\\" + name + "_current_image.shp"
+current_image = image_path + name + "_current_image.shp"
 
 def add_ocr(image_num):
 
