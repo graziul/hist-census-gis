@@ -9,9 +9,12 @@ from microclean.HNclean import *
 from microclean.SetPriority import *
 
 # Version number
-version = 4
+version = 5
 
 # Changelog
+#
+# V5
+#	- Integrated street names from edited 1940 street grid in matching process
 #
 # V4
 #	- New Steve Morse dictionary ("La" -> "Ln")
@@ -38,6 +41,7 @@ datestr = time.strftime("%Y_%m_%d")
 
 def clean_microdata(city_info):
 
+	#Step 1: Initialize a bunch of variables for use throughout
 	city = city_info[0]
 	state = city_info[1]
 	year = city_info[2]
@@ -60,28 +64,28 @@ def clean_microdata(city_info):
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
-	# Load city
+	# Step 2: Load city
 	df, load_time = load_city(city.replace(' ',''),state,year)
 
-	# Pre-clean street names
+	# Step 3a: Pre-clean street names
 	df, preclean_info = preclean_street(df,city,state,year)  
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
 
-	# Use pre-cleaned street names to get house number sequences
+	# Step 3b: Use pre-cleaned street names to get house number sequences
 	street_var = 'street_precleaned'
 	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
 	df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
 
-	# Use house number sequences to fill in blank street names
+	# Step 3c: Use house number sequences to fill in blank street names
 	df, fix_blanks_info1 = fix_blank_st(df,city,HN_SEQ,'street_precleaned',sm_st_ed_dict)
 
-	# Get exact matches
+	# Step 4: Get exact matches
 	df, exact_info = find_exact_matches(df,city,'street_precleanedHN',sm_all_streets,sm_st_ed_dict)
 
-	# Get fuzzy matches
+	# Step 5a: Get fuzzy matches
 	df, fuzzy_info = find_fuzzy_matches(df,city,'street_precleanedHN',sm_all_streets,sm_ed_st_dict)
 
-	# Use fuzzy matches to get house number sequences
+	# Step 5b: Use fuzzy matches to get house number sequences
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df['street_precleanedHN']
 	df.loc[df['sm_fuzzy_match_bool'],street_var] = df['sm_fuzzy_match']
@@ -89,17 +93,17 @@ def clean_microdata(city_info):
 	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
 	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
 
-	# Use house number sequences to fill in blank street names
+	# Step 5c: Use house number sequences to fill in blank street names
 	df, fix_blanks_info2 = fix_blank_st(df,city,HN_SEQ,'street_post_fuzzy',sm_st_ed_dict)
 
-	# Create overall match and all check variables
+	# Step 6: Create overall match and all check variables
 	df = create_overall_match_variables(df)
 	cprint("Overall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n",'green',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
-	# Set priority level for residual cases
+	# Step 7: Set priority level for residual cases
 	df, priority_info = set_priority(df)
 
-	# Save full dataset 
+	# Step 8: Save full dataset and generate dashboard information 
 	city_file_name = city.replace(' ','') + state
 	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V'+str(version))
 	df.to_csv(file_name_all)
@@ -140,20 +144,23 @@ def clean_microdata(city_info):
 
 #clean_microdata(['San Antonio','TX',1930,False,False])
 
+# Get city list
 file_path = '/home/s4-data/LatestCities' 
 city_info_file = file_path + '/CityInfo.csv' 
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
+# Get year and add it to city list information
 year = int(sys.argv[1])
-
 for i in city_info_list:                
 	i.append(year)
 
+# Farm out cleaning across multiple instances of Python
 pool = Pool(processes=4,maxtasksperchild=1)
 temp = pool.map(clean_microdata, city_info_list)
 pool.close()
 
+# Build dashboard for decade and save
 city_state = ['City','State']
 header_names = ['Year'] + city_state + ['NumCases']
 STprop_names = ['propExactMatchesValidated','propFuzzyMatches','propBlankSTfixed','propResidSt']
