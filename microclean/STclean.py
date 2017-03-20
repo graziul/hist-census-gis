@@ -25,6 +25,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import fuzzyset
+import shapefile
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 from microclean.STstandardize import *
@@ -46,8 +47,172 @@ class color:
    END = '\033[0m'
 
 #
-# Step 1: Load data
+# Step 1: Load city
 #
+
+def load_city(city,state,year):
+
+	start = time.time()
+
+	if city == "StatenIsland":
+		c = "Richmond"
+	else:
+		c = city
+
+	# Try to load file, return error if can't load or file has no cases
+	try:
+		file_name = c + state
+		df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year),file_name), convert_categoricals=False)
+	except:
+		print('Error loading %s raw data' % (city))
+   
+	if len(df) == 0:
+		print('Error loading %s raw data' % (city))  
+
+	end = time.time()
+	load_time = round(float(end-start)/60,1)
+
+	num_records = len(df)
+	cprint('Loading data for %s took %s' % (city,load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+
+	# Standardize variable names
+	df = rename_variables(df,year)
+
+	# Remove duplicates
+	df = remove_duplicates(df)
+
+	# Sort by image_id and line_num (important for HN) 
+	df = df.sort_values(['image_id','line_num'])
+	df.index = range(0,len(df))
+
+	return df, load_time
+
+def rename_variables(df,year):
+
+	# Street
+	'''
+	def pick_best_raw_street(st1,st2,st_match):
+		if st_match: 
+			return st1  
+		else:
+			if st1 == '' or st1 == None:
+				return st2
+			if st2 == '' or st2 == None:
+				return st1
+			else:
+				return ''
+	'''
+	if year == 1940:
+		df['street_raw'] = df['indexed_street']
+	if year == 1930:
+		df['street_raw'] = df['self_residence_place_streetaddre'].str.lower()
+	if year == 1920:
+		df['street_raw'] = df['indexed_street']
+	if year == 1910:
+		df['street_raw'] = df['Street']
+
+	# ED
+	if year == 1940:
+ #       df['ed'] = df['derived_enumdist']
+ 		df['ed'] = df['indexed_enumeration_district']
+ #       df['ed'] = df['ed'].str.split('-').str[1]
+	if year == 1930:
+		df['ed'] = df['indexed_enumeration_district']
+	if year == 1920:
+		df['ed'] = df['general_enumeration_district']
+	if year == 1910:
+		df['ed'] = df['EnumerationDistrict']
+
+		#Strip leading zeroes from EDs
+	if year != 1940:
+		df['ed'] = df['ed'].astype(str)
+		df['ed'] = df['ed'].str.split('.').str[0]
+		df['ed'] = df['ed'].str.lstrip('0')
+
+	# House number
+	'''
+	def pick_best_raw_hn(hn1,hn2,hn_match):
+		if hn_match: 
+			return hn1  
+		else:
+			if hn1 == '' or hn1 == None:
+				return hn2
+			if hn2 == '' or hn2 == None:
+				return hn1
+			else:
+				return ''
+	'''
+	if year == 1940:
+		df['hn_raw'] = df['general_house_number']
+	if year == 1930:
+		df['hn_raw'] = df['general_house_number_in_cities_o']
+	if year == 1920:
+		df['hn_raw'] = df['general_housenumber']
+	if year == 1910:
+		df['hn_raw'] = df['HouseNumber']    
+
+	df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
+	df['hn'] = df['hn'].apply(make_int)  
+   
+	# Image ID
+	if year==1940:
+		df['image_id'] = df['stableurl']
+	if year==1930:
+		df['image_id'] = df['imageid']
+
+	# Line number
+	if year==1940:
+		df['line_num'] = df['general_line_number']
+	if year==1930:
+		df['line_num'] = df['general_line_number'].apply(make_int)
+
+	# Dwelling number
+	if year==1940:
+		df['dn'] = None    
+	if year==1930:
+		df['dn'] = df['general_dwelling_number']
+
+	# Family ID
+	if year==1940:
+		df['fam_id'] = None
+	if year==1930:
+		df['fam_id'] = df['general_family_number']
+
+	# Block ID
+	if year==1930:
+		df['block'] = df['general_block']
+
+	# Institution (name)
+	if year==1940:
+		df['institution'] = df['general_institution']
+	if year==1930:
+		df['institution'] = df['general_institution']
+
+	# Rel ID
+	if year==1940:
+		df['rel_id'] = None
+	if year==1930:
+		df['rel_id'] = df['general_RelID']
+
+	# Household ID
+	if year==1940:
+		df['hhid_raw'] = df['hhid']
+		df['hhid'] = df['hhid_numeric']
+	if year==1930:
+		df['hhid'] = df['general_HOUSEHOLD_ID']
+
+	# PID
+	if year==1940:
+		df['pid'] = None
+	if year==1930:
+		df['pid'] = df['pid']
+
+	# Name
+	if year==1930:
+		df['name_last'] = df['self_empty_name_surname']
+		df['name_first'] = df['self_empty_name_given']
+
+	return df
 
 def remove_duplicates(df):
 
@@ -131,209 +296,8 @@ def remove_duplicates(df):
 
 	return df
 
-def rename_variables(df,year):
-
-	#
-	# Street
-	#
-
-	def pick_best_raw_street(st1,st2,st_match):
-		if st_match: 
-			return st1  
-		else:
-			if st1 == '' or st1 == None:
-				return st2
-			if st2 == '' or st2 == None:
-				return st1
-			else:
-				return ''
-
-	if year == 1940:
-		df['street_raw'] = df['indexed_street']
-	if year == 1930:
-		df['street_raw'] = df['self_residence_place_streetaddre'].str.lower()
-	if year == 1920:
-		df['street_raw'] = df['indexed_street']
-	if year == 1910:
-		df['street_raw'] = df['Street']
-
-	#
-	# ED
-	#
-
-	if year == 1940:
-#        df['ed'] = df['derived_enumdist']
-		df['ed'] = df['indexed_enumeration_district']
-#        df['ed'] = df['ed'].str.split('-').str[1]
-	if year == 1930:
-		df['ed'] = df['indexed_enumeration_district']
-	if year == 1920:
-		df['ed'] = df['general_enumeration_district']
-	if year == 1910:
-		df['ed'] = df['EnumerationDistrict']
-
-	#Strip leading zeroes from EDs
-	if year != 1940:
-		df['ed'] = df['ed'].astype(str)
-		df['ed'] = df['ed'].str.split('.').str[0]
-		df['ed'] = df['ed'].str.lstrip('0')
-
-	#
-	# House number
-	#
-
-	def pick_best_raw_hn(hn1,hn2,hn_match):
-		if hn_match: 
-			return hn1  
-		else:
-			if hn1 == '' or hn1 == None:
-				return hn2
-			if hn2 == '' or hn2 == None:
-				return hn1
-			else:
-				return ''
-
-	if year == 1940:
-		df['hn_raw'] = df['general_house_number']
-	if year == 1930:
-		df['hn_raw'] = df['general_house_number_in_cities_o']
-	if year == 1920:
-		df['hn_raw'] = df['general_housenumber']
-	if year == 1910:
-		df['hn_raw'] = df['HouseNumber']    
-
-	df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
-	df['hn'] = df['hn'].apply(make_int)  
-   
-	#
-	# Image ID
-	#
-
-	if year==1940:
-		df['image_id'] = df['stableurl']
-	if year==1930:
-		df['image_id'] = df['imageid']
-
-	#
-	# Line number
-	#
-
-	if year==1940:
-		df['line_num'] = df['general_line_number']
-	if year==1930:
-		df['line_num'] = df['general_line_number'].apply(make_int)
-
-	#
-	# Dwelling number
-	#
-
-	if year==1940:
-		df['dn'] = None    
-	if year==1930:
-		df['dn'] = df['general_dwelling_number']
-
-	#
-	# Family ID
-	#
- 
-	if year==1940:
-		df['fam_id'] = None
-	if year==1930:
-		df['fam_id'] = df['general_family_number']
-
-	#
-	# Block ID
-	#
- 
-	if year==1930:
-		df['block'] = df['general_block']
-
-	#
-	# Institution (name)
-	#
- 
-	if year==1940:
-		df['institution'] = df['general_institution']
-	if year==1930:
-		df['institution'] = df['general_institution']
-
-	#
-	# Rel ID
-	#
- 
-	if year==1940:
-		df['rel_id'] = None
-	if year==1930:
-		df['rel_id'] = df['general_RelID']
-
-	#
-	# Household ID
-	#
-
-	if year==1940:
-		df['hhid_raw'] = df['hhid']
-		df['hhid'] = df['hhid_numeric']
-	if year==1930:
-		df['hhid'] = df['general_HOUSEHOLD_ID']
-
-	#
-	# PID
-	#    
-
-	if year==1940:
-		df['pid'] = None
-	if year==1930:
-		df['pid'] = df['pid']
-
-	#
-	# Name
-	#
-
-	if year==1930:
-		df['name_last'] = df['self_empty_name_surname']
-		df['name_first'] = df['self_empty_name_given']
-
-	return df
-
-def load_city(city,state,year):
-
-	start = time.time()
-
-	if city == "StatenIsland":
-		c = "Richmond"
-	else:
-		c = city
-
-	# Try to load file, return error if can't load or file has no cases
-	try:
-		file_name = c + state
-		df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year),file_name), convert_categoricals=False)
-	except:
-		print('Error loading %s raw data' % (city))
-   
-	if len(df) == 0:
-		print('Error loading %s raw data' % (city))  
-
-	end = time.time()
-	load_time = round(float(end-start)/60,1)
-
-	num_records = len(df)
-	cprint('Loading data for %s took %s' % (city,load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
-
-	# Standardize variable names
-	df = rename_variables(df,year)
-
-	# Remove duplicates
-	df = remove_duplicates(df)
-
-	# Sort by image_id and line_num (important for HN) 
-	df = df.sort_values(['image_id','line_num'])
-	df.index = range(0,len(df))
-
-	return df, load_time
-
 #
-# Step 2: Preclean data
+# Step 2a: Properly format street names and get Steve Morse street-ed information
 #
 
 def preclean_street(df,city,state,year):
@@ -419,10 +383,6 @@ def preclean_street(df,city,state,year):
 
 	return df, preclean_info
 
-#
-# Step 3: Get Steve Morse street-ed data
-#
-
 def load_steve_morse(city,state,year):
 
 	#NOTE: This dictionary must be built independently of this script
@@ -456,21 +416,44 @@ def load_steve_morse(city,state,year):
 				sm_ed_st_dict[ed].append(st)
 
 	return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
-	
+
 #
-# Step X: Matching steps
+# Step 3a: Import street names from 1940 street grid  
 #
 
-def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
-	if (microdata_st is None) or (sm_st_ed_dict[microdata_st] is None):
-		return False
+def get_streets_from_1940_street_grid(city,state): 
+
+	if city == "StatenIsland":
+		c = "Richmond"
 	else:
-		if microdata_ed in sm_st_ed_dict[microdata_st]:
-			return True
-		else:
-			return False
+		c = city
 
-def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict):
+	# Try to load file, return error if can't load or file has no cases
+	try:
+		file_name_st_grid = c + state + '_1940_edit.shp'
+		df = pd.read_stata(file_path + '/%s/st_grid/%s.dta' % (str(year),file_name_st_grid), convert_categoricals=False)
+
+#Load blocks shapefile to get block list
+st_grid_shp = shapefile.Reader(file_name_st_grid)
+fields = sf_blocks.fields[1:] 
+
+#Get block list from algorithm
+#blocks_algo = [r.record[-7] for r in sf_blocks.shapeRecords()]
+blocks_algo = [r.record[-3] for r in sf_blocks.shapeRecords()]
+blocks_algo = list(set(blocks_algo))
+blocks_algo.sort()
+blocks_algo.pop(0)
+
+	except:
+		print('Error loading %s raw data' % (city))
+   
+	return
+
+#
+# Step 3b: Identify exact matches based on Steve Morse and 1940 street grid
+#
+
+def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict,st_grid_st_list):
 
 	try:
 		post = '_' + street.split('_')[2].split('HN')[0]
@@ -483,30 +466,39 @@ def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict):
 
 	start = time.time()
 
-	#
 	# Check for exact matches between Steve Morse ST and microdata ST
-	#
+	find_exact_matches_sm()
 
+	# Check for exact matches between 1940 street grid ST and microdata ST
+	find_exact_matches_st_grid()
+
+	# Generate dashboard info
+	exact_info = [num_records, num_passed_validation, prop_passed_validation, 
+		num_failed_validation, prop_failed_validation, num_pairs_failed_validation, 
+		num_pairs, prop_pairs_failed_validation,exact_matching_time]
+
+	return df, exact_info
+
+def find_exact_matches_sm():
+
+	# Check for exact matches between Steve Morse ST and microdata ST
 	df['sm_exact_match_bool'+post] = df[street].apply(lambda s: s in sm_all_streets)
 	sm_exact_matches = np.sum(df['sm_exact_match_bool'+post])
 	if num_records == 0:
 		num_records += 1
 	cprint("Exact matches before ED validation: "+str(sm_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*float(sm_exact_matches)/float(num_records),1))+"%)",file=AnsiToWin32(sys.stdout))
 
-	#
-	# Validate exact matches by comparing Steve Morse ED to microdata ED
-	#
-
+	# Validate exact matches by comparing Steve Morse ED to microdata ED...
 	df['sm_ed_match_bool'+post] = df.apply(lambda s: check_ed_match(s['ed'],s[street],sm_st_ed_dict), axis=1)
 
-	#Validation of exact match fails if microdata ED and Steve Morse ED do not match
+	# ...fails if microdata ED and Steve Morse ED do not match
 	failed_validation = df[(df['sm_exact_match_bool'+post]==True) & (df['sm_ed_match_bool'+post]==False)]
 	num_failed_validation = len(failed_validation)
-	#Validation of exact match succeeds if microdata ED and Steve Morse ED are the same
+	# ...succeeds if microdata ED and Steve Morse ED are the same
 	passed_validation = df[(df['sm_exact_match_bool'+post]==True) & (df['sm_ed_match_bool'+post]==True)]
 	num_passed_validation = len(passed_validation)
 
-	#Keep track of unique street-ED pairs that have failed versus passed validation
+	# Keep track of unique street-ED pairs that have failed versus passed validation
 	num_pairs_failed_validation = len(failed_validation.groupby(['ed',street]).count())
 	num_pairs_passed_validation = len(passed_validation.groupby(['ed',street]).count())
 	num_pairs = num_pairs_failed_validation + num_pairs_passed_validation
@@ -526,11 +518,24 @@ def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict):
 	prop_failed_validation = float(num_failed_validation)/float(num_records)
 	prop_pairs_failed_validation = float(num_pairs_failed_validation)/float(num_pairs)
 
-	exact_info = [num_records, num_passed_validation, prop_passed_validation, 
-		num_failed_validation, prop_failed_validation, num_pairs_failed_validation, 
-		num_pairs, prop_pairs_failed_validation,exact_matching_time]
+	return
 
-	return df, exact_info
+def find_exact_matches_st_grid():
+
+	return
+
+def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
+	if (microdata_st is None) or (sm_st_ed_dict[microdata_st] is None):
+		return False
+	else:
+		if microdata_ed in sm_st_ed_dict[microdata_st]:
+			return True
+		else:
+			return False
+
+#
+# Step 4a: Search for fuzzy matches
+#
 
 def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_similar=False):
 
@@ -613,10 +618,10 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 				return [best_match_all[1],best_match_all[0],False]
 
 	#Create dictionary based on Street-ED pairs for faster lookup using helper function
-#    df_no_validated_exact_match = df[~(df['sm_exact_match_bool'] & df['sm_ed_match_bool'])]
-#    df_grouped = df_no_validated_exact_match.groupby([street,'ed'])
+ #   df_no_validated_exact_match = df[~(df['sm_exact_match_bool'] & df['sm_ed_match_bool'])]
+ #   df_grouped = df_no_validated_exact_match.groupby([street,'ed'])
 	df_no_exact_match = df[~(df['sm_exact_match_bool'+post])]
-#    df_grouped = df_no_validated_exact_match.groupby([street,'ed'])
+ #   df_grouped = df_no_validated_exact_match.groupby([street,'ed'])
 	df_grouped = df_no_exact_match.groupby([street,'ed'])
 	sm_fuzzy_match_dict = {}
 	for st_ed,_ in df_grouped:
@@ -625,7 +630,7 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 	#Helper function (necessary since dictionary built only for cases without validated exact matches)
 	def get_fuzzy_match(exact_match,ed_match,street,ed):
 		#Only look at cases without validated exact match
-#        if not (exact_match & ed_match):
+ #		if not (exact_match & ed_match):
 		if not (exact_match):
 			#Need to make sure "Unnamed" street doesn't get fuzzy matched
 			if 'Unnamed' in street:
@@ -641,12 +646,12 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 	df['sm_fuzzy_match'+post], df['sm_fuzzy_match_score'+post], df['sm_fuzzy_match_bool'+post] = zip(*df.apply(lambda x: get_fuzzy_match(x['sm_exact_match_bool'+post],x['sm_ed_match_bool'+post],x[street],x['ed']), axis=1))
 
 	#Compute number of cases without validated exact match
-#    passed_validation = df[(df['sm_exact_match_bool']==True) & (df['sm_ed_match_bool']==True)]
+ #  passed_validation = df[(df['sm_exact_match_bool']==True) & (df['sm_ed_match_bool']==True)]
 	passed_validation = df[df['sm_exact_match_bool'+post]]
 	num_passed_validation = len(passed_validation)
 	num_current_residual_cases = num_records - num_passed_validation
-
-	#Generate fuzzy_info
+	
+	#Generate dashboard information
 	num_fuzzy_matches = np.sum(df['sm_fuzzy_match_bool'+post])
 	prop_sm_fuzzy_matches = float(num_fuzzy_matches)/num_records
 	end = time.time()
@@ -657,6 +662,10 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 	cprint("Fuzzy matching for %s took %s\n" % (city,fuzzy_matching_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
 
 	return df, fuzzy_info
+
+#
+# Step 2c/4c: Use house number sequences to fill in blank street names
+#
 
 def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 
