@@ -41,7 +41,10 @@ datestr = time.strftime("%Y_%m_%d")
 
 def clean_microdata(city_info):
 
-	#Step 1: Initialize a bunch of variables for use throughout
+	#
+	# Step 0: Initialize a bunch of variables for use throughout
+	#
+
 	city = city_info[0]
 	state = city_info[1]
 	year = city_info[2]
@@ -64,28 +67,46 @@ def clean_microdata(city_info):
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
-	# Step 2: Load city
+	#
+	# Step 1: Load city
+	#
+
 	df, load_time = load_city(city.replace(' ',''),state,year)
 
-	# Step 3a: Pre-clean street names
+	#
+	# Step 2: Format raw street names and fill in blank street names
+	#
+
+	# Step 2a: Properly format street names and get Steve Morse street-ed information
 	df, preclean_info = preclean_street(df,city,state,year)  
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
 
-	# Step 3b: Use pre-cleaned street names to get house number sequences
+	# Step 2b: Use formatted street names to get house number sequences
 	street_var = 'street_precleaned'
 	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
 	df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
 
-	# Step 3c: Use house number sequences to fill in blank street names
+	# Step 2c: Use house number sequences to fill in blank street names
 	df, fix_blanks_info1 = fix_blank_st(df,city,HN_SEQ,'street_precleaned',sm_st_ed_dict)
 
-	# Step 4: Get exact matches
-	df, exact_info = find_exact_matches(df,city,'street_precleanedHN',sm_all_streets,sm_st_ed_dict)
+	#
+	# Step 3: Identify exact matches
+	#
 
-	# Step 5a: Get fuzzy matches
+	# Step 3a: Import street names from 1940 street grid  
+	st_grid_st_list = get_streets_from_1940_street_grid(city,state)
+
+	# Step 3b: Identify exact matches based on Steve Morse and 1940 street grid
+	df, exact_info = find_exact_matches(df,city,'street_precleanedHN',sm_all_streets,sm_st_ed_dict,st_grid_st_list)
+
+	#
+	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
+	#
+
+	# Step 4a: Search for fuzzy matches
 	df, fuzzy_info = find_fuzzy_matches(df,city,'street_precleanedHN',sm_all_streets,sm_ed_st_dict)
 
-	# Step 5b: Use fuzzy matches to get house number sequences
+	# Step 4b: Use fuzzy matches to get house number sequences
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df['street_precleanedHN']
 	df.loc[df['sm_fuzzy_match_bool'],street_var] = df['sm_fuzzy_match']
@@ -93,17 +114,26 @@ def clean_microdata(city_info):
 	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
 	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
 
-	# Step 5c: Use house number sequences to fill in blank street names
+	# Step 4c: Use house number sequences to fill in blank street names
 	df, fix_blanks_info2 = fix_blank_st(df,city,HN_SEQ,'street_post_fuzzy',sm_st_ed_dict)
 
-	# Step 6: Create overall match and all check variables
+	#	
+	# Step 5: Create overall match and all check variables
+	#
+
 	df = create_overall_match_variables(df)
 	cprint("Overall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n",'green',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
-	# Step 7: Set priority level for residual cases
+	#
+	# Step 6: Set priority level for residual cases
+	#
+
 	df, priority_info = set_priority(df)
 
-	# Step 8: Save full dataset and generate dashboard information 
+	#
+	# Step 7: Save full dataset and generate dashboard information 
+	#
+
 	city_file_name = city.replace(' ','') + state
 	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V'+str(version))
 	df.to_csv(file_name_all)
