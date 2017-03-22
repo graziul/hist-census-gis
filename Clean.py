@@ -40,6 +40,8 @@ version = 5
 
 datestr = time.strftime("%Y_%m_%d")
 
+city_info = ['New Haven','CT',1930]
+
 def clean_microdata(city_info):
 
 	#
@@ -55,16 +57,16 @@ def clean_microdata(city_info):
 	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
 	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
 
-	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
-		print("%s is done" % (city))
-		return 
+#	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
+#		print("%s is done" % (city))
+#		return None
 
 	HN_SEQ = {}
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-	init()
-	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
+#	init()
+#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 

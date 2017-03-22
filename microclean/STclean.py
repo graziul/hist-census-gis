@@ -25,7 +25,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import fuzzyset
-import simpledbf
+from simpledbf import Dbf5
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 from microclean.STstandardize import *
@@ -61,7 +61,7 @@ def load_city(city, state, year):
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
-		file_name = c + state
+		file_name = c + state.upper()
 		df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
 	except:
 		print('Error loading %s raw data' % (city))
@@ -372,8 +372,6 @@ def preclean_street(df, city, state, year):
 
 	df['street_precleaned'], df['check_DIR'], df['DIR_added'] = zip(*df.apply(lambda x: try_to_find_dir(x['street_precleaned'], x['DIR'], x['ed']), axis=1))
 
- #   df.loc[df['DIR_added'], ['image_id', 'line_num', 'street_raw', 'street_precleaned', 'ed']]
-
 	end = time.time()
 	preclean_time = round(float(end-start)/60, 1)
 
@@ -426,12 +424,12 @@ def get_streets_from_1940_street_grid(city, state):
 	if city == "StatenIsland":
 		c = "Richmond"
 	else:
-		c = city
+		c = city.replace(' ','')
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
 		file_name_st_grid = c + state + '_1940_edit.dbf'
-		dbf = simpledbf.Dbf5(file_path + '/1940/stgrid/' + file_name_st_grid)
+		dbf = Dbf5(file_path + '/1940/stgrid/' + file_name_st_grid)
 		df = dbf.to_dataframe()
 		streets = df['FULLNAME'].unique().tolist()
 	except:
@@ -461,27 +459,25 @@ def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, st_grid_
 
 	# Check for exact matches between microdata and Steve Morse
 	df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict,basic_info)
-	_, num_noexact_matches_sm, _, num_streets_noexact_sm, num_streets = exact_info_sm
-	exact_info_for_stgrid = [num_noexact_matches_sm, num_streets_noexact_sm, num_streets]
 
 	# Check for exact matches between microdata and 1940 street grid 
-	df, exact_info_stgrid = find_exact_matches_st_grid(df, street, st_grid_st_list, basic_info, exact_info_for_stgrid)
+	df, exact_info_stgrid = find_exact_matches_st_grid(df, street, st_grid_st_list, basic_info)
 
 	# Create final exact match variable
 	df['exact_match_bool'+post] = np.where(df['exact_match_sm_bool'+post] | df['exact_match_stgrid_bool'+post],True,False)
 	df['exact_match_type'] = ''
 	df.loc[df['exact_match_sm_bool'+post],'exact_match_type'] = 'SM'
-	df.loc[(df['exact_match_sm_bool'+post]) & (~df['exact_match_sm_bool'+post]),'exact_match_type'] = 'StGrid'
+	df.loc[(df['exact_match_stgrid_bool'+post]) & (~df['exact_match_sm_bool'+post]),'exact_match_type'] = 'StGrid'
 
 	# Generate some information
-	num_exact_matches = df[df['exact_match_bool'+post]].count()
+	num_exact_matches = df[df['exact_match_bool'+post]].sum()
 	prop_exact_matches = float(num_exact_matches)/float(num_records)
-	cprint("Cases with exact matches: "+str(num_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches, 1))+"%)", file=AnsiToWin32(sys.stdout))
+	cprint("Cases w/ exact matches: "+str(num_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches, 1))+"%)", file=AnsiToWin32(sys.stdout))
 
 	df_exact_matches = df[df['exact_match_bool'+post]]
 	num_streets_exact = len(df_exact_matches.groupby([street]).count())
 	prop_exact_streets = float(num_streets_exact)/float(num_streets)
-	cprint("Streets with exact matches from Steve Morse: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+	cprint("Streets w/ exact matches: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
 
 	# Timer stop
 	end = time.time()
@@ -502,7 +498,7 @@ def find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict, basic_info)
 	num_exact_matches_sm = np.sum(df['exact_match_sm_bool'+post])
 	num_noexact_matches_sm =  num_records - num_exact_matches_sm
 	prop_exact_matches_sm = float(num_exact_matches_sm)/float(num_records)
-	cprint("Cases with exact matches from Steve Morse: "+str(num_exact_matches_sm)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_sm, 1))+"%)", file=AnsiToWin32(sys.stdout))
+	cprint("Cases w/ exact matches (Steve Morse): "+str(num_exact_matches_sm)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_sm, 1))+"%)", file=AnsiToWin32(sys.stdout))
 
 	# Keep track of unique streets that do and do not have exact matches 
 	df_exact_matches_sm = df[df['exact_match_sm_bool'+post]]
@@ -510,11 +506,11 @@ def find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict, basic_info)
 
 	num_streets_exact_sm = len(df_exact_matches_sm.groupby([street]).count())
 	num_streets_noexact_sm = len(df_noexact_matches_sm.groupby([street]).count())
-	if num_streets_exact_sm + num_streets_noexact_sm != num_streets:
+	while num_streets_exact_sm + num_streets_noexact_sm != num_streets:
 		print("Error in number of streets")
 		break
 	prop_exact_streets_sm = float(num_streets_exact_sm)/float(num_streets)
-	cprint("Streets with exact matches from Steve Morse: "+str(num_streets_exact_sm)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets_sm, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+	cprint("Streets w/ exact matches (Steve Morse): "+str(num_streets_exact_sm)+" of "+str(num_streets)+" total streets ("+str(round(100*prop_exact_streets_sm, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
 
 	# Compile info for later use
 	exact_info_sm = [num_exact_matches_sm, num_noexact_matches_sm, 
@@ -522,29 +518,27 @@ def find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict, basic_info)
 
 	return df, exact_info_sm
 
-def find_exact_matches_st_grid(df, street, st_grid_st_list, basic_info, exact_info_for_stgrid):
+def find_exact_matches_st_grid(df, street, st_grid_st_list, basic_info):
 
 	post, num_records, num_streets = basic_info
-	num_noexact_matches_sm, num_streets_noexact_sm = exact_info_for_stgrid
 
 	# Determine if cases without Steve Morse exact match have street grid exact match
-	df.loc[df['exact_match_sm_bool'+post]==False,'exact_match_grid_bool'+post] = df.loc[df['exact_match_sm_bool'+post]==False,street].apply(lambda s: s in st_grid_st_list)
-	num_exact_matches_stgrid = np.sum(df['exact_match_grid_bool'+post])
+	df.loc[df['exact_match_sm_bool'+post]==False,'exact_match_stgrid_bool'+post] = df.loc[df['exact_match_sm_bool'+post]==False,street].apply(lambda s: s in st_grid_st_list)
+	num_exact_matches_stgrid = np.sum(df['exact_match_stgrid_bool'+post])
 	num_noexact_matches_stgrid = num_records - num_exact_matches_stgrid
 	prop_exact_matches_stgrid = float(num_exact_matches_stgrid)/float(num_records)
-	cprint("Cases with exact matches in street grid: "+str(num_exact_matches_stgrid)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_stgrid, 1))+"%)", file=AnsiToWin32(sys.stdout))
+	cprint("Cases w/ exact matches (street grid): "+str(num_exact_matches_stgrid)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_stgrid, 1))+"%)", file=AnsiToWin32(sys.stdout))
 
 	# Keep track of unique streets that do and do not have exact matches in street grid
-	df_exact_matches_stgrid = df[(df['exact_match_grid_bool'+post]==True)]
-	df_noexact_matches_stgrid = df[(df['exact_match_grid_bool'+post]==False)]
+	df['temp'] = df['exact_match_stgrid_bool'+post].fillna('')
+	df_exact_matches_stgrid = df[df['temp']==True]
+	df_noexact_matches_stgrid = df[df['temp']==False]
+	del df['temp']
 
 	num_streets_exact_stgrid = len(df_exact_matches_stgrid.groupby([street]).count())
 	num_streets_noexact_stgrid = len(df_noexact_matches_stgrid.groupby([street]).count())
-	if num_streets_exact_stgrid + num_streets_noexact_stgrid != num_streets:
-		print("Error in number of streets")
-		break
-	prop_exact_streets_stgrid = float(num_streets_exact_sm)/float(num_streets)
-	cprint("Streets with exact matches in street grid: "+str(num_streets_exact_stgrid)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets_stgrid, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+	prop_exact_streets_stgrid = float(num_streets_exact_stgrid)/float(num_streets)
+	cprint("Streets w/ exact matches (street grid): "+str(num_streets_exact_stgrid)+" of "+str(num_streets)+" total streets ("+str(round(100*prop_exact_streets_stgrid, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
 
 	# Compile info for later use
 	exact_info_stgrid = [num_exact_matches_stgrid, num_noexact_matches_stgrid, 
@@ -764,3 +758,12 @@ def fix_blank_st(df, city, HN_seq, street, sm_st_ed_dict):
 	fix_blanks_info = [num_street_changes_total, num_blank_street_names, num_blank_street_singletons, per_singletons, num_blank_street_fixed, per_blank_street_fixed, blank_fix_time]
 
 	return df, fix_blanks_info
+
+def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
+    if (microdata_st is None) or (sm_st_ed_dict[microdata_st] is None):
+        return False
+    else:
+        if microdata_ed in sm_st_ed_dict[microdata_st]:
+            return True
+        else:
+            return False
