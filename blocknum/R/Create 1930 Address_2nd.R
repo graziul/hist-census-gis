@@ -14,9 +14,20 @@ library(maptools)
 library(rgdal)
 library(haven)
 
-sa<-read.csv("Z:/Projects/1940Census/Block Creation/San Antonio/SA_AutoClean30.csv", stringsAsFactors = F)
+args <- commandArgs(trailingOnly = TRUE)
+dir_path <- args[1]
+city_name <- args[2]
+file_name <- args[3]
+state_abbr <- args[4]
+
+args <- commandArgs(trailingOnly = TRUE)
+dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
+city_name <- args[2]
+
+city<-read.dta13(file_name, stringsAsFactors = F)
+## STOPPED HERE
 changes<-read.csv("Z:/Projects/1940Census/Block Creation/San Antonio/Streets To Be Changed.csv", stringsAsFactors = F)
-names(sa)<-tolower(names(sa))
+names(city)<-tolower(names(city))
 names(changes)<-tolower(names(changes))
 
 #Change Only Microdata Streets Without a North/South direction
@@ -24,21 +35,22 @@ names(changes)<-tolower(names(changes))
   changes<-subset(changes, changes$change1!="OUTSIDE CITY LIMITS")
 
 vars<-c("overall_match", "ed", "type", "block","hn", "self_empty_info_race", "self_birth_place_empty")
-sa30<-sa[vars]
+city30<-city[vars]
 
-sa30<-plyr::rename(sa30, c(block="Mblk", overall_match="fullname"))
-sa30$state<-"TX"
-sa30$city<-"San Antonio"
+city30<-plyr::rename(city30, c(block="Mblk", overall_match="fullname"))
+city30$state<-state_abbr
+city30$city<-city_name
 
 #Change Microdata Names where they are noted in SteveMorse
   #Order By Fullname
-  sa30<-sa30[order(sa30$fullname),]
+city30<-city30[order(city30$fullname),]
   changes<-changes[order(changes$from),]
   #Make Changes
-  sa30$fullname<-ifelse(sa30$fullname %in% changes$from, changes$change1, sa30$fullname)
+  city30$fullname<-ifelse(city30$fullname %in% changes$from, changes$change1, city30$fullname)
 
 #Create New Address File
-  sa30$address<-paste(sa30$hn, sa30$fullname, sep=" ")
-  names(sa30)
+  city30$address<-paste(city30$hn, city30$fullname, sep=" ")
+  names(city30)
 
-write.csv(sa30, "Z:/Projects/1940Census/Block Creation/San Antonio/Add_30_2nd.csv")
+  write.csv(city30, paste(dir_path,"\\GIS_edited\\",city_name,"_1930_Addresses_2nd.csv",sep=""))
+  

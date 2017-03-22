@@ -89,7 +89,7 @@ try:
 except subprocess.CalledProcessError:
 	cprint("Error creating 1930 address (2nd round) for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 '''
-cprint("Skipping Step 6 for now\n", 'cyan', file=AnsiToWin32(sys.stdout))
+cprint("Skipping Step 6 for now\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 ##
 ## Not doing Step 6 until we know how to handle street name changes
@@ -106,7 +106,7 @@ try:
 except subprocess.CalledProcessError:
 	cprint("Error creating blocks and block points (2nd round) for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 '''
-cprint("Skipping Step 7 for now\n", 'cyan', file=AnsiToWin32(sys.stdout))
+cprint("Skipping Step 7 for now\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 # Step 8: Identify 1930 blocks
 cprint("Starting Step 8: Identify 1930 blocks\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
@@ -133,7 +133,7 @@ except subprocess.CalledProcessError:
 # Step 10: Integrate R and Matlab block numbering results
 cprint("Starting Step 10: Integrate R and Matlab block numbering results\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 try:
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\MapOCRintegration.py",city_name,file_path])
+	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\MapOCRintegration.py",file_path,file_name])
 	if t != 0:
 		cprint("Error integrating R and Matlab block numbering results for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 	else:

@@ -9,15 +9,17 @@ library(xlsx)
 library(maptools)
 library(rgdal)
 library(haven)
+library(readstata13)
 
 trim <- function( x ) {
   gsub("(^[[:space:]]+|[[:space:]]+$)", "", x)
 }
 
 args <- commandArgs(trailingOnly = TRUE)
-dir_path <- paste(args[1],"\\GIS\\",sep="")
+dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
 city_name <- args[2]
 file_name <- args[3]
+state_abbr <- args[4]
 
 #Bring in New 1930 Street Grid
   library(shapefiles)
@@ -25,13 +27,13 @@ file_name <- args[3]
   detach("package:shapefiles", unload=TRUE)
   
 #Bring in Clean Microdata File  
-  mdata<-read.dta(file_name)
+  mdata<-read.dta13(file_name)
   names(mdata)<-tolower(names(mdata))
-  vars<-c("overall_match", "ed", "type", "block","hn")
+  vars<-c("autostud_street", "ed", "type", "block","hn")
   mdata<-mdata[vars]
-  mdata<-plyr::rename(mdata, c(block="Mblk", overall_match="fullname"))
-  mdata$state<-"TX"
-  mdata$city<-"San Antonio"
+  mdata<-plyr::rename(mdata, c(block="Mblk", autostud_street="fullname"))
+  mdata$state<-state_abbr
+  mdata$city<-city_name
   mdata$address<-paste(mdata$hn, mdata$fullname, sep=" ")
   
 #Street Name Change List from Steve Morse
@@ -43,13 +45,13 @@ file_name <- args[3]
   names(mdata)<-tolower(names(mdata))
 
 #Add State and City to New Streets from Edited Grid - This Helps in Geocoding Later
-  grid30$state<-ifelse(is.na(grid30$state), "TX", as.character(grid30$state))
-  grid30$city<-ifelse(is.na(grid30$city), "San Antonio", as.character(grid30$city))
+  grid30$state<-ifelse(is.na(grid30$state), state_abbr, as.character(grid30$state))
+  grid30$city<-ifelse(is.na(grid30$city), city_name, as.character(grid30$city))
   
 #Add Street Ranges to New Streets & Streets 
   grid30$addrange<-ifelse(is.na(grid30$ltoadd) & is.na(grid30$lfromadd) 
                           & is.na(grid30$rtoadd) & is.na(grid30$rfromadd) 
-                          & is.na(grid30$statefp) & is.na(grid30$street), 1, 0)
+                          & is.na(grid30$state) & is.na(grid30$fullname), 1, 0)
   grid_nochange<-subset(grid30, grid30$addrange==0)
   grid_change<-subset(grid30, grid30$addrange==1)
     #Check streets in 'grid_change' to make sure they also do not appear in 'grid_nochange'. This
@@ -142,5 +144,6 @@ file_name <- args[3]
     new_grid<-rbind(grid30_nochange, grid30_change)
     
     #Export Map
-    writeOGR(paste(dir_path,city_name,"San Antonio_1930_stgrid_edit",sep=""), driver="ESRI Shapefile")
+    dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
+    writeOGR(new_grid, dsn=dir_path_export,layer=paste(city_name,"_1930_stgrid_edit",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
     

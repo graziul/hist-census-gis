@@ -15,7 +15,7 @@ library(rJava)
 library(xlsx) 
 
 args <- commandArgs(trailingOnly = TRUE)
-dir_path <- paste(args[1],"\\GIS\\",sep="")
+dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
 city_name <- args[2]
 
 #Functions used:
@@ -131,7 +131,7 @@ trim <- function( x ) {
   Combo<-subset(Combo, !duplicated(Combo$pblk_id))
   
 #WRITE FILE  
-  write.csv(Combo, file=paste(dir_path,city_name,"_ED_Choices.csv",sep=""), row.names=F)
+  write.csv(Combo, file=paste(dir_path,city_name,"_1930_ED_Choices.csv",sep=""), row.names=F)
   
 #Attach to Original Shapefile
   library(shapefiles)
@@ -145,7 +145,7 @@ trim <- function( x ) {
     pblk_id<-Combo$pblk_id
     pblk_map<-BlockMap$pblk_id
     Combo$inmap<-pblk_id %in% pblk_map
-    table(Combo$inmap)
+    print(table(Combo$inmap))
   #Merge
     BlockMap<-merge(x=BlockMap, y=Combo, by="pblk_id", all.x=TRUE)
     
@@ -163,5 +163,6 @@ trim <- function( x ) {
   BlockMap$FirstE<-as.numeric(BlockMap$FirstE)
   
   #Export Map
-  writeOGR(BlockMap, paste(dir_path,city_name,"_ED_Choice_Map.shp",sep=""), driver="ESRI Shapefile")
+  dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
+  writeOGR(obj=BlockMap, dsn=dir_path_export, layer=paste(city_name,"_1930_ED_Choice_Map.shp",sep=""), driver="ESRI Shapefile",overwrite_layer = TRUE)
   

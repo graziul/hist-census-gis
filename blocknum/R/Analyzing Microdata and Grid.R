@@ -17,17 +17,17 @@ trim <- function( x ) {
 }
 
 args <- commandArgs(trailingOnly = TRUE)
-dir_path <- paste(args[1],"\\GIS\\",sep="")
+dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
 city_name <- args[2]
 
 #Bring in Points
-  points_dbf_file<-paste(dir_path,city_name,"_1930_Points30.dbf",sep="")
+  points_dbf_file<-paste(dir_path,city_name,"_1930_Points.dbf",sep="")
   Points<-read.dbf(points_dbf_file)
 #Bring in Street Grid
-  grid_dbf_file<-paste(dir_path,city_name,"_1930_stgrid",sep="")
+  grid_dbf_file<-paste(dir_path,city_name,"_1930_stgrid.dbf",sep="")
   grid30<-read.dbf(grid_dbf_file)
   
-#Street Name Change List from Steve Morse
+#Street Name Change List from Steve Morse 
   #Bring In Street Name Change File
   is.odd <- function(x) x %% 2 != 0
   
@@ -59,10 +59,10 @@ city_name <- args[2]
   Even<-plyr::rename(Even, c("List5[c(F, T), ]"="New"))
   
   new<-cbind(Odd, Even)
-  write(new, paste(dir_path,city_name,"_StName_Change.csv",sep=""))
+  write.csv(new, paste(dir_path,city_name,"_StName_Change.csv",sep=""))
 
 #Microdata file
-  mdata<-read.csv(paste(dir_path,city_name,"_Add_30.csv",sep=""), stringsAsFactors = F)
+  mdata<-read.csv(paste(dir_path,city_name,"_1930_Addresses.csv",sep=""), stringsAsFactors = F)
   #Count how many people are on each unique street
   mdata$Person<-car::recode(mdata$city,"\" \"=0; else=1")
   cnt<-tapply(mdata$Person, INDEX=list(mdata$fullname), FUN=sum)
@@ -96,7 +96,8 @@ city_name <- args[2]
   names(grid30)
   names(mdata)<-tolower(names(mdata))
   names(mdata)
-  
+  #Not convinced this makes sense to do as a rule (Hartford "new" street names are not always street names) - Chris
+  "
   #Grab all old street names before they were changed
     old<-as.character(new$Old)
   #Grab all new street names after they were changed  
@@ -109,7 +110,7 @@ city_name <- args[2]
   
   table(grid30$old_st_name) 
   table(grid30$new_st_name)
-  
+  "
 #Keep Unique MicroData Street Names
   m_st<-subset(mdata, !duplicated(mdata$fullname))
   myvars<-c("fullname", "ed", "ppst", "priority")

@@ -26,14 +26,16 @@ csv.field_size_limit(sys.maxsize)
 
 file_path = '/home/s4-data/LatestCities' 
 
+'''
 city_info_file = file_path + '/CityInfo.csv' 
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df.values.tolist()
+'''
 
-c = 'Houston'
-s = 'TX'
-city = 'HoustonTX'
-student_file = 'Houston1930_Carlos_select.dta'
+c = 'Hartford'
+s = 'CT'
+city = c + s
+student_file = 'HartfordCT_ForStudentsV1_Copy.dta'
 version = 3
 year = 1930
 

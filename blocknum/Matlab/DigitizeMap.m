@@ -4,7 +4,9 @@ function [I, plot, p ] = DigitizeMap( filename )
 %
 
 % Import and prep
+
 [I, R] = geotiffread(filename);
+I = imread(filename);
 rotated_I = imrotate(I,-90);
 SE = strel('disk',1,0);
 % Binarize image

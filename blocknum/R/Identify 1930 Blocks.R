@@ -16,6 +16,10 @@
   library(xlsx)
   library(magrittr)
 
+args <- commandArgs(trailingOnly = TRUE)
+dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
+city_name <- args[2]
+  
 #Functions used:
 trim <- function( x ) {
   gsub("(^[[:space:]]+|[[:space:]]+$)", "", x)
@@ -40,7 +44,7 @@ shift<-function(x,shift_by){
 }
 
 #Bring in microdata points
-  Points<-read.dbf("Z:/Projects/1940Census/Block Creation/San Antonio/San Antonio_1930_Pblk_Points_2.dbf")
+  Points<-read.dbf(paste(dir_path,city_name,"_1930_Pblk_Points.dbf",sep="")) # This was "Pblk_Points_2.dbf" but we're skipping Steps 6 and 7 currently
 #Make variable names lowercase
   names(Points)<-tolower(names(Points))
   names(Points)
@@ -151,11 +155,10 @@ shift<-function(x,shift_by){
     
 #Attach to Original Shapefile
     library(shapefiles)
-    setwd("Z:/Projects/1940Census/Block Creation/San Antonio/")
-    BlockMap<-readOGR(dsn=getwd(), layer="San Antonio_1930_Pblk_2")
+    BlockMap<-readOGR(paste(dir_path,city_name,"_1930_Pblk.shp",sep=""))
     names(BlockMap)<-tolower(names(BlockMap))
     detach("package:shapefiles", unload=TRUE)
-  
+
 #Merge
   BlockMap<-merge(x=BlockMap, y=BlockC, by="pblk_id", all.x=TRUE)
     
@@ -173,8 +176,8 @@ shift<-function(x,shift_by){
   BlockMap$inmap<-ifelse(pblk_map %in% pblk_id, 1, 0)
 
 #Export Map
-  setwd("Z:/Projects/1940Census/Block Creation/San Antonio/")
-  writeOGR(BlockMap, dsn=getwd(),layer="Block_Choice_Map", driver="ESRI Shapefile")
+  dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
+  writeOGR(BlockMap, dsn=dir_path_export,layer=paste(city_name,"_1930_Block_Choice_Map",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
   
 #########################################
   

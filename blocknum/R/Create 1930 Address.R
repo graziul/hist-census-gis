@@ -15,14 +15,16 @@ if (substr(file_name,nchar(file_name)-3+1,nchar(file_name)) == "dta") {
  
 names(city)<-tolower(names(city))
 
-vars<-c("overall_match", "ed", "type", "block","hn")
+#vars<-c("overall_match", "ed", "type", "block","hn")
+vars<-c("autostud_street", "ed", "type", "block","hn")
 city30<-city[vars]
 
-city30<-plyr::rename(city30, c(block="Mblk", overall_match="fullname"))
+#city30<-plyr::rename(city30, c(block="Mblk", overall_match="fullname"))
+city30<-plyr::rename(city30, c(block="Mblk", autostud_street="fullname"))
 city30$state<-state_abbr
 city30$city<-city_name
 city30$address<-paste(city30$hn, city30$fullname, sep=" ")
 #names(city30)
 #View(city30)
 
-write.csv(city30, paste(dir_path,"\\GIS\\Add_30.csv",sep=""))
+write.csv(city30, paste(dir_path,"\\GIS_edited\\",city_name,"_1930_Addresses.csv",sep=""))
