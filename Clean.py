@@ -15,6 +15,7 @@ version = 5
 #
 # V5
 #	- Integrated street names from edited 1940 street grid in matching process
+#	- Removed code for validating exact matches by ED (still do fuzzy matching using ED)
 #
 # V4
 #	- New Steve Morse dictionary ("La" -> "Ln")
@@ -51,8 +52,8 @@ def clean_microdata(city_info):
 	start_total = time.time()
 
 	city_file_name = city.replace(' ','') + state
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V'+str(version))
-	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year),city_file_name,'V'+str(version))
+	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
+	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
 
 	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
 		print("%s is done" % (city))
@@ -63,31 +64,31 @@ def clean_microdata(city_info):
 
 	#Save to logfile
 	init()
-	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year),city.replace(' ','')+state,datestr),'wb')
+	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 	#
-	# Step 1: Load city
+	# Step 1: Load city and standardize variable names
 	#
 
-	df, load_time = load_city(city.replace(' ',''),state,year)
+	df, load_time = load_city(city.replace(' ',''), state, year)
 
 	#
 	# Step 2: Format raw street names and fill in blank street names
 	#
 
 	# Step 2a: Properly format street names and get Steve Morse street-ed information
-	df, preclean_info = preclean_street(df,city,state,year)  
+	df, preclean_info = preclean_street(df, city, state, year)  
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
 
 	# Step 2b: Use formatted street names to get house number sequences
 	street_var = 'street_precleaned'
-	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
-	df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
+	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
+	df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
 
 	# Step 2c: Use house number sequences to fill in blank street names
-	df, fix_blanks_info1 = fix_blank_st(df,city,HN_SEQ,'street_precleaned',sm_st_ed_dict)
+	df, fix_blanks_info1 = fix_blank_st(df, city, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
 
 	#
 	# Step 3: Identify exact matches
@@ -97,25 +98,25 @@ def clean_microdata(city_info):
 	st_grid_st_list = get_streets_from_1940_street_grid(city,state)
 
 	# Step 3b: Identify exact matches based on Steve Morse and 1940 street grid
-	df, exact_info = find_exact_matches(df,city,'street_precleanedHN',sm_all_streets,sm_st_ed_dict,st_grid_st_list)
+	df, exact_info = find_exact_matches(df, city, 'street_precleanedHN', sm_all_streets, sm_st_ed_dict, st_grid_st_list)
 
 	#
 	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
 	#
 
 	# Step 4a: Search for fuzzy matches
-	df, fuzzy_info = find_fuzzy_matches(df,city,'street_precleanedHN',sm_all_streets,sm_ed_st_dict)
+	df, fuzzy_info = find_fuzzy_matches(df, city, 'street_precleanedHN', sm_all_streets, sm_ed_st_dict)
 
 	# Step 4b: Use fuzzy matches to get house number sequences
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df['street_precleanedHN']
-	df.loc[df['sm_fuzzy_match_bool'],street_var] = df['sm_fuzzy_match']
+	df.loc[df['fuzzy_match_sm_bool'],street_var] = df['fuzzy_match_sm']
 	HN_SEQ_new = {}
-	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df,year,street_var,debug=True)
-	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'],s[street_var],s['hn'],ED_ST_HN_dict[street_var]),axis=1)
+	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
+	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
 
 	# Step 4c: Use house number sequences to fill in blank street names
-	df, fix_blanks_info2 = fix_blank_st(df,city,HN_SEQ,'street_post_fuzzy',sm_st_ed_dict)
+	df, fix_blanks_info2 = fix_blank_st(df, city, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
 
 	#	
 	# Step 5: Create overall match and all check variables
@@ -135,16 +136,16 @@ def clean_microdata(city_info):
 	#
 
 	city_file_name = city.replace(' ','') + state
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year),city_file_name,'V'+str(version))
+	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
 	df.to_csv(file_name_all)
 
 	end_total = time.time()
 	total_time = round(float(end_total-start_total)/60,1)
-	cprint("Total processing time for %s: %s\n" % (city,total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
+	cprint("Total processing time for %s: %s\n" % (city, total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
 	#Generate dashbaord info
-	times = [load_time,total_time]
-	info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, priority_info,times)
+	times = [load_time, total_time]
+	info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, priority_info, times)
 
 	# Save only a subset of variables for students to use when cleaning
 	df = df.replace({'check_ed' : { True : 'yes', False: ''}})
@@ -153,16 +154,16 @@ def clean_microdata(city_info):
 		student_vars = ['hhid','hhorder','institution','rel_id','dn','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','check_ed','clean_priority']
 	if year==1930:
 		df['street_fuzzy_match'] = ''
-		df.loc[~df['overall_match_bool'],'street_fuzzy_match'] = df['sm_fuzzy_match']		
+		df.loc[~df['overall_match_bool'],'street_fuzzy_match'] = df['fuzzy_match_sm']		
 		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','street_fuzzy_match','overall_match','clean_priority']
 
 	df = df[student_vars]
-	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year),city_file_name,'V'+str(version))
+	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year), city_file_name, 'V'+str(version))
 	df.to_csv(file_name_students)
 
 	# Set do-file information
 	dofile = file_path + "/ConvertCsvToDta.do"
-	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year),city_file_name,'V'+str(version))
+	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
 	cmd = ["stata","-b","do", dofile, file_name_students, file_name_stata,"&"]
 	# Run do-file
 	subprocess.call(cmd) 
@@ -186,7 +187,7 @@ for i in city_info_list:
 	i.append(year)
 
 # Farm out cleaning across multiple instances of Python
-pool = Pool(processes=4,maxtasksperchild=1)
+pool = Pool(processes=4, maxtasksperchild=1)
 temp = pool.map(clean_microdata, city_info_list)
 pool.close()
 
@@ -229,7 +230,7 @@ dfED = df.ix[:,86:95].sort_values(by='propExactMatchesFailed',ascending=False).r
 dfFixBlank = df.ix[:,95:106].reset_index()
 dfTime = df.ix[:,106:117].sort_values(by='TotalTime').reset_index()
 
-dashboard = pd.concat([dfSTprop,dfSTnum,dfHNprop,dfHNnum,dfRprop,dfRnum,dfperPriority,dfPriority,dfseqPriority,dfperseqPriority,dfED,dfFixBlank,dfTime],axis=1)
+dashboard = pd.concat([dfSTprop, dfSTnum, dfHNprop, dfHNnum, dfRprop, dfRnum, dfperPriority, dfPriority, dfseqPriority, dfperseqPriority, dfED, dfFixBlank, dfTime],axis=1)
 del dashboard['index']
 
 csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(year),str(year),datestr)
