@@ -25,7 +25,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import fuzzyset
-import shapefile
+import simpledbf
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 from microclean.STstandardize import *
@@ -50,7 +50,7 @@ class color:
 # Step 1: Load city
 #
 
-def load_city(city,state,year):
+def load_city(city, state, year):
 
 	start = time.time()
 
@@ -62,7 +62,7 @@ def load_city(city,state,year):
 	# Try to load file, return error if can't load or file has no cases
 	try:
 		file_name = c + state
-		df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year),file_name), convert_categoricals=False)
+		df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
 	except:
 		print('Error loading %s raw data' % (city))
    
@@ -70,28 +70,28 @@ def load_city(city,state,year):
 		print('Error loading %s raw data' % (city))  
 
 	end = time.time()
-	load_time = round(float(end-start)/60,1)
+	load_time = round(float(end-start)/60, 1)
 
 	num_records = len(df)
-	cprint('Loading data for %s took %s' % (city,load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	cprint('Loading data for %s took %s' % (city, load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
 	# Standardize variable names
-	df = rename_variables(df,year)
+	df = rename_variables(df, year)
 
 	# Remove duplicates
 	df = remove_duplicates(df)
 
 	# Sort by image_id and line_num (important for HN) 
-	df = df.sort_values(['image_id','line_num'])
-	df.index = range(0,len(df))
+	df = df.sort_values(['image_id', 'line_num'])
+	df.index = range(0, len(df))
 
 	return df, load_time
 
-def rename_variables(df,year):
+def rename_variables(df, year):
 
 	# Street
 	'''
-	def pick_best_raw_street(st1,st2,st_match):
+	def pick_best_raw_street(st1, st2, st_match):
 		if st_match: 
 			return st1  
 		else:
@@ -131,7 +131,7 @@ def rename_variables(df,year):
 
 	# House number
 	'''
-	def pick_best_raw_hn(hn1,hn2,hn_match):
+	def pick_best_raw_hn(hn1, hn2, hn_match):
 		if hn_match: 
 			return hn1  
 		else:
@@ -244,17 +244,17 @@ def remove_duplicates(df):
 	cprint('%s line number blanks removed' % (len1-len2), file=AnsiToWin32(sys.stdout))
 
 	# Remove if pages are duplicates (using sequences of age/gender)
-	image_id = df[['image_id','self_residence_info_age','self_empty_info_gender']]
+	image_id = df[['image_id', 'self_residence_info_age', 'self_empty_info_gender']]
 	image_id_chunks = image_id.groupby('image_id')
-	image_id_chunks_dict = {name:np.array(group[['self_residence_info_age','self_empty_info_gender']]).tolist() for name, group in image_id_chunks}
-	repeat = {k:v for k,v in image_id_chunks_dict.items() if v in removekey(image_id_chunks_dict,k).values() and len(v) > 2}
+	image_id_chunks_dict = {name:np.array(group[['self_residence_info_age', 'self_empty_info_gender']]).tolist() for name, group in image_id_chunks}
+	repeat = {k:v for k, v in image_id_chunks_dict.items() if v in removekey(image_id_chunks_dict, k).values() and len(v) > 2}
 
 	# Identify and remove image_id where all age/gender values are blank ('')
 	blank = []
-	for k,v in repeat.items():
+	for k, v in repeat.items():
 		if set([i for s in v for i in s]) == {''}:
 			blank.append(k)
-			repeat = removekey(repeat,k)
+			repeat = removekey(repeat, k)
 
 	# Identify unique sequences of age/gender that are repeated
 	sequence_list = unique_sequences(repeat.values())
@@ -263,7 +263,7 @@ def remove_duplicates(df):
 	repeat_list = []
 	df_list = []
 	for i in range(len(sequence_list)):
-		repeat_list.append([k for k,v in repeat.items() if v == sequence_list[i]])
+		repeat_list.append([k for k, v in repeat.items() if v == sequence_list[i]])
 		df_list.append(df[df['image_id'].isin(repeat_list[i])])
 
 	# Pick the page with the fewest blanks in the data
@@ -279,7 +279,7 @@ def remove_duplicates(df):
 			drop_imageids.append(blanks_dict.keys()[1:])
 		else:
 			#Have to make sure only one image_id is saved since multiple may have max_blanks
-			temp = [k for k,v in blanks_dict.items() if v != max_blanks]
+			temp = [k for k, v in blanks_dict.items() if v != max_blanks]
 			if temp is list:
 				temp = temp[0]
 			drop_imageids.append(temp)
@@ -291,7 +291,7 @@ def remove_duplicates(df):
 	cprint('%s cases removed due to duplicate pages\n' % (len1-len2), file=AnsiToWin32(sys.stdout))
 
 	end = time.time()
-	search_time = round(float(end-start)/60,1)
+	search_time = round(float(end-start)/60, 1)
 	cprint('Searching for duplicates took %s minutes\n' % (search_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
 	return df
@@ -300,7 +300,7 @@ def remove_duplicates(df):
 # Step 2a: Properly format street names and get Steve Morse street-ed information
 #
 
-def preclean_street(df,city,state,year):
+def preclean_street(df, city, state, year):
 
 	start = time.time()
 
@@ -309,7 +309,7 @@ def preclean_street(df,city,state,year):
 	def create_unique_street_dict(var):
 		grouped = df.groupby([var])
 		unique_street_dict = {}
-		for name,_ in grouped:
+		for name, _ in grouped:
 			unique_street_dict[name] = standardize_street(name)
 		return unique_street_dict
 
@@ -321,12 +321,12 @@ def preclean_street(df,city,state,year):
 	df['NAME'] = df['street_raw'].apply(lambda s: cleaning_dict[s][2])
 	df['TYPE'] = df['street_raw'].apply(lambda s: cleaning_dict[s][3])
 
-	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city,state,year)
+	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city, state, year)
 
 	#Create dictionary {NAME:num_NAME_versions}
-	num_NAME_versions = {k:len(v) for k,v in sm_st_ed_dict_nested.items()}
+	num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
 	#Flatten for use elsewhere
-	sm_st_ed_dict = {k:v for d in [v for k,v in sm_st_ed_dict_nested.items()] for k,v in d.items()}
+	sm_st_ed_dict = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
 	#For bookkeeping when validating matches using ED 
 	microdata_all_streets = df['street_precleaned'].unique()
 	for st in microdata_all_streets:
@@ -334,7 +334,7 @@ def preclean_street(df,city,state,year):
 			sm_st_ed_dict[st] = None
 
 	#If no TYPE, check if NAME is unique (and so we can assume TYPE = "St")
-	def replace_singleton_names_w_st(st,NAME,TYPE):
+	def replace_singleton_names_w_st(st, NAME, TYPE):
 		try:
 			if num_NAME_versions[NAME] == 1 & TYPE == '':
 				TYPE = "St"
@@ -343,10 +343,10 @@ def preclean_street(df,city,state,year):
 		except:
 			return st, TYPE
 
-	df['street_precleaned'], df['TYPE'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'],x['NAME'],x['TYPE']), axis=1))
+	df['street_precleaned'], df['TYPE'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'], x['NAME'], x['TYPE']), axis=1))
 
 	#If no DIR, check Steve Mose ED for street to see if it should have a DIR
-	def try_to_find_dir(st,DIR,ed):
+	def try_to_find_dir(st, DIR, ed):
 		#If st has DIR then do nothing 
 		if len(DIR) > 0:
 			return st, False, False
@@ -361,7 +361,7 @@ def preclean_street(df,city,state,year):
 		contains = [i for i in streets if st in i]
 		#If exact street name is not in ED and only one street in 
 		if not exact and len(contains) == 1:
-			has_DIR = re.search(r'^([Nn]|[Ss]|[Ee]|[Ww])[\s]?([Nn]|[Ss]|[Ee]|[Ww])?[\s]',contains[0])
+			has_DIR = re.search(r'^([Nn]|[Ss]|[Ee]|[Ww])[\s]?([Nn]|[Ss]|[Ee]|[Ww])?[\s]', contains[0])
 			if has_DIR:
 				return contains[0], False, True
 			else:
@@ -370,27 +370,27 @@ def preclean_street(df,city,state,year):
 			#POSSIBLE: Add something to catch when only some cases are missing DIR (based on street-ED)?
 			return st, True, False
 
-	df['street_precleaned'], df['check_DIR'], df['DIR_added'] = zip(*df.apply(lambda x: try_to_find_dir(x['street_precleaned'],x['DIR'],x['ed']),axis=1))
+	df['street_precleaned'], df['check_DIR'], df['DIR_added'] = zip(*df.apply(lambda x: try_to_find_dir(x['street_precleaned'], x['DIR'], x['ed']), axis=1))
 
- #   df.loc[df['DIR_added'],['image_id','line_num','street_raw','street_precleaned','ed']]
+ #   df.loc[df['DIR_added'], ['image_id', 'line_num', 'street_raw', 'street_precleaned', 'ed']]
 
 	end = time.time()
-	preclean_time = round(float(end-start)/60,1)
+	preclean_time = round(float(end-start)/60, 1)
 
-	cprint('Precleaning street names for %s took %s\n' % (city,preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	cprint('Precleaning street names for %s took %s\n' % (city, preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 	
 	preclean_info = sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
 
 	return df, preclean_info
 
-def load_steve_morse(city,state,year):
+def load_steve_morse(city, state, year):
 
 	#NOTE: This dictionary must be built independently of this script
-	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'rb'))
-	sm_st_ed_dict_nested = sm_st_ed_dict_file[(city,'%s' % (state.lower()))]
+	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year), str(year)), 'rb'))
+	sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
 
 	#Flatten dictionary
-	temp = {k:v for d in [v for k,v in sm_st_ed_dict_nested.items()] for k,v in d.items()}
+	temp = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
 
 	#Capture all Steve Morse streets in one list
 	sm_all_streets = temp.keys()
@@ -421,7 +421,7 @@ def load_steve_morse(city,state,year):
 # Step 3a: Import street names from 1940 street grid  
 #
 
-def get_streets_from_1940_street_grid(city,state): 
+def get_streets_from_1940_street_grid(city, state): 
 
 	if city == "StatenIsland":
 		c = "Richmond"
@@ -430,114 +430,133 @@ def get_streets_from_1940_street_grid(city,state):
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
-		file_name_st_grid = c + state + '_1940_edit.shp'
-		df = pd.read_stata(file_path + '/%s/st_grid/%s.dta' % (str(year),file_name_st_grid), convert_categoricals=False)
-
-#Load blocks shapefile to get block list
-st_grid_shp = shapefile.Reader(file_name_st_grid)
-fields = sf_blocks.fields[1:] 
-
-#Get block list from algorithm
-#blocks_algo = [r.record[-7] for r in sf_blocks.shapeRecords()]
-blocks_algo = [r.record[-3] for r in sf_blocks.shapeRecords()]
-blocks_algo = list(set(blocks_algo))
-blocks_algo.sort()
-blocks_algo.pop(0)
-
+		file_name_st_grid = c + state + '_1940_edit.dbf'
+		dbf = simpledbf.Dbf5(file_path + '/1940/stgrid/' + file_name_st_grid)
+		df = dbf.to_dataframe()
+		streets = df['FULLNAME'].unique().tolist()
 	except:
-		print('Error loading %s raw data' % (city))
+		print('Error gettin %s street grid data' % (city))
    
-	return
+	return streets
 
 #
 # Step 3b: Identify exact matches based on Steve Morse and 1940 street grid
 #
 
-def find_exact_matches(df,city,street,sm_all_streets,sm_st_ed_dict,st_grid_st_list):
+def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, st_grid_st_list):
 
+	cprint("\nExact matching algorithm for %s \n" % (street), attrs=['underline'], file=AnsiToWin32(sys.stdout))
+
+	# Timer start
+	start = time.time()
+
+	# Bookkeeping
 	try:
 		post = '_' + street.split('_')[2].split('HN')[0]
 	except:
 		post = ''
-
 	num_records = len(df)
+	num_streets = len(df.groupby([street]).count())
+	basic_info = [post,num_records,num_streets]
 
-	cprint("\nExact matching algorithm for %s \n" % (street),attrs=['underline'],file=AnsiToWin32(sys.stdout))
+	# Check for exact matches between microdata and Steve Morse
+	df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict,basic_info)
+	_, num_noexact_matches_sm, _, num_streets_noexact_sm, num_streets = exact_info_sm
+	exact_info_for_stgrid = [num_noexact_matches_sm, num_streets_noexact_sm, num_streets]
 
-	start = time.time()
+	# Check for exact matches between microdata and 1940 street grid 
+	df, exact_info_stgrid = find_exact_matches_st_grid(df, street, st_grid_st_list, basic_info, exact_info_for_stgrid)
 
-	# Check for exact matches between Steve Morse ST and microdata ST
-	find_exact_matches_sm()
+	# Create final exact match variable
+	df['exact_match_bool'+post] = np.where(df['exact_match_sm_bool'+post] | df['exact_match_stgrid_bool'+post],True,False)
+	df['exact_match_type'] = ''
+	df.loc[df['exact_match_sm_bool'+post],'exact_match_type'] = 'SM'
+	df.loc[(df['exact_match_sm_bool'+post]) & (~df['exact_match_sm_bool'+post]),'exact_match_type'] = 'StGrid'
 
-	# Check for exact matches between 1940 street grid ST and microdata ST
-	find_exact_matches_st_grid()
+	# Generate some information
+	num_exact_matches = df[df['exact_match_bool'+post]].count()
+	prop_exact_matches = float(num_exact_matches)/float(num_records)
+	cprint("Cases with exact matches: "+str(num_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches, 1))+"%)", file=AnsiToWin32(sys.stdout))
+
+	df_exact_matches = df[df['exact_match_bool'+post]]
+	num_streets_exact = len(df_exact_matches.groupby([street]).count())
+	prop_exact_streets = float(num_streets_exact)/float(num_streets)
+	cprint("Streets with exact matches from Steve Morse: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+
+	# Timer stop
+	end = time.time()
+	exact_matching_time = round(float(end-start)/60, 1)
+	cprint("Exact matching for %s took %s\n" % (city, exact_matching_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
 	# Generate dashboard info
-	exact_info = [num_records, num_passed_validation, prop_passed_validation, 
-		num_failed_validation, prop_failed_validation, num_pairs_failed_validation, 
-		num_pairs, prop_pairs_failed_validation,exact_matching_time]
+	exact_info = [num_records, num_streets] + exact_info_sm + exact_info_stgrid + [exact_matching_time]
 
 	return df, exact_info
 
-def find_exact_matches_sm():
+def find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict, basic_info):
+
+	post, num_records, num_streets = basic_info
 
 	# Check for exact matches between Steve Morse ST and microdata ST
-	df['sm_exact_match_bool'+post] = df[street].apply(lambda s: s in sm_all_streets)
-	sm_exact_matches = np.sum(df['sm_exact_match_bool'+post])
-	if num_records == 0:
-		num_records += 1
-	cprint("Exact matches before ED validation: "+str(sm_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*float(sm_exact_matches)/float(num_records),1))+"%)",file=AnsiToWin32(sys.stdout))
+	df['exact_match_sm_bool'+post] = df[street].apply(lambda s: s in sm_all_streets)
+	num_exact_matches_sm = np.sum(df['exact_match_sm_bool'+post])
+	num_noexact_matches_sm =  num_records - num_exact_matches_sm
+	prop_exact_matches_sm = float(num_exact_matches_sm)/float(num_records)
+	cprint("Cases with exact matches from Steve Morse: "+str(num_exact_matches_sm)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_sm, 1))+"%)", file=AnsiToWin32(sys.stdout))
 
-	# Validate exact matches by comparing Steve Morse ED to microdata ED...
-	df['sm_ed_match_bool'+post] = df.apply(lambda s: check_ed_match(s['ed'],s[street],sm_st_ed_dict), axis=1)
+	# Keep track of unique streets that do and do not have exact matches 
+	df_exact_matches_sm = df[df['exact_match_sm_bool'+post]]
+	df_noexact_matches_sm = df[~df['exact_match_sm_bool'+post]]
 
-	# ...fails if microdata ED and Steve Morse ED do not match
-	failed_validation = df[(df['sm_exact_match_bool'+post]==True) & (df['sm_ed_match_bool'+post]==False)]
-	num_failed_validation = len(failed_validation)
-	# ...succeeds if microdata ED and Steve Morse ED are the same
-	passed_validation = df[(df['sm_exact_match_bool'+post]==True) & (df['sm_ed_match_bool'+post]==True)]
-	num_passed_validation = len(passed_validation)
+	num_streets_exact_sm = len(df_exact_matches_sm.groupby([street]).count())
+	num_streets_noexact_sm = len(df_noexact_matches_sm.groupby([street]).count())
+	if num_streets_exact_sm + num_streets_noexact_sm != num_streets:
+		print("Error in number of streets")
+		break
+	prop_exact_streets_sm = float(num_streets_exact_sm)/float(num_streets)
+	cprint("Streets with exact matches from Steve Morse: "+str(num_streets_exact_sm)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets_sm, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
 
-	# Keep track of unique street-ED pairs that have failed versus passed validation
-	num_pairs_failed_validation = len(failed_validation.groupby(['ed',street]).count())
-	num_pairs_passed_validation = len(passed_validation.groupby(['ed',street]).count())
-	num_pairs = num_pairs_failed_validation + num_pairs_passed_validation
-	end = time.time()
-	exact_matching_time = round(float(end-start)/60,1)
+	# Compile info for later use
+	exact_info_sm = [num_exact_matches_sm, num_noexact_matches_sm, 
+	num_streets_exact_sm, num_streets_noexact_sm]
 
-	if sm_exact_matches == 0:
-		sm_exact_matches += 1
-	cprint("Failed ED validation: "+str(num_failed_validation)+" of "+str(sm_exact_matches)+" cases with exact name matches ("+str(round(100*float(len(failed_validation))/float(sm_exact_matches),1))+"%)",'red',file=AnsiToWin32(sys.stdout))
-	cprint("Exact matches after ED validation: "+str(num_passed_validation)+" of "+str(num_records)+" cases ("+str(round(100*float(num_passed_validation)/float(num_records),1))+"%)",file=AnsiToWin32(sys.stdout))
-	if num_pairs == 0:
-		num_pairs += 1
-	cprint("Cases failing ED validation represent "+str(num_pairs_failed_validation)+" of "+str(num_pairs)+" total Street-ED pairs ("+str(round(100*float(num_pairs_failed_validation)/float(num_pairs),1))+"%)\n",'yellow',file=AnsiToWin32(sys.stdout))
-	cprint("Exact matching and ED validation for %s took %s\n" % (city,exact_matching_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	return df, exact_info_sm
 
-	prop_passed_validation = float(num_passed_validation)/float(num_records)
-	prop_failed_validation = float(num_failed_validation)/float(num_records)
-	prop_pairs_failed_validation = float(num_pairs_failed_validation)/float(num_pairs)
+def find_exact_matches_st_grid(df, street, st_grid_st_list, basic_info, exact_info_for_stgrid):
 
-	return
+	post, num_records, num_streets = basic_info
+	num_noexact_matches_sm, num_streets_noexact_sm = exact_info_for_stgrid
 
-def find_exact_matches_st_grid():
+	# Determine if cases without Steve Morse exact match have street grid exact match
+	df.loc[df['exact_match_sm_bool'+post]==False,'exact_match_grid_bool'+post] = df.loc[df['exact_match_sm_bool'+post]==False,street].apply(lambda s: s in st_grid_st_list)
+	num_exact_matches_stgrid = np.sum(df['exact_match_grid_bool'+post])
+	num_noexact_matches_stgrid = num_records - num_exact_matches_stgrid
+	prop_exact_matches_stgrid = float(num_exact_matches_stgrid)/float(num_records)
+	cprint("Cases with exact matches in street grid: "+str(num_exact_matches_stgrid)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_stgrid, 1))+"%)", file=AnsiToWin32(sys.stdout))
 
-	return
+	# Keep track of unique streets that do and do not have exact matches in street grid
+	df_exact_matches_stgrid = df[(df['exact_match_grid_bool'+post]==True)]
+	df_noexact_matches_stgrid = df[(df['exact_match_grid_bool'+post]==False)]
 
-def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
-	if (microdata_st is None) or (sm_st_ed_dict[microdata_st] is None):
-		return False
-	else:
-		if microdata_ed in sm_st_ed_dict[microdata_st]:
-			return True
-		else:
-			return False
+	num_streets_exact_stgrid = len(df_exact_matches_stgrid.groupby([street]).count())
+	num_streets_noexact_stgrid = len(df_noexact_matches_stgrid.groupby([street]).count())
+	if num_streets_exact_stgrid + num_streets_noexact_stgrid != num_streets:
+		print("Error in number of streets")
+		break
+	prop_exact_streets_stgrid = float(num_streets_exact_sm)/float(num_streets)
+	cprint("Streets with exact matches in street grid: "+str(num_streets_exact_stgrid)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets_stgrid, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+
+	# Compile info for later use
+	exact_info_stgrid = [num_exact_matches_stgrid, num_noexact_matches_stgrid, 
+	num_streets_exact_stgrid, num_streets_noexact_stgrid]
+
+	return df, exact_info_stgrid
 
 #
 # Step 4a: Search for fuzzy matches
 #
 
-def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_similar=False):
+def find_fuzzy_matches(df, city, street, sm_all_streets, sm_ed_st_dict, check_too_similar=False):
 
 	try:
 		post = '_' + street.split('_')[2].split('HN')[0]
@@ -546,7 +565,7 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 
 	num_records = len(df)
 
-	cprint("Fuzzy matching algorithm for %s \n" % (street),attrs=['underline'],file=AnsiToWin32(sys.stdout))
+	cprint("Fuzzy matching algorithm for %s \n" % (street), attrs=['underline'], file=AnsiToWin32(sys.stdout))
 
 	start = time.time()
 
@@ -561,7 +580,7 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 	problem_EDs = []
 
 	#Function to check if street names differ by one character
-	def diff_by_one_char(st1,st2):
+	def diff_by_one_char(st1, st2):
 		if len(st1) == len(st2):
 			st1chars = list(st1)
 			st2chars = list(st2)
@@ -574,11 +593,11 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 			return False
 
 	#Fuzzy matching algorithm
-	def sm_fuzzy_match(street,ed):
+	def sm_fuzzy_match(street, ed):
 		
 		#Return null if street is blank
 		if street == '':
-			return ['','',False]
+			return ['', '', False]
 
 		#Microdata ED may not be in Steve Morse, if so then add it to problem ED list and return null
 		try:
@@ -586,80 +605,74 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 			sm_ed_streets_fuzzyset = fuzzyset.FuzzySet(sm_ed_streets)
 		except:
 			problem_EDs.append(ed)
-			return ['','',False]
+			return ['', '', False]
 		
 		#Step 1: Find best match among streets associated with microdata ED
 		try:
 			best_match_ed = sm_ed_streets_fuzzyset[street][0]
 		except:
-			return ['','',False]
+			return ['', '', False]
 
 		#Step 2: Find best match among all streets
 		try:
 			best_match_all = sm_all_streets_fuzzyset[street][0]
 		except:
-			return ['','',False]    
+			return ['', '', False]    
 
 		#Step 3: If both best matches are the same, return as best match
 		if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.5):
 			#Check how many other streets in ED differ by one character
 			if check_too_similar:
-				too_similar = sum([diff_by_one_char(st,best_match_ed[1]) for st in sm_ed_streets])
+				too_similar = sum([diff_by_one_char(st, best_match_ed[1]) for st in sm_ed_streets])
 				if too_similar == 0:
-					return [best_match_ed[1],best_match_ed[0],True]
+					return [best_match_ed[1], best_match_ed[0], True]
 				else:
-					return['','',False]
+					return['', '', False]
 			else: 
-				return [best_match_ed[1],best_match_ed[0],True]
+				return [best_match_ed[1], best_match_ed[0], True]
+		#Step 4: If both are not the same, return one with the higher score (to help manual cleaning)
 		else:
 			if best_match_all[0] < best_match_ed[0]:
-				return [best_match_ed[1],best_match_ed[0],False]
+				return [best_match_ed[1], best_match_ed[0], False]
 			else:
-				return [best_match_all[1],best_match_all[0],False]
+				return [best_match_all[1], best_match_all[0], False]
 
 	#Create dictionary based on Street-ED pairs for faster lookup using helper function
- #   df_no_validated_exact_match = df[~(df['sm_exact_match_bool'] & df['sm_ed_match_bool'])]
- #   df_grouped = df_no_validated_exact_match.groupby([street,'ed'])
-	df_no_exact_match = df[~(df['sm_exact_match_bool'+post])]
- #   df_grouped = df_no_validated_exact_match.groupby([street,'ed'])
-	df_grouped = df_no_exact_match.groupby([street,'ed'])
+	df_no_exact_match = df[~(df['exact_match_bool'+post])]
+	df_grouped = df_no_exact_match.groupby([street, 'ed'])
 	sm_fuzzy_match_dict = {}
-	for st_ed,_ in df_grouped:
-		sm_fuzzy_match_dict[st_ed] = sm_fuzzy_match(st_ed[0],st_ed[1])
+	for st_ed, _ in df_grouped:
+		sm_fuzzy_match_dict[st_ed] = sm_fuzzy_match(st_ed[0], st_ed[1])
 
 	#Helper function (necessary since dictionary built only for cases without validated exact matches)
-	def get_fuzzy_match(exact_match,ed_match,street,ed):
+	def get_fuzzy_match(exact_match, ed_match, street, ed):
 		#Only look at cases without validated exact match
- #		if not (exact_match & ed_match):
 		if not (exact_match):
 			#Need to make sure "Unnamed" street doesn't get fuzzy matched
 			if 'Unnamed' in street:
-				return ['','',False]
+				return ['', '', False]
 			#Get fuzzy match    
 			else:
-				return sm_fuzzy_match_dict[street,ed]
+				return sm_fuzzy_match_dict[street, ed]
 		#Return null if exact validated match
 		else:
-			return ['','',False]
+			return ['', '', False]
 
 	#Get fuzzy matches 
-	df['sm_fuzzy_match'+post], df['sm_fuzzy_match_score'+post], df['sm_fuzzy_match_bool'+post] = zip(*df.apply(lambda x: get_fuzzy_match(x['sm_exact_match_bool'+post],x['sm_ed_match_bool'+post],x[street],x['ed']), axis=1))
+	df['fuzzy_match_sm'+post], df['fuzzy_match_sm_score'+post], df['fuzzy_match_sm_bool'+post] = zip(*df.apply(lambda x: get_fuzzy_match(x['exact_match_bool'+post], x['ed_match_sm_bool'+post], x[street], x['ed']), axis=1))
 
-	#Compute number of cases without validated exact match
- #  passed_validation = df[(df['sm_exact_match_bool']==True) & (df['sm_ed_match_bool']==True)]
-	passed_validation = df[df['sm_exact_match_bool'+post]]
-	num_passed_validation = len(passed_validation)
-	num_current_residual_cases = num_records - num_passed_validation
-	
+	#Compute number of cases without exact match
+	num_current_residual_cases = num_records - len(df[df['exact_match_bool'+post]])
+
 	#Generate dashboard information
-	num_fuzzy_matches = np.sum(df['sm_fuzzy_match_bool'+post])
+	num_fuzzy_matches = np.sum(df['fuzzy_match_sm_bool'+post])
 	prop_sm_fuzzy_matches = float(num_fuzzy_matches)/num_records
 	end = time.time()
-	fuzzy_matching_time = round(float(end-start)/60,1)
+	fuzzy_matching_time = round(float(end-start)/60, 1)
 	fuzzy_info = [num_fuzzy_matches, prop_sm_fuzzy_matches, fuzzy_matching_time, problem_EDs]
 
-	cprint("Fuzzy matches (using microdata ED): "+str(num_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(num_current_residual_cases),1))+"%)\n",file=AnsiToWin32(sys.stdout))
-	cprint("Fuzzy matching for %s took %s\n" % (city,fuzzy_matching_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
+	cprint("Fuzzy matches (using microdata ED): "+str(num_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(num_current_residual_cases), 1))+"%)\n", file=AnsiToWin32(sys.stdout))
+	cprint("Fuzzy matching for %s took %s\n" % (city, fuzzy_matching_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
 	return df, fuzzy_info
 
@@ -667,9 +680,9 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict,check_too_sim
 # Step 2c/4c: Use house number sequences to fill in blank street names
 #
 
-def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
+def fix_blank_st(df, city, HN_seq, street, sm_st_ed_dict):
 
-	cprint("\nFixing blank street names using house number sequences\n",attrs=['underline'],file=AnsiToWin32(sys.stdout))
+	cprint("\nFixing blank street names using house number sequences\n", attrs=['underline'], file=AnsiToWin32(sys.stdout))
 
 	start = time.time()
 	
@@ -689,14 +702,14 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 	# Create list of ranges that contain cases with blank street names
 	HNseq_w_blanks = [list(x) for x in set(tuple(x) for x in STblank_HNseq_dict.values())]
 	# Create list of HNseq ranges with blanks
-	seq_ranges_w_blanks = [range(i[0],i[1]+1) for i in HNseq_w_blanks]
+	seq_ranges_w_blanks = [range(i[0], i[1]+1) for i in HNseq_w_blanks]
 	# Create singleton list
-	singleton_list = [i for i in STblank_indices if len(range(STblank_HNseq_dict[i][0],STblank_HNseq_dict[i][1])) == 0]    
+	singleton_list = [i for i in STblank_indices if len(range(STblank_HNseq_dict[i][0], STblank_HNseq_dict[i][1])) == 0]    
 	# Create dictionary to hold {keys = frozenset(seq_ranges) : values = <assigned street name> }
 	df['%sHN' % (street)] = df[street]
 	for i in seq_ranges_w_blanks:
 		# Select part of df with the blank street name
-		df_seq_streets = df.ix[i[0]:i[-1],['ed',street,'hn']]
+		df_seq_streets = df.ix[i[0]:i[-1], ['ed', street, 'hn']]
 		# Collect street names (this will include '')
 		seq_street_names = df_seq_streets[street].unique().tolist()
 		# Count how many cases of each street name, store in dictionary
@@ -711,8 +724,8 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 			potential_street_name = seq_street_names[0]
 			# Only change name if sequence does not span EDs and street-ED can be validated
 			for ed in ed_list:
-				if check_ed_match(ed,potential_street_name,sm_st_ed_dict) or ed == '':
-					df.ix[i,'%sHN' % (street)] = potential_street_name
+				if check_ed_match(ed, potential_street_name, sm_st_ed_dict) or ed == '':
+					df.ix[i, '%sHN' % (street)] = potential_street_name
 			continue        
 		# If sequence has one blank and more than one street name:
 		else:
@@ -722,8 +735,8 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 				if float(street_count_dict[name])/float(non_blank_entries) > 0.5:
 					potential_street_name = name
 					for ed in ed_list:
-						if check_ed_match(ed,potential_street_name,sm_st_ed_dict) or ed == '':
-							df.ix[i,'%sHN' % (street)] = potential_street_name
+						if check_ed_match(ed, potential_street_name, sm_st_ed_dict) or ed == '':
+							df.ix[i, '%sHN' % (street)] = potential_street_name
 
 	df_STblank_post = df[df['%sHN' % (street)]=='']
 	num_blank_street_names_post = len(df_STblank_post)    
@@ -734,19 +747,19 @@ def fix_blank_st(df,city,HN_seq,street,sm_st_ed_dict):
 
 	end = time.time()
 
-	cprint("Found %s cases with blank street names" % (str(num_blank_street_names)),file=AnsiToWin32(sys.stdout))
+	cprint("Found %s cases with blank street names" % (str(num_blank_street_names)), file=AnsiToWin32(sys.stdout))
  
 	num_blank_street_singletons = len(singleton_list)
-	per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names),1)
-	cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%% of blanks) were singletons",file=AnsiToWin32(sys.stdout))
+	per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names), 1)
+	cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+"%% of blanks) were singletons", file=AnsiToWin32(sys.stdout))
 
-	per_blank_street_fixed = round(100*float(num_blank_street_fixed)/len(df),1)
-	per_street_changes_total = round(100*float(num_street_changes_total)/len(df),1)
-	cprint("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+"%% of all cases) could be fixed using HN sequences",file=AnsiToWin32(sys.stdout))
-	cprint("A total of "+str(num_street_changes_total)+" ("+str(per_street_changes_total)+"%% of all cases) were changed",file=AnsiToWin32(sys.stdout))
+	per_blank_street_fixed = round(100*float(num_blank_street_fixed)/len(df), 1)
+	per_street_changes_total = round(100*float(num_street_changes_total)/len(df), 1)
+	cprint("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+"%% of all cases) could be fixed using HN sequences", file=AnsiToWin32(sys.stdout))
+	cprint("A total of "+str(num_street_changes_total)+" ("+str(per_street_changes_total)+"%% of all cases) were changed", file=AnsiToWin32(sys.stdout))
 
-	blank_fix_time = round(float(end-start)/60,1)
-	cprint("Fixing blank streets for %s took %s" % (city,blank_fix_time),'cyan',attrs=['dark'],file=AnsiToWin32(sys.stdout))
+	blank_fix_time = round(float(end-start)/60, 1)
+	cprint("Fixing blank streets for %s took %s" % (city, blank_fix_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
 	fix_blanks_info = [num_street_changes_total, num_blank_street_names, num_blank_street_singletons, per_singletons, num_blank_street_fixed, per_blank_street_fixed, blank_fix_time]
 
