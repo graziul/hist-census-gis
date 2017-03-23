@@ -40,8 +40,6 @@ version = 5
 
 datestr = time.strftime("%Y_%m_%d")
 
-city_info = ['New Haven','CT',1930]
-
 def clean_microdata(city_info):
 
 	#
@@ -57,16 +55,16 @@ def clean_microdata(city_info):
 	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
 	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
 
-#	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
-#		print("%s is done" % (city))
-#		return None
+ 	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
+ 		print("%s is done" % (city))
+ 		return None
 
 	HN_SEQ = {}
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-#	init()
-#	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
+	init()
+ 	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -175,8 +173,6 @@ def clean_microdata(city_info):
 
 	return info 
 
-#clean_microdata(['San Antonio','TX',1930,False,False])
-
 # Get city list
 file_path = '/home/s4-data/LatestCities' 
 city_info_file = file_path + '/CityInfo.csv' 
@@ -196,8 +192,8 @@ pool.close()
 # Build dashboard for decade and save
 city_state = ['City','State']
 header_names = ['Year'] + city_state + ['NumCases']
-STprop_names = ['propExactMatchesValidated','propFuzzyMatches','propBlankSTfixed','propResidSt']
-STnum_names = city_state + ['ExactMatchesValidated','FuzzyMatches','BlankSTfixed','ResidSt']
+STprop_names = ['propExactMatchesSM','propExactMatchesStGrid','propFuzzyMatches','propBlankSTfixed','propResidSt']
+STnum_names = city_state + ['ExactMatchesSM','propExactMatchesStGrid','FuzzyMatches','BlankSTfixed','ResidSt']
 HNprop_names = city_state + ['propCheckHn','propCheckStHn','propCheckHnTotal']
 HNnum_names = city_state + ['CheckHn','CheckStHn','CheckHnTotal']
 Rprop_names = city_state + ['propCheckHn','propCheckStHn','propCheckSt','propCheckTotal']
@@ -206,8 +202,7 @@ Priority_names = city_state + ['100+ Cases','50-99 Cases','20-49 Cases','10-19 C
 perPriority_names = city_state + ['100+ Cases (%)','50-99 Cases (%)','20-49 Cases (%)','10-19 Cases (%)','5-9 Cases (%)','2-4 Cases (%)','1 Case (%)','perTotalPriority']
 seqPriority_names = city_state + ['Seq 100+','Seq 50-99','Seq 20-49','Seq 10-19','Seq 5-9','Seq 2-4','Seq 1','seqTotal']
 perseqPriority_names = city_state + ['Seq 100+ (%)','Seq 50-99 (%)','Seq 20-49 (%)','Seq 10-19 (%)','Seq 5-9 (%)','Seq 2-4 (%)','Seq 1 (%)','perseqTotal']
-ED_names = city_state + ['ProblemEDs', 'ExactMatchesFailed','propExactMatchesFailed',
-	'StreetEDpairsFailed','StreetEDpairsTotal','propStreedEDpairsFailed']
+ED_names = city_state + ['ProblemEDs']
 FixBlank_names = city_state + ['HnOutliers1','StreetNameBlanks1','BlankSingletons1','PerSingletons1',
 	'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2']
 Time_names = city_state + ['LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime',
@@ -218,19 +213,19 @@ names = header_names + STprop_names + sp + STnum_names + sp + HNprop_names + sp 
 
 df = pd.DataFrame(temp,columns=names)
 
-dfSTprop = df.ix[:,1:9].sort_values(by='propResidSt').reset_index()
-dfSTnum = df.ix[:,9:16].sort_values(by='ResidSt').reset_index()
-dfHNprop = df.ix[:,16:22].sort_values(by='propCheckHnTotal').reset_index()
-dfHNnum = df.ix[:,22:28].sort_values(by='CheckHnTotal').reset_index()
-dfRprop =df.ix[:,28:35].sort_values(by='propCheckTotal').reset_index()
-dfRnum = df.ix[:,35:42].sort_values(by='CheckTotal').reset_index()
-dfPriority = df.ix[:,42:53].sort_values(by='TotalPriority').reset_index()
-dfperPriority = df.ix[:,53:64].sort_values(by='perTotalPriority').reset_index()
-dfseqPriority = df.ix[:,64:75].sort_values(by='seqTotal').reset_index()
-dfperseqPriority = df.ix[:,75:86].sort_values(by='perseqTotal').reset_index()
-dfED = df.ix[:,86:95].sort_values(by='propExactMatchesFailed',ascending=False).reset_index()
-dfFixBlank = df.ix[:,95:106].reset_index()
-dfTime = df.ix[:,106:117].sort_values(by='TotalTime').reset_index()
+dfSTprop = df.ix[:,1:10].sort_values(by='propResidSt').reset_index()
+dfSTnum = df.ix[:,10:18].sort_values(by='ResidSt').reset_index()
+dfHNprop = df.ix[:,18:24].sort_values(by='propCheckHnTotal').reset_index()
+dfHNnum = df.ix[:,24:30].sort_values(by='CheckHnTotal').reset_index()
+dfRprop =df.ix[:,30:37].sort_values(by='propCheckTotal').reset_index()
+dfRnum = df.ix[:,37:44].sort_values(by='CheckTotal').reset_index()
+dfPriority = df.ix[:,44:55].sort_values(by='TotalPriority').reset_index()
+dfperPriority = df.ix[:,55:66].sort_values(by='perTotalPriority').reset_index()
+dfseqPriority = df.ix[:,66:77].sort_values(by='seqTotal').reset_index()
+dfperseqPriority = df.ix[:,77:88].sort_values(by='perseqTotal').reset_index()
+dfED = df.ix[:,88:92].sort_values(by=city_state,ascending=False).reset_index()
+dfFixBlank = df.ix[:,92:103].reset_index()
+dfTime = df.ix[:,103:114].sort_values(by='TotalTime').reset_index()
 
 dashboard = pd.concat([dfSTprop, dfSTnum, dfHNprop, dfHNnum, dfRprop, dfRnum, dfperPriority, dfPriority, dfseqPriority, dfperseqPriority, dfED, dfFixBlank, dfTime],axis=1)
 del dashboard['index']
