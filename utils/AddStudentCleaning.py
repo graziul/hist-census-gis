@@ -31,20 +31,19 @@ city_info_file = file_path + '/CityInfo.csv'
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df.values.tolist()
 '''
-
+'''
 c = 'Hartford'
 s = 'CT'
 city = c + s
 student_file = 'HartfordCT_ForStudentsV1_Copy.dta'
 version = 3
 year = 1930
-
 '''
+
 city = sys.argv[1]
 student_file = sys.argv[2]
 version = sys.argv[3]
 year = sys.argv[4]
-'''
 
 #
 # Open both files and merge
