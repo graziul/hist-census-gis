@@ -28,3 +28,5 @@
 <p>Step 10: Integrate R and Matlab block numbering results</p>
 <h2>Manual block numbering</h2>
 <p>Step 1: Following automated block numbering, maps are given to workers that, using a standardized set of guidelines, manually label block numbers using various data sources</p>
+
+<xml Id = msg SRC = "ProjectWorkflow.xml"></xml>
