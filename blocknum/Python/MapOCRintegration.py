@@ -170,3 +170,7 @@ print("OCR returned plausible guesses for " + str(guessed) + " of " + str(numeri
 tot_algos = guessed + numeric_algo
 per_tot_algos = round(100*float(tot_algos)/numeric_micro,1)
 print("\nTotal blocks identified by algorithms: " + str(tot_algos) + " of " + str(numeric_micro) + " (" + str(per_tot_algos) + "%)")
+
+####
+#### TO DO: Compress options into fewest variables possible (i.e. 2 maps -> 1 variable if possible)
+####

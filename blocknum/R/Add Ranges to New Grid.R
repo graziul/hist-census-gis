@@ -54,6 +54,14 @@ state_abbr <- args[4]
                           & is.na(grid30$state) & is.na(grid30$fullname), 1, 0)
   grid_nochange<-subset(grid30, grid30$addrange==0)
   grid_change<-subset(grid30, grid30$addrange==1)
+
+#If grid_change is empty, simply dump to file
+if (length(grid_change)==0) {
+  dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
+  writeOGR(grid_nochange, dsn=dir_path_export,layer=paste(city_name,"_1930_stgrid_edit",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
+#Otherwise, incorporate grid changes
+  } else {
+  
     #Check streets in 'grid_change' to make sure they also do not appear in 'grid_nochange'. This
     #indicates that a street segment was added to the grid and not an entirely new street.
     nochange<-as.character(grid_nochange$fullname)
@@ -146,4 +154,4 @@ state_abbr <- args[4]
     #Export Map
     dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
     writeOGR(new_grid, dsn=dir_path_export,layer=paste(city_name,"_1930_stgrid_edit",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
-    
+}

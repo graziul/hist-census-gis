@@ -431,6 +431,8 @@ def get_streets_from_1940_street_grid(city, state):
 		file_name_st_grid = c + state + '_1940_edit.dbf'
 		dbf = Dbf5(file_path + '/1940/stgrid/' + file_name_st_grid)
 		df = dbf.to_dataframe()
+#Some cities do not have FULLNAME but another variable name
+#AltSt has street name if fullname/standardized == "City limits"
 		streets = df['FULLNAME'].unique().tolist()
 	except:
 		print('Error gettin %s street grid data' % (city))

@@ -96,8 +96,7 @@ city_name <- args[2]
   names(grid30)
   names(mdata)<-tolower(names(mdata))
   names(mdata)
-  #Not convinced this makes sense to do as a rule (Hartford "new" street names are not always street names) - Chris
-  "
+
   #Grab all old street names before they were changed
     old<-as.character(new$Old)
   #Grab all new street names after they were changed  
@@ -110,7 +109,7 @@ city_name <- args[2]
   
   table(grid30$old_st_name) 
   table(grid30$new_st_name)
-  "
+
 #Keep Unique MicroData Street Names
   m_st<-subset(mdata, !duplicated(mdata$fullname))
   myvars<-c("fullname", "ed", "ppst", "priority")

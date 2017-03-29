@@ -14,7 +14,6 @@ state = sys.argv[3]
 # overwrite output
 arcpy.env.overwriteOutput=True
 
-print "Working On: " + name
 #Create Paths to be used throughout Process
 reference_data = "'" + dir_path + name + "_1930_stgrid.shp' 'Primary Table'"
 grid = dir_path + name + "_1930_stgrid.shp"
@@ -30,13 +29,12 @@ in_field_map='''
 'Max X value for extent' <None> VISIBLE NONE;'Min Y value for extent' <None> VISIBLE NONE;'Max Y value for extent' <None> VISIBLE NONE;'Left parity' <None> VISIBLE NONE;
 'Right parity' <None> VISIBLE NONE;'Left Additional Field' <None> VISIBLE NONE;'Right Additional Field' <None> VISIBLE NONE;'Altname JoinID' <None> VISIBLE NONE;'''
 add_locator = dir_path + name + "_addloc"
-#'Add_30' originates from 'Create 1930 and 1940 Address Files.R' code
+#'_1930_Addresses.csv' originates from 'Create 1930 and 1940 Address Files.R' code
 addresses = dir_path + name + "_1930_Addresses.csv"
 address_fields="Street address;City city;State state"
 points30 = dir_path + name + "_1930_Points.shp"
 pblk_points = dir_path + name + "_1930_Pblk_Points.shp"
 
-'''
 #Add CITY and STATE if it doens't exist yet
 fields = arcpy.ListFields(grid)
 if 'CITY' not in fields:
@@ -44,13 +42,14 @@ if 'CITY' not in fields:
 	cur = arcpy.UpdateCursor(grid)
 	for row in cur:
 		row.setValue('CITY',name)
+	del(cur)
 if 'STATE' not in fields:
 	arcpy.AddField_management(grid,'STATE','TEXT')
 	cur = arcpy.UpdateCursor(grid)
 	for row in cur:
 		row.setValue('STATE',state)
-'''
-
+	del(cur)
+	
 #Make sure address locator doesn't already exist - if it does, delete it
 add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addloc")]
 for f in add_loc_files:
@@ -70,7 +69,7 @@ expression="!FID! + 1"
 arcpy.AddField_management(pblocks, "pblk_id", "LONG", 4, "", "","", "", "")
 arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
 
-print "Working On: " + name + " Geocode"
+print "Working On: " + name + " Geocode\n"
 ##### #Geocode Points# #####
 #Create Address Locator
 arcpy.CreateAddressLocator_geocoding("US Address - Dual Ranges", reference_data, in_field_map, add_locator,"")
@@ -79,4 +78,3 @@ arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points3
 #Attach Pblk ids to points
 arcpy.SpatialJoin_analysis(points30, pblocks, pblk_points, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
 
-print "Finished: " + name

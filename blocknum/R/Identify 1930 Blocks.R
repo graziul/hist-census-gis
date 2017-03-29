@@ -51,7 +51,7 @@ shift<-function(x,shift_by){
   
 #Create Unique Household (Address) Indicator
   Points$build_id<-plyr::id(Points[c("hn","fullname")], drop=F)
-  
+
 #Keep only Unique Addresses
   Blocks<-subset(Points, !duplicated(Points$build_id))
   
