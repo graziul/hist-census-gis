@@ -4,7 +4,7 @@
 #
 # Purpose:		Integrate student cleaning into autocleaning results 
 #
-# Usage:		python AddStudentCleaning.py [city-state] [student file name] [autoclean version] [year]
+# Usage:		python AddStudentCleaning.py [city] [state_abbr] [student file name] [autoclean version] [year]
 #					
 #				ex: 
 #	 
@@ -31,20 +31,22 @@ city_info_file = file_path + '/CityInfo.csv'
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df.values.tolist()
 '''
-
+'''
 c = 'Hartford'
 s = 'CT'
 city = c + s
 student_file = 'HartfordCT_ForStudentsV1_Copy.dta'
 version = 3
 year = 1930
+'''
 
-'''
-city = sys.argv[1]
-student_file = sys.argv[2]
-version = sys.argv[3]
-year = sys.argv[4]
-'''
+c = sys.argv[1]
+s = sys.argv[2]
+s = s.upper()
+city = c + s
+student_file = sys.argv[3]
+version = sys.argv[4]
+year = sys.argv[5]
 
 #
 # Open both files and merge
