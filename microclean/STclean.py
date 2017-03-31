@@ -428,8 +428,8 @@ def get_streets_from_1940_street_grid(city, state):
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
-		file_name_st_grid = c + state + '_1940_edit.dbf'
-		dbf = Dbf5(file_path + '/1940/stgrid/' + file_name_st_grid)
+		file_name_st_grid = c + state + '_1940_stgrid_edit.dbf'
+		dbf = Dbf5(file_path + '/1940/stgrid/' + city + '/' + state + '/' + file_name_st_grid)
 		df = dbf.to_dataframe()
 #Some cities do not have FULLNAME but another variable name
 #AltSt has street name if fullname/standardized == "City limits"

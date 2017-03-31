@@ -14,27 +14,27 @@ version = 5
 # Changelog
 #
 # V5
-#	- Integrated street names from edited 1940 street grid in matching process
+#	- Integrated street names from edited 1940 street grid in matching process*
 #	- Removed code for validating exact matches by ED (still do fuzzy matching using ED)
 #
 # V4
 #	- New Steve Morse dictionary ("La" -> "Ln")
-#	- Include best fuzzy match even if doesn't meet threshold (for students to use)
+#	- Include best fuzzy match even if doesn't meet threshold (for student use)
 #
 # V3
-#	- Integrated new raw data
-#	- Implemented sequential street/hn checking for both old and new raw data
-#	- Implemented code to select best street given old and new raw data
-#	- Flagged street where old raw street and new raw street do not match
-#	- Flagged hn where old raw hn and new raw hn do no match
-#	- Implemented code to find DIR given ED if no DIR in microdata
+#	- Integrated new raw data (obsolete)
+#	- Implemented sequential street/hn checking for both old and new raw data (obsolete)
+#	- Implemented code to select best street given old and new raw data (obsolete)
+#	- Flagged street where old raw street and new raw street do not match (obsolete)
+#	- Flagged hn where old raw hn and new raw hn do no match (obsolete)
+#	- Implemented code to find DIR given ED if no DIR in microdata*
 #
 # V2 
-#	- Removed cases where line_num, street_raw, name_last, and name_first are all blank
-#	- Removed duplicate pages, keeping page with most information (used age/gender sequences > 2)
-#	- Fixed multiple hn/st cleaning issues found through manual cleaning (e.g. street direction issues)
+#	- Removed cases where line_num, street_raw, name_last, and name_first are all blank*
+#	- Removed duplicate pages, keeping page with most information (used age/gender sequences > 2)*
+#	- Fixed multiple hn/st cleaning issues found through manual cleaning (e.g. street direction issues)*
 #	- Removed checking for ED matches
-#	- Note: Hangover code did NOT make it into this version
+#	- Note: "Hangover" code did NOT make it into this version
 #
 # V1 - Original run
 
@@ -175,7 +175,8 @@ def clean_microdata(city_info):
 
 # Get city list
 file_path = '/home/s4-data/LatestCities' 
-city_info_file = file_path + '/CityInfo.csv' 
+#city_info_file = file_path + '/CityInfo.csv' 
+city_info_file = file_path + '/CityInfo_with_map.csv' 
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
