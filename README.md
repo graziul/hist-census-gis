@@ -2,6 +2,7 @@
 <h1>Historical Census GIS project</h1>
 <h3>Geocoding historical Census data by hook or by crook</h3>
 <p>This repository exists to serve as a place to share and collaboratively write code that automates various parts of a complicated data cleaning process</p>
+<img src="ProjectFlow.png"></img>
 <h2>Automated microdata cleaning</h2>
 <p>These scripts standardize the formatting of street names, use an external data source (stevemorse.org) to validate street names and guess street names that aren't exact matches, and use house number sequences to fill in blank street names.</p>
 <p>Step 1: Load city and standardize variable names</p>
