@@ -223,9 +223,8 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 
 	#Old solution: Back out first blank fixing since it occurs before exact matching
 	#New solution: Ignore first blank fixing since it occurs before exact matching
-	STprop = [prop_exact_matches_stgrid, prop_exact_matches_stgrid, 
+	STprop = [prop_exact_matches_sm, prop_exact_matches_stgrid, 
 		prop_fuzzy_matches, prop_blank_street_fixed2, prop_resid_st]
-	#Back out first blank fixing since it occurs before exact matching
 	STnum = [city, state, num_exact_matches_sm, num_exact_matches_stgrid, 
 		num_fuzzy_matches, num_blank_street_fixed2, num_resid_st]
 	HNprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_hn_total]
