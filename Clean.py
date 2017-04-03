@@ -178,6 +178,7 @@ file_path = '/home/s4-data/LatestCities'
 #city_info_file = file_path + '/CityInfo.csv' 
 city_info_file = file_path + '/CityInfo_with_map.csv' 
 city_info_df = pd.read_csv(city_info_file)
+city_info_df['city_name'] = city_info_df['city_name'].str.replace('.','')
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
 # Get year and add it to city list information
