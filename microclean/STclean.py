@@ -421,6 +421,8 @@ def load_steve_morse(city, state, year):
 
 def get_streets_from_1940_street_grid(city, state): 
 
+	special_cities = ['Birgmingham','Bridgeport','Dallas']
+
 	if city == "StatenIsland":
 		c = "Richmond"
 	else:
@@ -429,14 +431,16 @@ def get_streets_from_1940_street_grid(city, state):
 	# Try to load file, return error if can't load or file has no cases
 	try:
 		file_name_st_grid = c + state + '_1940_stgrid_edit.dbf'
-		dbf = Dbf5(file_path + '/1940/stgrid/' + city + '/' + state + '/' + file_name_st_grid)
+		dbf = Dbf5(file_path + '/1940/stgrid/' + c + state + '/' + file_name_st_grid)
 		df = dbf.to_dataframe()
-#Some cities do not have FULLNAME but another variable name
-#AltSt has street name if fullname/standardized == "City limits"
-		streets = df['FULLNAME'].unique().tolist()
+#TODO: AltSt has street name if FULLNAME/standardized == "City limits" (actually "City limit")
+		if city in special_cities:
+			streets = df['standardiz'].unique().tolist()
+		else:
+			streets = df['FULLNAME'].unique().tolist()
 	except:
 		print('Error gettin %s street grid data' % (city))
-   
+
 	return streets
 
 #
