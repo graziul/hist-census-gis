@@ -11,12 +11,9 @@ sumby<- function(x,y){
   y2<-unlist((strsplit(as.character(y1), "[$]")))[2]
   myvars<-"y"
   nrows<-length(x)
-  #df<-data.frame(Person=numeric(), y=numeric())
   df<-data.frame(x=numeric(), y=numeric())
   df<-rename(df, c(x=y2, y=y))
   for(i in 1:nrows){
-    #x1<-deparse(substitute(x))
-    #x2<-(unlist((strsplit(as.character(x1[i]), "[$]")))[2])
     x2<-(colnames(x[i]))
     t<-(tapply(x[,i], INDEX=list(y), FUN=sum, na.rm=T))
     df2<-data.frame(x=names(t), y=t)
