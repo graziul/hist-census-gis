@@ -6,9 +6,12 @@ import glob
 import shapefile
 import simpledbf
 
+dir_path = sys.argv[1]
+city = sys.argv[2]
+file_name = sys.argv[3]
 
-image_path = sys.argv[1] + "\\GIS_edited\\1930 ED Maps\\"
-file_name = sys.argv[2]
+gis_path = dir_path + "\\GIS_edited\\"
+image_path = dir_path + "\\GIS_edited\\1930 ED Maps\\"
 
 def convert_block(block):
 	try:
@@ -30,35 +33,32 @@ def remove_fields(shp,keep_field_list):
 		if field.name not in keep_field_list:
 			arcpy.DeleteField_management(shp,field.name)
 
-names = ['Hartford']
-
-for name in names:
-	print "Working On: " + name
-	#Create Paths to be used throughout Process
-	reference_data = image_path + name + "_1930_stgrid.shp' 'Primary Table'"
-	grid = image_path + name + "_1930_stgrid.shp"
-	dissolve_grid = image_path+ name + "_1930_stgrid_Dissolve.shp"
-	split_grid = image_path+ name + "_1930_stgrid_Split.shp"
-	pblocks = image_path+ name + "_1930_Pblk.shp"
-	in_field_map='''
-	"'Feature ID' FID VISIBLE NONE;'*From Left' LFROMADD VISIBLE NONE;'*To Left' LTOADD VISIBLE NONE;'*From Right' RFROMADD VISIBLE NONE;
-	'*To Right' RTOADD VISIBLE NONE;'Prefix Direction' <None> VISIBLE NONE;'Prefix Type' <None> VISIBLE NONE;'*Street Name' FULLNAME VISIBLE NONE;
-	'Suffix Type' <None> VISIBLE NONE;'Suffix Direction' <None> VISIBLE NONE;'Left City or Place' CITY VISIBLE NONE;'Right City or Place' CITY VISIBLE NONE;
-	'Left ZIP Code' <None> VISIBLE NONE;'Right ZIP Code' <None> VISIBLE NONE;'Left State' state VISIBLE NONE;'Right State' state VISIBLE NONE;'Left Street ID' <None> VISIBLE NONE;
-	'Right Street ID' <None> VISIBLE NONE;'Display X' <None> VISIBLE NONE;'Display Y' <None> VISIBLE NONE;'Min X value for extent' <None> VISIBLE NONE;
-	'Max X value for extent' <None> VISIBLE NONE;'Min Y value for extent' <None> VISIBLE NONE;'Max Y value for extent' <None> VISIBLE NONE;'Left parity' <None> VISIBLE NONE;
-	'Right parity' <None> VISIBLE NONE;'Left Additional Field' <None> VISIBLE NONE;'Right Additional Field' <None> VISIBLE NONE;'Altname JoinID' <None> VISIBLE NONE;'''
-	add_locator = image_path+ name + "_addloc"
-	#'Add_30' originates from 'Create 1930 and 1940 Address Files.R' code
-	addresses = "S:\Projects\\1940Census\Block Creation\\" + name + "\\Add_30.csv"
-	address_fields="Street address;City city;State state"
-	points30 = image_path+ name + "_Points30.shp"
-	pblk_points = image_path+ name + "_1930_Pblk_Points.shp"
-	blocks_algo_file = image_path+ "Block_Choice_Map.shp"
-	eds_algo_file = image_path+ "ED_Choice_Map.shp"
-	ocr_pblk = image_path+ name + "_OCR_Pblk.shp"
-	ocr_ed = image_path+ name + "_OCR_ED.shp"
-	temp = image_path + name + "_temp.shp"
+print "Working On: " + name
+#Create Paths to be used throughout Process
+reference_data = gis_path + city + "_1930_stgrid.shp' 'Primary Table'"
+grid = gis_path + city + "_1930_stgrid.shp"
+dissolve_grid = gis_path+ city + "_1930_stgrid_Dissolve.shp"
+split_grid = gis_path+ city + "_1930_stgrid_Split.shp"
+pblocks = gis_path+ city + "_1930_Pblk.shp"
+in_field_map='''
+"'Feature ID' FID VISIBLE NONE;'*From Left' LFROMADD VISIBLE NONE;'*To Left' LTOADD VISIBLE NONE;'*From Right' RFROMADD VISIBLE NONE;
+'*To Right' RTOADD VISIBLE NONE;'Prefix Direction' <None> VISIBLE NONE;'Prefix Type' <None> VISIBLE NONE;'*Street Name' FULLNAME VISIBLE NONE;
+'Suffix Type' <None> VISIBLE NONE;'Suffix Direction' <None> VISIBLE NONE;'Left City or Place' CITY VISIBLE NONE;'Right City or Place' CITY VISIBLE NONE;
+'Left ZIP Code' <None> VISIBLE NONE;'Right ZIP Code' <None> VISIBLE NONE;'Left State' state VISIBLE NONE;'Right State' state VISIBLE NONE;'Left Street ID' <None> VISIBLE NONE;
+'Right Street ID' <None> VISIBLE NONE;'Display X' <None> VISIBLE NONE;'Display Y' <None> VISIBLE NONE;'Min X value for extent' <None> VISIBLE NONE;
+'Max X value for extent' <None> VISIBLE NONE;'Min Y value for extent' <None> VISIBLE NONE;'Max Y value for extent' <None> VISIBLE NONE;'Left parity' <None> VISIBLE NONE;
+'Right parity' <None> VISIBLE NONE;'Left Additional Field' <None> VISIBLE NONE;'Right Additional Field' <None> VISIBLE NONE;'Altname JoinID' <None> VISIBLE NONE;'''
+add_locator = gis_path+ city + "_addloc"
+#'Add_30' originates from 'Create 1930 and 1940 Address Files.R' code
+addresses = gis_path + city + "_1930_Addresses.csv"
+address_fields="Street address;City city;State state"
+points30 = gis_path+ city + "_Points30.shp"
+pblk_points = gis_path+ city + "_1930_Pblk_Points.shp"
+blocks_algo_file = gis_path + city + "_Block_Choice_Map2.shp"
+eds_algo_file = gis_path + city + "_ED_Choice_Map.shp"
+ocr_pblk = gis_path + city + "_OCR_Pblk.shp"
+ocr_ed = gis_path+ city + "_OCR_ED.shp"
+temp = gis_path + city + "_temp.shp"
 
 df = pd.read_stata(file_name)
 
