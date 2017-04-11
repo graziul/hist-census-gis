@@ -75,7 +75,7 @@ else:
 	cprint("OK!\n", 'green', file=AnsiToWin32(sys.stdout))
 
 #
-# Step 2: Apply python algorithm (Author: Chris Graziul)
+# Step 2: Create and apply "block descriptions" based on microdata
 #
 
 # Assigns block numbers using microdata blocks. Uses results from Step 1 and derived 
@@ -90,14 +90,6 @@ if t != 0:
 else:
 	cprint("OK!\n", 'green', file=AnsiToWin32(sys.stdout))
 
-# Integrate python block numbering results
-cprint("Integrating block description guesses\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
-t = subprocess.call(["python",script_path+"\\blocknum\\Python\\BlockDescIntegration.py",file_path,file_name])
-if t != 0:
-	cprint("Error integrating block description guesses for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
-else:
-	cprint("OK!\n", 'green', file=AnsiToWin32(sys.stdout))
-
 #
 # Step 3: Apply Matlab (OCR) algorithm (Author: Chris Graziul)
 #
@@ -105,11 +97,11 @@ else:
 # Assigns block numbers using 1930 block maps. Applies custom built OCR engine 
 # and Matlab toolboxes to produce shapefiles.  
 
-cprint("Runing Matlab OCR script\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
+cprint("Runing OCR script\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 # MOSTLY DONE
 # Run OCR script
-cprint("Runing OCR script\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
+cprint("Runing Matlab script\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunOCR.py",file_path,script_path])
 if t != 0:
 	cprint("Error running Matlab OCR script for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
