@@ -10,18 +10,18 @@ from colorama import AnsiToWin32, init
 arcpy.env.parallelProcessingFactor = "75%"
 arcpy.env.overwriteOutput=True
 
-#dir_path = sys.argv[1] 
-#city_name = sys.argv[2]
-#file_name = sys.argv[3]
+city_path = sys.argv[1]
+city_name = sys.argv[2]
+microdata_file = sys.argv[3]
 
+#city_name = "Hartford"
 street = 'autostud_street'
-city = "Hartford"
-city_path = "S:\\Projects\\1940Census\\" + city
+#microdata_file = city_path + "\\StataFiles_Other\\1930\\HartfordCT_StudAuto.dta"
+
 gis_path = city_path + "\\GIS_edited\\"
-microdata_file = city_path + "\\StataFiles_Other\\1930\\HartfordCT_StudAuto.dta"
-block_file = gis_path + city + "_1930_Block_Choice_Map.shp"
-stgrid_file = gis_path + city + "_1930_stgrid_edit.shp"
-out_file = gis_path + city + "_1930_Block_Choice_Map2.shp"
+block_file = gis_path + city_name + "_1930_Block_Choice_Map.shp"
+stgrid_file = gis_path + city_name + "_1930_stgrid_edit.shp"
+out_file = gis_path + city_name + "_1930_Block_Choice_Map2.shp"
 
 #dir_path = sys.argv[1] + "\\GIS_edited\\"
 #name = sys.argv[2]
@@ -75,7 +75,7 @@ def remove_single_point_touches(street_list):
 
 start = time.time()
 
-temp_file = gis_path + city + "_1930_Block_Choice_Map2.shp"
+temp_file = gis_path + city_name + "_1930_Block_Choice_Map2.shp"
 
 	#Get list of streets touching each physical block and turn into dictionary
 map_blocks_dict = {}
