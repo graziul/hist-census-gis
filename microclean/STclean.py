@@ -421,7 +421,10 @@ def load_steve_morse(city, state, year):
 
 def get_streets_from_1940_street_grid(city, state): 
 
-	special_cities = ['Birgmingham','Bridgeport','Dallas']
+	special_cities = {'Birmingham':'standardiz',
+					'Bridgeport':'standardiz',
+					'Dallas':'standardiz',
+					'Springfield':'Standardiz'}
 
 	if city == "StatenIsland":
 		c = "Richmond"
@@ -434,8 +437,11 @@ def get_streets_from_1940_street_grid(city, state):
 		dbf = Dbf5(file_path + '/1940/stgrid/' + c + state + '/' + file_name_st_grid)
 		df = dbf.to_dataframe()
 #TODO: AltSt has street name if FULLNAME/standardized == "City limits" (actually "City limit")
-		if city in special_cities:
-			streets = df['standardiz'].unique().tolist()
+		if city in special_cities.keys():
+			var = special_cities[city]
+			streets = df[var].unique().tolist()
+		if city == "Kansas City" and state == "MO":
+			streets = df['stndrdName'].unique().tolist()
 		else:
 			streets = df['FULLNAME'].unique().tolist()
 	except:
