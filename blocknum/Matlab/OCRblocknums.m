@@ -12,3 +12,4 @@ for f = files'
     shapewrite(p,char(strcat(f.folder,string('\'),strrep(f.name,'.tif','.shp'))));
 end
 
+exit
