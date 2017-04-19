@@ -27,7 +27,7 @@ out_file = gis_path + city_name + "_1930_Block_Choice_Map2.shp"
 #name = sys.argv[2]
 #state = sys.argv[3]
 
-cprint("Step 2: Block descriptions from microdata\n", attrs=['bold','underline'], file=AnsiToWin32(sys.stdout))
+cprint("Getting block description guesses\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 #
 # Step 1: Create "block descriptions" using microdata
@@ -151,7 +151,7 @@ cprint("\n"+"Physical blocks labeled by Step 2: "+str(num_labeled_step2)+" ("+st
 
 num_labeled_steps1and2 = num_labeled_step1+num_labeled_step2
 per_physical_blocks = round(100*float(num_labeled_steps1and2)/num_physical_blocks, 1)
-cprint("Physical blocks labeled by Step 1 and Step 2: "+str(num_labeled_steps1and2)+" ("+str(per_physical_blocks)+r"% of physical blocks)",attrs=['bold'], file=AnsiToWin32(sys.stdout))
+cprint("Physical blocks labeled by Step 1 and Step 2: "+str(num_labeled_steps1and2)+" ("+str(per_physical_blocks)+r"% of physical blocks)"+"\n",attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 #Add labels 
 
