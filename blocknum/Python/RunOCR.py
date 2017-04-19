@@ -88,4 +88,4 @@ except subprocess.CalledProcessError:
 	cprint("Error sending images to Matlab for "+city_name, 'red', file=AnsiToWin32(sys.stdout))
 
 #Clean up
-os.remove(image_path+'georeferenced_images.txt')
+#os.remove(image_path+'georeferenced_images.txt')
