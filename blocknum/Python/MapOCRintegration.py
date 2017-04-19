@@ -12,6 +12,7 @@ file_name = sys.argv[3]
 
 gis_path = dir_path + "\\GIS_edited\\"
 image_path = dir_path + "\\GIS_edited\\1930 ED Maps\\"
+files_txt = image_path+'georeferenced_images.txt'
 
 def convert_block(block):
 	try:
@@ -33,7 +34,7 @@ def remove_fields(shp,keep_field_list):
 		if field.name not in keep_field_list:
 			arcpy.DeleteField_management(shp,field.name)
 
-print "Working On: " + name
+#print "Working On: " + city
 #Create Paths to be used throughout Process
 reference_data = gis_path + city + "_1930_stgrid.shp' 'Primary Table'"
 grid = gis_path + city + "_1930_stgrid.shp"
@@ -54,13 +55,16 @@ addresses = gis_path + city + "_1930_Addresses.csv"
 address_fields="Street address;City city;State state"
 points30 = gis_path+ city + "_Points30.shp"
 pblk_points = gis_path+ city + "_1930_Pblk_Points.shp"
-blocks_algo_file = gis_path + city + "_Block_Choice_Map2.shp"
-eds_algo_file = gis_path + city + "_ED_Choice_Map.shp"
+blocks_algo_file = gis_path + city + "_1930_Block_Choice_Map2.shp"
+eds_algo_file = gis_path + city + "_1930_ED_Choice_Map.shp"
 ocr_pblk = gis_path + city + "_OCR_Pblk.shp"
 ocr_ed = gis_path+ city + "_OCR_ED.shp"
 temp = gis_path + city + "_temp.shp"
 
-df = pd.read_stata(file_name)
+try:
+	df = pd.read_stata(file_name)
+except:
+	df = pd.read_csv(file_name)
 
 #Get block list from microdata
 df_no_empty_blocks = df[df['block']!="."]
@@ -78,10 +82,13 @@ print("Entirely numeric blocks (micro): " + str(len(blocks_micro_numeric)) + "\n
 #Load blocks shapefile to get block list
 sf_blocks = shapefile.Reader(blocks_algo_file)
 fields = sf_blocks.fields[1:] 
+for i, item in enumerate(fields):
+	if item[0] == 'MBID':
+		position = i
 
-#Get block list from algorithm
+#Get 100% certainty block list from algorithm
 #blocks_algo = [r.record[-7] for r in sf_blocks.shapeRecords()]
-blocks_algo = [r.record[-3] for r in sf_blocks.shapeRecords()]
+blocks_algo = [r.record[position] for r in sf_blocks.shapeRecords()]
 blocks_algo = list(set(blocks_algo))
 blocks_algo.sort()
 blocks_algo.pop(0) #Blocks without numbers are whitespace, this removes that entry
@@ -99,7 +106,7 @@ print("Algorithm identified " + str(numeric_algo) + " of " + str(numeric_micro) 
 blocks_to_find = [i for i in blocks_micro_numeric if i not in blocks_algo_numeric]
 #print(blocks_to_find)
 
-current_image = image_path + name + "_current_image.shp"
+current_image = image_path + city + "_current_image.shp"
 
 def add_ocr(image_num):
 
@@ -142,6 +149,10 @@ def add_ocr(image_num):
 		arcpy.CopyFeatures_management(temp,ocr_pblk)
 		arcpy.Delete_management(temp)
 
+with open(files_txt,'r') as f:
+	files = f.read().splitlines()
+	files = [f.replace(".tif",".shp") for f in files]
+
 for i in range(len(files)):
 	add_ocr(i)
 
@@ -151,8 +162,8 @@ df = dbf.to_dataframe()
 
 print("OCR blocks identified")
 total = 0
-#to_guess = df[df['MBID'].isnull()]
-to_guess = df[df['FirstE'].isnull()]
+to_guess = df[df['MBID'].isnull()]
+#to_guess = df[df['FirstE'].isnull()]
 
 for i in range(len(files)):
 	img_tot = to_guess['im_blk%s' % (str(i+1))].notnull().sum()
@@ -167,10 +178,6 @@ guessed = df_im_blks.notnull().any(axis=1).sum()
 per_guessed = round(100*float(guessed)/numeric_micro,1)
 print("OCR returned plausible guesses for " + str(guessed) + " of " + str(numeric_micro) + " (" + str(per_guessed) + "%) numeric microdata blocks")
 
-tot_algos = guessed + numeric_algo
-per_tot_algos = round(100*float(tot_algos)/numeric_micro,1)
-print("\nTotal blocks identified by algorithms: " + str(tot_algos) + " of " + str(numeric_micro) + " (" + str(per_tot_algos) + "%)")
-
-####
-#### TO DO: Compress options into fewest variables possible (i.e. 2 maps -> 1 variable if possible)
-####
+#tot_algos = guessed + numeric_algo
+#per_tot_algos = round(100*float(tot_algos)/numeric_micro,1)
+#print("\nTotal blocks identified/guessed: " + str(tot_algos) + " of " + str(numeric_micro) + " (" + str(per_tot_algos) + "%)"+"\n")
