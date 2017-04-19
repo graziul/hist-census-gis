@@ -16,7 +16,7 @@ state = sys.argv[3]
 arcpy.env.overwriteOutput=True
 
 #Create Paths to be used throughout Process
-reference_data = "S:\\Projects\\1940Census\\StreetGrids\\" + name + state + "_1940_stgrid_edit.shp 'Primary Table'"
+reference_data = "'S:\\Projects\\1940Census\\StreetGrids\\" + name + state + "_1940_stgrid_edit.shp' 'Primary Table'"
 grid = "S:\\Projects\\1940Census\\StreetGrids\\" + name + state + "_1940_stgrid_edit.shp"
 dissolve_grid = dir_path + name + "_1930_stgrid_Dissolve.shp"
 split_grid = dir_path + name + "_1930_stgrid_Split.shp"
@@ -70,7 +70,8 @@ def add_city(grid, name):
 	cur = arcpy.UpdateCursor(grid)
 	for row in cur:
 		row.setValue('CITY',name)
-	del(cur)
+		cur.updateRow(row)
+	del cur
 
 if len(has_city) == 0:
 	add_city(grid, name)
@@ -87,7 +88,8 @@ def add_state(grid, state):
 	cur = arcpy.UpdateCursor(grid)
 	for row in cur:
 		row.setValue('STATE',state)
-	del(cur)
+		cur.updateRow(row)
+	del cur
 
 if len(has_state) == 0:
 	add_state(grid, state)
