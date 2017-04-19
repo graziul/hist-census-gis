@@ -164,5 +164,5 @@ trim <- function( x ) {
   
   #Export Map
   dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
-  writeOGR(obj=BlockMap, dsn=dir_path_export, layer=paste(city_name,"_1930_ED_Choice_Map.shp",sep=""), driver="ESRI Shapefile",overwrite_layer = TRUE)
+  writeOGR(obj=BlockMap, dsn=dir_path_export, layer=paste(city_name,"_1930_ED_Choice_Map",sep=""), driver="ESRI Shapefile",overwrite_layer = TRUE)
   
