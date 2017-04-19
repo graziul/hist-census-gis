@@ -9,18 +9,19 @@ state_abbr <- args[4]
 
 if (substr(file_name,nchar(file_name)-3+1,nchar(file_name)) == "dta") {
   city<-read.dta13(file_name)
+  vars<-c("autostud_street", "ed", "type", "block","hn")
+  names(city)<-tolower(names(city))
+  city30<-city[vars]
+  city30<-plyr::rename(city30, c(block="Mblk", autostud_street="fullname"))  
 } else {
   city<-read.csv(file_name)
+  vars<-c("overall_match", "ed", "type", "block","hn")
+  names(city)<-tolower(names(city))
+  city30<-city[vars]
+  city30<-plyr::rename(city30, c(block="Mblk", overall_match="fullname"))
 }
  
-names(city)<-tolower(names(city))
 
-#vars<-c("overall_match", "ed", "type", "block","hn")
-vars<-c("autostud_street", "ed", "type", "block","hn")
-city30<-city[vars]
-
-#city30<-plyr::rename(city30, c(block="Mblk", overall_match="fullname"))
-city30<-plyr::rename(city30, c(block="Mblk", autostud_street="fullname"))
 city30$state<-state_abbr
 city30$city<-city_name
 city30$address<-paste(city30$hn, city30$fullname, sep=" ")
