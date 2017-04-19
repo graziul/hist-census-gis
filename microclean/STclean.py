@@ -18,6 +18,7 @@ from __future__ import print_function
 import urllib
 import re
 import os
+import dbf
 import sys
 import time
 import math
@@ -25,7 +26,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import fuzzyset
-from simpledbf import Dbf5
+#from simpledbf import Dbf5
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 from microclean.STstandardize import *
@@ -419,33 +420,42 @@ def load_steve_morse(city, state, year):
 # Step 3a: Import street names from 1940 street grid  
 #
 
+specstd = {ord(u'’'): u"'", }
+def specials(error):
+  return specstd.get(ord(error.object[error.start]), u''), error.end
+codecs.register_error('specials', specials)
+
 def get_streets_from_1940_street_grid(city, state): 
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',
 					'Dallas':'standardiz',
-					'Springfield':'Standardiz'}
+					'Springfield':'standardiz'}
 
-	if city == "StatenIsland":
-		c = "Richmond"
+	if city == 'StatenIsland':
+		c = 'Richmond'
 	else:
 		c = city.replace(' ','')
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
 		file_name_st_grid = c + state + '_1940_stgrid_edit.dbf'
-		dbf = Dbf5(file_path + '/1940/stgrid/' + c + state + '/' + file_name_st_grid)
-		df = dbf.to_dataframe()
-#TODO: AltSt has street name if FULLNAME/standardized == "City limits" (actually "City limit")
+		st_grid_path = file_path + '/1940/stgrid/' + c + state + '/'
+	#TODO: AltSt has street name if FULLNAME/standardized == "City limits" (actually "City limit")
 		if city in special_cities.keys():
 			var = special_cities[city]
-			streets = df[var].unique().tolist()
 		if city == "Kansas City" and state == "MO":
-			streets = df['stndrdName'].unique().tolist()
+			var = 'stndrdname'
 		else:
-			streets = df['FULLNAME'].unique().tolist()
+			var = 'fullname'
+		table = dbf.Table(st_grid_path + file_name_st_grid)
+		table.open()
+		s = [i[var].encode('utf-8').strip() for i in table]
+		table.close()
+		s_no_utf = [i.replace('\xc2\xbd',' 1/2') for i in list(set(s))]
+		streets = list(set(s_no_utf))
 	except:
-		print('Error gettin %s street grid data' % (city))
+		print('Error getting %s street grid data' % (city))
 
 	return streets
 
