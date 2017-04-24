@@ -13,14 +13,16 @@ arcpy.env.overwriteOutput=True
 city_path = sys.argv[1]
 city_name = sys.argv[2]
 microdata_file = sys.argv[3]
+state_abbr = sys.argv[4]
 
 #city_name = "Hartford"
-street = 'autostud_street'
+#street = 'autostud_street'
 #microdata_file = city_path + "\\StataFiles_Other\\1930\\HartfordCT_StudAuto.dta"
 
 gis_path = city_path + "\\GIS_edited\\"
 block_file = gis_path + city_name + "_1930_Block_Choice_Map.shp"
-stgrid_file = gis_path + city_name + "_1930_stgrid_edit.shp"
+#stgrid_file = gis_path + city_name + "_1930_stgrid_edit.shp"
+stgrid_file = "S:\\Projects\\1940Census\\StreetGrids\\" + city_name + state_abbr + "_1940_stgrid_edit.shp"
 out_file = gis_path + city_name + "_1930_Block_Choice_Map2.shp"
 
 #dir_path = sys.argv[1] + "\\GIS_edited\\"
@@ -37,16 +39,18 @@ cprint("Getting block description guesses\n", attrs=['bold'], file=AnsiToWin32(s
 start = time.time()
 
 if microdata_file.split('.')[1] == 'dta':
+	street = 'autostud_street'
 	df_pre = pd.read_stata(microdata_file)
 	df_pre = df_pre[['ed','block',street]]
 if microdata_file.split('.')[1] == 'csv':
+	street = 'overall_match'
 	with open(microdata_file) as f:
 		reader = csv.reader(f)
 		header = next(reader)
 	ed_idx = header.index('ed')
 	block_idx = header.index('block')
 	street_idx = header.index(street)
-	df_pre = pd.read_csv(file_name,usecols=[ed_idx,block_idx,street_idx])
+	df_pre = pd.read_csv(microdata_file,usecols=[ed_idx,block_idx,street_idx])
 
 end = time.time()
 run_time = round(float(end-start)/60, 1)
