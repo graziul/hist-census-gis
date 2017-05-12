@@ -38,26 +38,26 @@ for name in ["StLouis"]:
 
     #### STEP 1 #### - Overlapping Segment Groups
     #Join the segment shapefile to itself by 'intersect'
- #   arcpy.SpatialJoin_analysis(target_features, join_features, Out_Join, "JOIN_ONE_TO_MANY", "KEEP_ALL", fieldmappings, "INTERSECT")
+    arcpy.SpatialJoin_analysis(target_features, join_features, Out_Join, "JOIN_ONE_TO_MANY", "KEEP_ALL", fieldmappings, "INTERSECT")
     #Add Field Name called "UniqID" to result in Step 1
- #   arcpy.AddField_management(Out_Join, "UniqID", "TEXT", "", "", "","", "", "")
- #   arcpy.CalculateField_management(Out_Join, "UniqID", expression_ExtSegGr, "PYTHON_9.3")
+    arcpy.AddField_management(Out_Join, "UniqID", "TEXT", "", "", "","", "", "")
+    arcpy.CalculateField_management(Out_Join, "UniqID", expression_ExtSegGr, "PYTHON_9.3")
     #Disolve by JOIN_FID
- #   arcpy.Dissolve_management(Out_Join, SegGr_grid, "JOIN_FID")
+    arcpy.Dissolve_management(Out_Join, SegGr_grid, "JOIN_FID")
     #Add Field Name "SegGrID=JOIN_FID"
- #   arcpy.AddField_management(SegGr_grid, "SegGrID", "LONG", "", "", "","", "", "")
- #   arcpy.CalculateField_management(SegGr_grid, "SegGrID", expression_SegGr, "PYTHON_9.3")
+    arcpy.AddField_management(SegGr_grid, "SegGrID", "LONG", "", "", "","", "", "")
+    arcpy.CalculateField_management(SegGr_grid, "SegGrID", expression_SegGr, "PYTHON_9.3")
 
     print "Finished:" + name + "SegGr_grid.shp"
 
     #### STEP 2 #### - Overlapping Extended Segment Groups
     #Create New Shapefile to Join to Itself
- #   arcpy.CopyFeatures_management(SegGr_grid, SegGr_grid_c)
+    arcpy.CopyFeatures_management(SegGr_grid, SegGr_grid_c)
     #Join SegGr shapefile to itself by 'intersect'
- #   arcpy.SpatialJoin_analysis(SegGr_grid, SegGr_grid_c, Out_Join_2, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
+    arcpy.SpatialJoin_analysis(SegGr_grid, SegGr_grid_c, Out_Join_2, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
     #Add Field Name called "UniqID"
- #   arcpy.AddField_management(Out_Join_2, "UniqID", "TEXT", "", "", "","", "", "")
- #   arcpy.CalculateField_management(Out_Join_2, "UniqID", expression_Out_Join_2, "PYTHON_9.3")
+    arcpy.AddField_management(Out_Join_2, "UniqID", "TEXT", "", "", "","", "", "")
+    arcpy.CalculateField_management(Out_Join_2, "UniqID", expression_Out_Join_2, "PYTHON_9.3")
 
     
     print "Starting SegGr to SegGr Join Procedure"
