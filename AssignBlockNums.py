@@ -13,7 +13,8 @@ city_name = city_name.replace(" ","")
 state_abbr = "MO"
 #state_abbr = "CT"
 file_path = "S:\Projects\\1940Census\\%s" % (city_name) #TO DO: Directories need to be city_name+state_abbr
-file_name = file_path + r"\StataFiles_Other\1930\StLouisMO_AutoCleanedV4.csv"
+#file_name = file_path + r"\StataFiles_Other\1930\StLouisMO_AutoCleanedV4.csv"
+file_name = file_path + r"\StataFiles_Other\1930\StLouisMO_StudAuto.dta"
 #file_name = file_path + "\\StataFiles_Other\\1930\\HartfordCT_StudAuto.dta"
 #file_name = file_path + "\\StataFiles_Other\\1930\\combined_Hartford1930.dta"
 
