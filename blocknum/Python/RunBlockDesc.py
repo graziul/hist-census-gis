@@ -38,9 +38,29 @@ cprint("Getting block description guesses\n", attrs=['bold'], file=AnsiToWin32(s
 #Load data
 start = time.time()
 
+def load_large_dta(fname):
+    import sys
+
+    reader = pd.read_stata(fname, iterator=True)
+    df = pd.DataFrame()
+
+    try:
+        chunk = reader.get_chunk(100*1000)
+        while len(chunk) > 0:
+            df = df.append(chunk, ignore_index=True)
+            chunk = reader.get_chunk(100*1000)
+            print '.',
+            sys.stdout.flush()
+    except (StopIteration, KeyboardInterrupt):
+        pass
+
+    print '\nloaded {} rows'.format(len(df))
+
+    return df
+    
 if microdata_file.split('.')[1] == 'dta':
 	street = 'autostud_street'
-	df_pre = pd.read_stata(microdata_file)
+	df_pre = load_large_dta(microdata_file)
 	df_pre = df_pre[['ed','block',street]]
 if microdata_file.split('.')[1] == 'csv':
 	street = 'overall_match'
