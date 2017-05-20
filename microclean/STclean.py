@@ -609,31 +609,30 @@ def find_fuzzy_matches(df, city, street, sm_all_streets, sm_ed_st_dict, check_to
 
 	#Fuzzy matching algorithm
 	def sm_fuzzy_match(street, ed):
-		
+
+		nomatch = ['', '', False]
+	
 		#Return null if street is blank
 		if street == '':
-			return ['', '', False]
-
+			return nomatch
 		#Microdata ED may not be in Steve Morse, if so then add it to problem ED list and return null
 		try:
 			sm_ed_streets = sm_ed_st_dict[ed]
 			sm_ed_streets_fuzzyset = fuzzyset.FuzzySet(sm_ed_streets)
 		except:
 			problem_EDs.append(ed)
-			return ['', '', False]
-		
+			return nomatch
+
 		#Step 1: Find best match among streets associated with microdata ED
 		try:
 			best_match_ed = sm_ed_streets_fuzzyset[street][0]
 		except:
-			return ['', '', False]
-
+			return nomatch
 		#Step 2: Find best match among all streets
 		try:
 			best_match_all = sm_all_streets_fuzzyset[street][0]
 		except:
-			return ['', '', False]    
-
+			return nomatch    
 		#Step 3: If both best matches are the same, return as best match
 		if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.5):
 			#Check how many other streets in ED differ by one character
@@ -642,7 +641,7 @@ def find_fuzzy_matches(df, city, street, sm_all_streets, sm_ed_st_dict, check_to
 				if too_similar == 0:
 					return [best_match_ed[1], best_match_ed[0], True]
 				else:
-					return['', '', False]
+					return nomatch
 			else: 
 				return [best_match_ed[1], best_match_ed[0], True]
 		#Step 4: If both are not the same, return one with the higher score (to help manual cleaning)
