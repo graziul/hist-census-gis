@@ -47,6 +47,7 @@ trim <- function( x ) {
   
 #Adds a variable with the number 1 used to enumerate values throughout code
   EDs$one<-car::recode(EDs$ed,"\" \"=0; else=1")
+  EDs$one<-as.numeric(EDs$one)
   
 #Remove pblk_id with '0';
   EDs<-EDs[which(EDs$pblk_id!=0),]
@@ -55,7 +56,7 @@ trim <- function( x ) {
   EDs<-EDs[which(!is.na(EDs$ed)),]
   
 #Count Number of Unique Eds (Microdata combinations of ED and Block #)
-  EdCt<-tapply(EDs$one, INDEX=list(EDs$ed), FUN=sum)
+  EdCt<-tapply(as.numeric(EDs$one), INDEX=list(EDs$ed), FUN=sum)
   Ed_Count<-data.frame(ed=names(EdCt), Ed_Count=EdCt)
   EDs<-merge(x=EDs, y=Ed_Count, by="ed", all.x=T)
   
@@ -65,7 +66,7 @@ trim <- function( x ) {
   EDs<-merge(x=EDs, y=Pblk_Count, by="pblk_id", all.x=T)
   
 #Count Number of Unqiue EDs and Pblk Combinations
-  Combo<-tapply(EDs$one, INDEX=list(EDs$Unique), FUN=sum)
+  Combo<-tapply(as.numeric(EDs$one), INDEX=list(EDs$Unique), FUN=sum)
   Combos<-data.frame(Unique=names(Combo), TotCombos=Combo)
   EDs<-merge(x=EDs, y=Combos, by="Unique", all.x=T)
   
