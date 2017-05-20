@@ -53,7 +53,7 @@ year = sys.argv[5]
 #
 
 studentcleaned_file_name = file_path + '/%s/studentcleaned/%s' % (str(year),student_file)
-autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city,str(version))
+autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city.replace(' ',''),str(version))
 
 sc = pd.read_stata(studentcleaned_file_name)
 ac = pd.read_csv(autocleaned_file_name,low_memory=False)
@@ -514,14 +514,14 @@ mc.rename(columns={'overall_match':'overall_match_auto',
 
 mc = mc.apply(lambda x: x.str.strip() if isinstance(x, str) else x).replace('', '.')
 
-autostud_file_name = file_path + '/%s/autostudcleaned/%s' % (str(year),city + '_StudAuto.csv')
+autostud_file_name = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.csv')
 mc.to_csv(autostud_file_name)
 
-autostud_file_stata = file_path + '/%s/autostudcleaned/%s' % (str(year),city + '_StudAuto.dta')
+autostud_file_stata = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.dta')
 
 ## Set do-file information
 dofile = file_path + "/ConvertCsvToDta.do"
-cmd = ["stata","-b","do", dofile, autostud_file_name, autostud_file_stata,"&"]
+cmd = ["stata","-b","do", dofile, "%s" % (autostud_file_name), "%s" % (autostud_file_stata),"&"] 
 ## Run do-file
 subprocess.call(cmd) 
 
