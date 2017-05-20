@@ -39,7 +39,6 @@ cprint("Getting block description guesses\n", attrs=['bold'], file=AnsiToWin32(s
 start = time.time()
 
 def load_large_dta(fname):
-    import sys
 
     reader = pd.read_stata(fname, iterator=True)
     df = pd.DataFrame()
