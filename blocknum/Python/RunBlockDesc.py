@@ -54,10 +54,10 @@ def load_large_dta(fname):
     except (StopIteration, KeyboardInterrupt):
         pass
 
-    print '\nloaded {} rows'.format(len(df))
+    print '\nloaded {} rows\n'.format(len(df))
 
     return df
-    
+
 if microdata_file.split('.')[1] == 'dta':
 	street = 'autostud_street'
 	df_pre = load_large_dta(microdata_file)
