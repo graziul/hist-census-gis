@@ -32,11 +32,11 @@ city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df.values.tolist()
 '''
 '''
-c = 'Hartford'
-s = 'CT'
+c = 'StLouis'
+s = 'MO'
 city = c + s
-student_file = 'HartfordCT_ForStudentsV1_Copy.dta'
-version = 3
+student_file = 'StLouisMO_ForStudentsV4_rush.dta'
+version = 4
 year = 1930
 '''
 
@@ -52,11 +52,31 @@ year = sys.argv[5]
 # Open both files and merge
 #
 
+def load_large_dta(fname):
+
+    reader = pd.read_stata(fname, iterator=True)
+    df = pd.DataFrame()
+
+    try:
+        chunk = reader.get_chunk(100*1000)
+        while len(chunk) > 0:
+            df = df.append(chunk, ignore_index=True)
+            chunk = reader.get_chunk(100*1000)
+            print '.',
+            sys.stdout.flush()
+    except (StopIteration, KeyboardInterrupt):
+        pass
+
+    print '\nloaded {} rows\n'.format(len(df))
+
+    return df
+
 studentcleaned_file_name = file_path + '/%s/studentcleaned/%s' % (str(year),student_file)
 autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city.replace(' ',''),str(version))
 
-sc = pd.read_stata(studentcleaned_file_name)
-ac = pd.read_csv(autocleaned_file_name,low_memory=False)
+sc = load_large_dta(studentcleaned_file_name)
+tp = pd.read_csv(autocleaned_file_name, iterator=True, chunksize=10000,low_memory=False)
+ac = pd.concat(tp, ignore_index=True)
 
 vars_formerge = ['image_id','line_num','clean_priority','street_raw',
 	'street_precleanedhn','st','stname_flag','checked_st','checked_hn','inst','nonstreet',
