@@ -25,9 +25,6 @@ block_file = gis_path + city_name + "_1930_Block_Choice_Map.shp"
 stgrid_file = "S:\\Projects\\1940Census\\StreetGrids\\" + city_name + state_abbr + "_1940_stgrid_edit.shp"
 out_file = gis_path + city_name + "_1930_Block_Choice_Map2.shp"
 
-#dir_path = sys.argv[1] + "\\GIS_edited\\"
-#name = sys.argv[2]
-#state = sys.argv[3]
 
 cprint("Getting block description guesses\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -77,9 +74,10 @@ cprint("Finished loading microdata (took " + str(run_time) + " minutes)", 'cyan'
 
 #TO DO: Clean up block numbers
 df_pre = df_pre[df_pre['block'].notnull() & df_pre['ed'].notnull()]
-df_pre['ed_block'] = df_pre['ed'].astype(str) + '-' + df_pre['block'].astype(str)
-del df_pre['ed']
-del df_pre['block']
+df_pre['ed_int'] = df_pre['ed'].astype(int)
+df_pre['ed_block'] = df_pre['ed_int'].astype(str) + '-' + df_pre['block'].astype(str)
+#del df_pre['ed']
+#del df_pre['block']
 
 #Create {Census block:streets} dict from microdata 
 df = df_pre.groupby(['ed_block',street]).size().to_frame('st_addresses').reset_index()
