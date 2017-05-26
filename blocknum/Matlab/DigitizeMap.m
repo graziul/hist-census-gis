@@ -31,11 +31,11 @@ height = bb(:,4);
 idx = (width.*height > 200) & (width > x_min) & (width < x_max) & (height > y_min) & (height < y_max);
 bb_out = bb(idx,:);
 
-%figure
-%imshow(BW);
-%for idx = 1 : length(bb_out)
-%    rectangle('Position', bb_out(idx,:), 'edgecolor', 'red','linewidth',2);
-%end
+% figure
+% imshow(BW);
+% for idx = 1 : length(bb_out)
+%     rectangle('Position', bb_out(idx,:), 'edgecolor', 'red','linewidth',2);
+% end
 
 %
 % Apply some filters maybe?
@@ -146,17 +146,17 @@ ocrtxt = ocr(BW, textBBoxes,'TextLayout','Word','Language','C:\Users\cgraziul\Do
 t = char(ocrtxt.Text);
 t = cellstr(t);
 t1 = str2double(t);
-m = t1 > 120 | isnan(t1);
+m = t1 > 9999 | isnan(t1);
 t(m) = [];
 t = str2double(t);
 textBBoxesLoc(m,:) = [];
 for_shp = cellstr(num2str(t));
 
 % See what it looks like
-%figure
-%J1 = insertText(rotated_I,textBBoxesLoc,t,'FontSize',20);
-%hold on
-%imshow(J1)
+figure
+J1 = insertText(I,textBBoxesLoc,t,'FontSize',20);
+hold on
+imshow(J1)
 
 % Needs to be transformed to match original image orientation
 
