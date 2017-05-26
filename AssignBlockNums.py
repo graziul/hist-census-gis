@@ -1,22 +1,28 @@
+#
+#	AssignBlockNums.py
+#
+#	
+#
+
 import os
 import subprocess
 import sys
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 
-r_path = "C:\Program Files\\R\\R-3.3.2\\bin\Rscript"
-script_path = "C:\Users\\cgraziul\\hist-census-gis"
+#city_name = "St Louis"
+#state_abbr = "MO"
+#r_path = "C:\Program Files\\R\\R-3.3.2\\bin\Rscript"
+#script_path = "C:\Users\\cgraziul\\hist-census-gis"
 
-city_name = "St Louis"
-#city_name = "Hartford"
+city_name = sys.argv[1]
+state_abbr = sys.argv[2]
+r_path = sys.argv[3]
+script_path = sys.argv[4]
+
 city_name = city_name.replace(" ","")
-state_abbr = "MO"
-#state_abbr = "CT"
 file_path = "S:\Projects\\1940Census\\%s" % (city_name) #TO DO: Directories need to be city_name+state_abbr
-#file_name = file_path + r"\StataFiles_Other\1930\StLouisMO_AutoCleanedV4.csv"
-file_name = file_path + r"\StataFiles_Other\1930\StLouisMO_StudAuto.dta"
-#file_name = file_path + "\\StataFiles_Other\\1930\\HartfordCT_StudAuto.dta"
-#file_name = file_path + "\\StataFiles_Other\\1930\\combined_Hartford1930.dta"
+file_name = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
 
 cprint("Combined script for automated block numbering (%s)\n" % (city_name), 'yellow',attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -55,7 +61,7 @@ else:
 
 # Analyze microdata and grid
 cprint("Analyzing microdata and grids\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
-t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 if t != 0:
 	cprint("Error analyzing microdata and grid for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 else:
@@ -90,7 +96,7 @@ else:
 cprint("Step 2: Block descriptions from microdata\n", attrs=['bold','underline'], file=AnsiToWin32(sys.stdout))
 
 # Get block description guesses
-t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunBlockDesc.py",file_path,city_name,file_name,state_abbr])
+t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunBlockDesc.py",file_path,city_name,state_abbr])
 if t != 0:
 	cprint("Error getting block description guesses for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 else:
@@ -132,7 +138,7 @@ cprint("Step 4: Set confidence\n", attrs=['bold','underline'], file=AnsiToWin32(
 
 # Integrate OCR block numbering results
 cprint("Setting confidence\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
-t = subprocess.call(["python",script_path+"\\blocknum\\Python\\SetConfidence.py",file_path,file_name])
+t = subprocess.call(["python",script_path+"\\blocknum\\Python\\SetConfidence.py",file_path,city_name])
 if t != 0:
 	cprint("Error setting confidence for for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 else:
