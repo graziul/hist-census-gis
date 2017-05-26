@@ -9,6 +9,7 @@ image_path = sys.argv[1] + "\\GIS_edited\\1930 ED Maps\\"
 matlab_path = "C:\\Program Files\\MATLAB\\R2016b\\bin\\matlab.exe"
 script_path = sys.argv[2] + "\\blocknum\\Matlab\\" 
 arcpy.env.scratchWorkspace = image_path
+arcpy.env.overwriteOutput=True
 
 #Code to create MXD from scratch (need to add .jpg to .mxd then ExportToTIFF to get ref info)
 def CreateMXD(path):
