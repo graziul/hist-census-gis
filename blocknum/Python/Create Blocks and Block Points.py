@@ -207,7 +207,12 @@ arcpy.CalculateField_management(grid_uns, fieldName, expression, "PYTHON", codeb
 
 #Fix grid problems (OFFLOAD TO SEPARATE SCRIPT)
 
+#Create a copy in case names need changing
 arcpy.CopyFeatures_management(grid_uns,grid_uns2)
+#Add a unique, static identifier (so ranges can be changed later)
+expression="!FID! + 1"
+arcpy.AddField_management(grid_uns2, "grid_id", "LONG", 4, "", "","", "", "")
+arcpy.CalculateField_management(grid_uns2, "grid_id", expression, "PYTHON_9.3")
 
 def change_ns(name_type,first_n,fids_n,fids_s):
 	cursor = arcpy.UpdateCursor(grid_uns2)
