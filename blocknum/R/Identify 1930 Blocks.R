@@ -19,7 +19,8 @@
 args <- commandArgs(trailingOnly = TRUE)
 dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
 city_name <- args[2]
-  
+city_name <- gsub(" ","",city_name)
+
 #Functions used:
 trim <- function( x ) {
   gsub("(^[[:space:]]+|[[:space:]]+$)", "", x)
@@ -91,7 +92,7 @@ shift<-function(x,shift_by){
   Blocks<-merge(x=Blocks, y=Combos, by="Unique", all.x=T)
 
 #Name Change - M_Count - Microdata count; P_Count - Physical count
-  Blocks<-rename(Blocks, c(Ed_Count="M_Count", Pblk_Count="P_Count"))
+  Blocks<-plyr::rename(Blocks, c(Ed_Count="M_Count", Pblk_Count="P_Count"))
 
 #Percentage Matching MicroBlocks
   Blocks$PerMblk<-(Blocks$TotCombos/Blocks$M_Count)*100
