@@ -4,27 +4,29 @@ import sys
 import pandas as pd
 import csv
 import time
+import pickle
 from termcolor import colored, cprint
 from colorama import AnsiToWin32, init
 
 arcpy.env.parallelProcessingFactor = "75%"
 arcpy.env.overwriteOutput=True
+arcpy.env.workspace = "in_memory"
 
 city_path = sys.argv[1]
 city_name = sys.argv[2]
-microdata_file = sys.argv[3]
-state_abbr = sys.argv[4]
+state_abbr = sys.argv[3]
 
-#city_name = "Hartford"
-#street = 'autostud_street'
-#microdata_file = city_path + "\\StataFiles_Other\\1930\\HartfordCT_StudAuto.dta"
+#city_path = "S:\\Projects\\1940Census\\StLouis"
+#city_name = "StLouis"
+#state_abbr = "MO"
 
 gis_path = city_path + "\\GIS_edited\\"
 block_file = gis_path + city_name + "_1930_Block_Choice_Map.shp"
 #stgrid_file = gis_path + city_name + "_1930_stgrid_edit.shp"
-stgrid_file = "S:\\Projects\\1940Census\\StreetGrids\\" + city_name + state_abbr + "_1940_stgrid_edit.shp"
-out_file = gis_path + city_name + "_1930_Block_Choice_Map2.shp"
-
+stgrid_file = gis_path + city_name + state_abbr + "_1940_stgrid_edit_Uns2.shp"
+out_file = gis_path + city_name + "_1930_Block_Choice_Map2test.shp"
+pblk_grid_dict_file = gis_path + city_name + "_map_block_dict.pkl"
+microdata_file = city_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
 
 cprint("Getting block description guesses\n", attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -54,19 +56,9 @@ def load_large_dta(fname):
 
     return df
 
-if microdata_file.split('.')[1] == 'dta':
-	street = 'autostud_street'
-	df_pre = load_large_dta(microdata_file)
-	df_pre = df_pre[['ed','block',street]]
-if microdata_file.split('.')[1] == 'csv':
-	street = 'overall_match'
-	with open(microdata_file) as f:
-		reader = csv.reader(f)
-		header = next(reader)
-	ed_idx = header.index('ed')
-	block_idx = header.index('block')
-	street_idx = header.index(street)
-	df_pre = pd.read_csv(microdata_file,usecols=[ed_idx,block_idx,street_idx])
+street = 'autostud_street'
+df_pre = load_large_dta(microdata_file)
+df_pre = df_pre[['ed','block',street]]
 
 end = time.time()
 run_time = round(float(end-start)/60, 1)
@@ -96,21 +88,32 @@ def remove_single_point_touches(street_list):
 
 start = time.time()
 
-temp_file = gis_path + city_name + "_1930_Block_Choice_Map2.shp"
+arcpy.CopyFeatures_management(block_file, "block_file")
+arcpy.CopyFeatures_management(stgrid_file, "stgrid_file")
 
 	#Get list of streets touching each physical block and turn into dictionary
-map_blocks_dict = {}
-for row in arcpy.da.SearchCursor(block_file,('OID@','SHAPE@')):
-	map_blocks_dict[str(row[0])] = []
-	for row2 in arcpy.da.SearchCursor(stgrid_file,('OID@','SHAPE@','fullname')):
+pblk_st_dict = {}
+pblk_grid_dict = {}
+#for row in arcpy.da.SearchCursor('in_memory\\block_file',('pblk_id','SHAPE@')):
+block_sc = arcpy.da.SearchCursor('in_memory\\block_file',('pblk_id','SHAPE@'))
+grid_sc = arcpy.da.SearchCursor('in_memory\\stgrid_file',('grid_id','SHAPE@','fullname'))
+
+#for row in arcpy.da.SearchCursor(block_file,('pblk_id','SHAPE@')):
+#	for row2 in arcpy.da.SearchCursor(stgrid_file,('grid_id','SHAPE@','fullname')):
+
+for row in arcpy.da.SearchCursor('in_memory\\block_file',('pblk_id','SHAPE@')):
+	pblk_st_dict[str(row[0])] = []
+	pblk_grid_dict[str(row[0])] = []
+	for row2 in arcpy.da.SearchCursor('in_memory\\stgrid_file',('grid_id','SHAPE@','fullname')):
 		if not row[1].disjoint(row2[1]):
 			if row[1].intersect(row2[1],1):
-				map_blocks_dict[str(row[0])].append(row2[2])
+				pblk_st_dict[str(row[0])].append(row2[2])
+				pblk_grid_dict[str(row[0])].append(row2[0])
 exclude_list = ['City Limits']
 	#Exclude certain street names "City Limits"
-map_blocks_dict = {k:list(set([i for i in v if i not in exclude_list])) for k,v in map_blocks_dict.items()}
-	#Remove streets that touch physical block only once (i.e. T-intersections)
-#map_blocks_dict = {k:list(set(remove_single_point_touches(v))) for k,v in map_blocks_dict.items()}
+pblk_st_dict = {k:list(set([i for i in v if i not in exclude_list])) for k,v in pblk_st_dict.items()}
+	#Save a copy for RenumberGrid.py
+pickle.dump(pblk_grid_dict,open(pblk_grid_dict_file,'wb'))
 
 end = time.time()
 run_time = round(float(end-start)/60, 1)
@@ -118,30 +121,33 @@ cprint("Finished overlaying physical blocks and street grid (took " + str(run_ti
 
 #Get number of physical blocks
 num_physical_blocks = int(arcpy.GetCount_management(block_file).getOutput(0))
+#Get number of microdata blocks
+num_micro_blocks = len(df_pre['block'].unique())
 
 #Get block numbers already labeled in Step 1 (strict criteria)
 def extract_step1_labels(fields):
 	labels_step1 = []
-	fid_labeled1 = []
+	pblks_labeled1 = []
 	for field in fields:
-		with arcpy.da.SearchCursor(block_file,['FID',field]) as cursor:
+		with arcpy.da.SearchCursor(block_file,['pblk_id',field]) as cursor:
 			for row in cursor:
 				if row[1] != ' ':
 					labels_step1.append(row[1])
-					fid_labeled1.append(row[0])
+					pblks_labeled1.append(row[0])
 	num_labels_step1 = len(labels_step1)
-	per_physical_blocks = round(100*float(num_labels_step1)/num_physical_blocks, 1)
-	cprint("Physical blocks labeled in Step 1: "+str(num_labels_step1)+" ("+str(per_physical_blocks)+r"% of physical blocks)"+"\n",'green',attrs=['bold'], file=AnsiToWin32(sys.stdout))
-	return labels_step1, fid_labeled1, num_labels_step1
+	per_micro_blocks = round(100*float(num_labels_step1)/num_micro_blocks, 1)
+	cprint("Physical blocks labeled in Step 1: "+str(num_labels_step1)+" ("+str(per_micro_blocks)+r"% of microdata blocks)"+"\n",'green',attrs=['bold'], file=AnsiToWin32(sys.stdout))
+	return labels_step1, pblks_labeled1, num_labels_step1
 
-fields = ['MBID','MBID2']
-labels_step1, fids_labeled_step1, num_labeled_step1 = extract_step1_labels(fields)
+#This step determines which ED-blocks to consider labeled based on prior numbering efforts
+fields = ['MBID']
+labels_step1, pblks_labeled_step1, num_labeled_step1 = extract_step1_labels(fields)
 
 #Look for block description matches
-def match_using_block_desc(thresh,fids_labeled,labels):
+def match_using_block_desc(thresh,pblks_labeled,labels):
 	temp_match_dict = {}
-	for map_block, map_streets in map_blocks_dict.items():
-		if len(map_streets) > 0 and (int(map_block) not in fids_labeled):
+	for map_block, map_streets in pblk_st_dict.items():
+		if len(map_streets) > 0 and (int(map_block) not in pblks_labeled):
 			temp_match_dict[map_block] = temp_match_dict.setdefault(map_block, [])
 			for micro_block, microdata_streets in micro_blocks_dict.items():
 				if micro_block not in labels:
@@ -156,28 +162,28 @@ def match_using_block_desc(thresh,fids_labeled,labels):
 	temp_fids_labeled = [int(i) for i in temp_match_dict.keys()]
 	temp_labels = temp_match_dict.values()
 	num_matches = len(temp_match_dict)
-	per_physical_blocks = round(100*float(num_matches)/num_physical_blocks, 1)
-	cprint("Matches based on block description: "+str(num_matches)+" ("+str(per_physical_blocks)+r"% of physical blocks)",file=AnsiToWin32(sys.stdout))
+	per_micro_blocks = round(100*float(num_matches)/num_micro_blocks, 1)
+	cprint("Matches based on block description: "+str(num_matches)+" ("+str(per_micro_blocks)+r"% of microdata blocks)",file=AnsiToWin32(sys.stdout))
 	return temp_match_dict, temp_fids_labeled, temp_labels, num_matches
 
-exact_match_dict, fids_labeled_exact, labels_exact, num_exact_matches \
-	= match_using_block_desc(1, fids_labeled_step1, labels_step1)
+exact_match_dict, pblks_labeled_exact, labels_exact, num_exact_matches \
+	= match_using_block_desc(1, pblks_labeled_step1, labels_step1)
 
-good_match_dict, fids_labeled_good, labels_good, num_good_matches \
-	= match_using_block_desc(0.75, fids_labeled_step1+fids_labeled_exact, labels_step1+labels_exact)
+good_match_dict, pblks_labeled_good, labels_good, num_good_matches \
+	= match_using_block_desc(0.75, pblks_labeled_step1+fids_labeled_exact, labels_step1+labels_exact)
 
 num_labeled_step2 = num_exact_matches+num_good_matches
-per_physical_blocks = round(100*float(num_labeled_step2)/num_physical_blocks, 1)
-cprint("\n"+"Physical blocks labeled by Step 2: "+str(num_labeled_step2)+" ("+str(per_physical_blocks)+r"% of physical blocks)"+"\n",'green',attrs=['bold'],file=AnsiToWin32(sys.stdout))
+per_micro_blocks = round(100*float(num_labeled_step2)/num_micro_blocks, 1)
+cprint("\n"+"Physical blocks labeled by Step 2: "+str(num_labeled_step2)+" ("+str(per_micro_blocks)+r"% of physical blocks)"+"\n",'green',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
 num_labeled_steps1and2 = num_labeled_step1+num_labeled_step2
-per_physical_blocks = round(100*float(num_labeled_steps1and2)/num_physical_blocks, 1)
-cprint("Physical blocks labeled by Step 1 and Step 2: "+str(num_labeled_steps1and2)+" ("+str(per_physical_blocks)+r"% of physical blocks)"+"\n",attrs=['bold'], file=AnsiToWin32(sys.stdout))
+per_micro_blocks = round(100*float(num_labeled_steps1and2)/num_micro_blocks, 1)
+cprint("Physical blocks labeled by Step 1 and Step 2: "+str(num_labeled_steps1and2)+" ("+str(per_micro_blocks)+r"% of physical blocks)"+"\n",attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
 #Add labels 
 
-map_blocks = map_blocks_dict.keys()
-for block in map_blocks:
+pblks = pblk_st_dict.keys()
+for block in pblks:
 	if block not in exact_match_dict.keys():
 		exact_match_dict[block] = ''
 	if block not in good_match_dict.keys():
@@ -189,8 +195,8 @@ arcpy.AddField_management(out_file,'blockdesc2','TEXT')
 
 cursor = arcpy.UpdateCursor(out_file)
 for row in cursor:
-	fid = row.getValue('FID')
-	row.setValue('blockdesc',exact_match_dict[str(fid)])
-	row.setValue('blockdesc2',good_match_dict[str(fid)])
+	pblk_id = row.getValue('pblk_id')
+	row.setValue('blockdesc',exact_match_dict[str(pblk_id)])
+	row.setValue('blockdesc2',good_match_dict[str(pblk_id)])
 	cursor.updateRow(row)
 del(cursor)
