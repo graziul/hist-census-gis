@@ -5,6 +5,10 @@
 
 import pysal as ps
 import pandas as pd
+import arcpy
+import os
+arcpy.env.overwriteOutput=True
+
 '''
 Arguments
 ---------
@@ -20,65 +24,6 @@ def dbf2DF(dbfile, upper=True): #Reads in DBF files and returns Pandas DF
         pandasDF.columns = map(str.upper, db.header) 
     db.close() 
     return pandasDF
-
-dbf_file = "S:\\Projects\\1940Census\\Hartford\\GIS_edited\\Hartford_1930_Block_Choice_Map2.dbf"
-df = dbf2DF(dbf_file,upper=False)
-
-def df2dbf(df, dbf_path, my_specs=None):
-    '''
-    Convert a pandas.DataFrame into a dbf.
-    __author__  = "Dani Arribas-Bel <darribas@asu.edu> "
-    ...
-    Arguments
-    ---------
-    df          : DataFrame
-                  Pandas dataframe object to be entirely written out to a dbf
-    dbf_path    : str
-                  Path to the output dbf. It is also returned by the function
-    my_specs    : list
-                  List with the field_specs to use for each column.
-                  Defaults to None and applies the following scheme:
-                    * int: ('N', 14, 0)
-                    * float: ('N', 14, 14)
-                    * str: ('C', 14, 0)
-    '''
-    if my_specs:
-        specs = my_specs
-    else:
-        type2spec = {int: ('N', 20, 0),
-                     np.int64: ('N', 20, 0),
-                     float: ('N', 36, 15),
-                     np.float64: ('N', 36, 15),
-                     str: ('C', 14, 0)
-                     }
-        types = [type(df[i].iloc[0]) for i in df.columns]
-        specs = [type2spec[t] for t in types]
-    db = ps.open(dbf_path, 'w')
-    db.header = list(df.columns)
-    db.field_spec = specs
-    for i, row in df.T.iteritems():
-        db.write(row)
-    db.close()
-    return dbf_path
-
-
-#
-# Reduce OCR variables to fewest possible
-#
-
-vars_to_compress = ['MBID','MBID2','MBID3']
-
-df_to_compress = df[vars_to_compress]
-list_to_compress = df_to_compress.values.tolist()
-list_compressed = [list(set(i)) for i in list_to_compress]
-for i in list_compressed:
-	if '' in i:
-		i.remove('')
-df_compressed = pd.DataFrame.from_records(list_compressed)
-min_num_vars = len(df_compressed.columns)
-
-for i in range(1,min_num_vars+1):
-	df['ocr%s' % (str(i))] = df_compressed[[i-1]]
 
 #
 # Find highest confidence block number guess
@@ -196,7 +141,45 @@ def get_auto_blocknum(x,conf):
 	else:
 		return ['','']
 
-for i in range(1,8):
+file_path = sys.argv[1]
+city_name = sys.argv[2]
+
+#file_path = "S:\\Projects\\1940Census\\StLouis"
+#city_name = "StLouis"
+dir_path = file_path + "\\GIS_edited"
+
+# Load
+dbf_file = dir_path + "\\" + city_name + "_1930_Block_Choice_Map2.dbf"
+df = dbf2DF(dbf_file,upper=False)
+
+# Reduce OCR variables to fewest possible
+vars_to_compress = []
+df_to_compress = df[vars_to_compress]
+list_to_compress = df_to_compress.values.tolist()
+list_compressed = [list(set(i)) for i in list_to_compress]
+for i in list_compressed:
+	if '' in i:
+		i.remove('')
+df_compressed = pd.DataFrame.from_records(list_compressed)
+min_num_vars = len(df_compressed.columns)
+for i in range(1,min_num_vars+1):
+	df['ocr%s' % (str(i))] = df_compressed[[i-1]]
+
+# Run
+for i in range(1,7):
 	df['auto_bn'], df['auto_bnc'] = zip(*df.apply(lambda x: get_auto_blocknum(x,i), axis=1))
 
-df2dbf(df,dbf_file)
+print(df['auto_bnc'].value_counts(normalize=True))
+
+# Save as dbf via csv
+csv_file = dir_path + "\\temp_for_dbf.csv"
+df.to_csv(csv_file)
+arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp.dbf")
+os.remove(dbf_file)
+os.remove(csv_file)
+os.rename(dir_path+"\\temp_for_shp.dbf",dbf_file)
+os.remove(dir_path+"\\temp_for_shp.dbf.xml")
+os.remove(dir_path+"\\temp_for_shp.cpg")
+
+
+
