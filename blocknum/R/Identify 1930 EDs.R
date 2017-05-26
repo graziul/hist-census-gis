@@ -26,11 +26,15 @@ trim <- function( x ) {
 #Bring in microdata points
   dbf_file<-paste(dir_path,city_name,"_1930_Pblk_Points.dbf",sep="")
   Points<-read.dbf(dbf_file)
+  tot_points<-length(Points[,1])  
 #Make variable names lowercase
   names(Points)<-tolower(names(Points))
   names(Points)
 #Delete points not geocoded
   Points<-Points[which(Points$status!="U"),]
+  geocoded_points<-length(Points[,1])
+#Report number of geocoded points
+  print(paste(geocoded_points," of ",tot_points," (",round(100*geocoded_points/tot_points,1),"%) points geocoded",sep=""))
   
 #Create Unique Household (Address) Indicator
   Points$build_id<-plyr::id(Points[c("hn","fullname")], drop=F)
@@ -47,8 +51,8 @@ trim <- function( x ) {
   
 #Adds a variable with the number 1 used to enumerate values throughout code
   EDs$one<-car::recode(EDs$ed,"\" \"=0; else=1")
-  EDs$one<-as.numeric(EDs$one)
-  
+#  EDs$one<-as.numeric(levels(EDs$one))[EDs$one]
+
 #Remove pblk_id with '0';
   EDs<-EDs[which(EDs$pblk_id!=0),]
   
