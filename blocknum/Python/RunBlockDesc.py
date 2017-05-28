@@ -15,13 +15,13 @@ arcpy.env.parallelProcessingFactor = "75%"
 arcpy.env.overwriteOutput=True
 arcpy.env.workspace = "in_memory"
 
-#city_path = sys.argv[1]
-#city_name = sys.argv[2]
-#state_abbr = sys.argv[3]
+city_path = sys.argv[1]
+city_name = sys.argv[2]
+state_abbr = sys.argv[3]
 
-city_path = "S:\\Projects\\1940Census\\StLouis"
-city_name = "StLouis"
-state_abbr = "MO"
+#city_path = "S:\\Projects\\1940Census\\StLouis"
+#city_name = "StLouis"
+#state_abbr = "MO"
 
 gis_path = city_path + "\\GIS_edited\\"
 block_file = gis_path + city_name + "_1930_Block_Choice_Map.shp"
