@@ -25,7 +25,7 @@ state_abbr <- args[3]
   points_dbf_file<-paste(dir_path,city_name,"_1930_Points.dbf",sep="")
   Points<-read.dbf(points_dbf_file)
 #Bring in Street Grid
-  grid_dbf_file<-paste(dir_path,city_name,state_abbr,"_1940_stgrid_edit_Uns2.dbf",sep="")
+  grid_dbf_file<-paste(dir_path,city_name,state_abbr,"_1930_stgrid_edit_Uns2.dbf",sep="")
   grid30<-read.dbf(grid_dbf_file)
   
 #Street Name Change List from Steve Morse 
