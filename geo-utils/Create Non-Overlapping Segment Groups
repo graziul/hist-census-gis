@@ -1,0 +1,26 @@
+Process outline:
+
+Use a planerized Street Grid.
+Use a projected ED or Block polygon shapefile.
+
+Step 1: Now, we will create a hexagon grid with a custom tool that someone posted on the ESRI site. 
+Navigate to the _Exchange drive in Windows, and double click on “Create_Hexagon_Tessellation.” 
+The tool becomes available in ArcMap under the geoprocessing results. 
+This window appears in Arc once you open the file from the exchange drive:
+
+Double click on the tool here to open it. 
+•	For “Study Area,” select the ED polygons for your city that end with “edt.”
+•	Specify the side length
+•	Save the resulting file as “hex###” in your city’s folder, where ### is the number used to specify the side length (e.g. hex150 for sides of 150m).
+Now, search for the “Feature to Point” tool, and choose your new hexagon file as the input. Save your output as “centroid###” in the folder you’re working with. This creates the centroids for the hexagons.
+
+Step 2: Finally, we attach an ID from each centroid onto the segments that fall closest to it. Open the attribute table of the “centroid###” points, and create a new field. Make it a long integer, and call it “hexid###”. Right click on the field name in the table, and click on “Field Calculator.” Click on the FID field in the calculator, make the formula read “[FID]+1” and calculate the variable. 
+
+Next, open the “Spatial Join” tool from the search bar.
+•	The “Target Features” is “citynamest_segment”
+•	The “Join Features” is “centroid###”
+•	Save the output in the city folder as “citynamest_join###”
+•	Make sure the join operation is “JOIN_ONE_TO_ONE”
+•	Set the match option to “CLOSEST”
+
+Run the function, and the resulting file has street segments grouped by their hexid!
