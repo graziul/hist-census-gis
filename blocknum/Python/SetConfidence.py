@@ -141,15 +141,15 @@ def get_auto_blocknum(x,conf):
 	else:
 		return ['','']
 
-file_path = sys.argv[1]
-city_name = sys.argv[2]
-
 #file_path = "S:\\Projects\\1940Census\\StLouis"
 #city_name = "StLouis"
+
+file_path = sys.argv[1]
+city_name = sys.argv[2]
 dir_path = file_path + "\\GIS_edited"
 
 # Load
-dbf_file = dir_path + "\\" + city_name + "_1930_Block_Choice_Map2.dbf"
+dbf_file = dir_path + "\\" + city_name + "_1930_Block_Choice_Map2test.dbf"
 df = dbf2DF(dbf_file,upper=False)
 
 # Reduce OCR variables to fewest possible
@@ -169,7 +169,7 @@ for i in range(1,min_num_vars+1):
 for i in range(1,7):
 	df['auto_bn'], df['auto_bnc'] = zip(*df.apply(lambda x: get_auto_blocknum(x,i), axis=1))
 
-print(df['auto_bnc'].value_counts(normalize=True))
+print(100*df['auto_bnc'].value_counts(normalize=True))
 
 # Save as dbf via csv
 csv_file = dir_path + "\\temp_for_dbf.csv"
