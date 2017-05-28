@@ -28,4 +28,5 @@ city30$address<-paste(city30$hn, city30$fullname, sep=" ")
 #names(city30)
 #View(city30)
 
-write.csv(city30, paste(dir_path,"\\GIS_edited\\",city_name,"_1930_Addresses.csv",sep=""))
+setwd(paste(dir_path,"\\GIS_edited",sep=""))
+write.csv(city30, paste(city_name,"_1930_Addresses.csv",sep=""))
