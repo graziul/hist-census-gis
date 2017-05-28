@@ -21,11 +21,11 @@ state = sys.argv[3]
 arcpy.env.overwriteOutput=True
 
 #Create Paths to be used throughout Process
-reference_data = dir_path + name + state + "_1940_stgrid_edit_Uns2.shp 'Primary Table'"
-grid = dir_path + name + state + "_1940_stgrid_edit.shp"
+reference_data = dir_path + name + state + "_1930_stgrid_edit_Uns2.shp 'Primary Table'"
+grid = dir_path + name + state + "_1930_stgrid_edit.shp"
 #grid = dir_path + name + "_1930_Added_Directions.shp"
-grid_uns =  dir_path + name + state + "_1940_stgrid_edit_Uns.shp"
-grid_uns2 =  dir_path + name + state + "_1940_stgrid_edit_Uns2.shp"
+grid_uns =  dir_path + name + state + "_1930_stgrid_edit_Uns.shp"
+grid_uns2 =  dir_path + name + state + "_1930_stgrid_edit_Uns2.shp"
 dissolve_grid = dir_path + name + "_1930_stgrid_Dissolve.shp"
 split_grid = dir_path + name + "_1930_stgrid_Split.shp"
 pblocks = dir_path + name + "_1930_Pblk.shp"
