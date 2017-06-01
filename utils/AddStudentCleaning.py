@@ -31,22 +31,22 @@ city_info_file = file_path + '/CityInfo.csv'
 city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df.values.tolist()
 '''
-'''
+
 c = 'StLouis'
 s = 'MO'
 city = c + s
 student_file = 'StLouisMO_ForStudentsV4_rush.dta'
 version = 4
 year = 1930
-'''
 
-c = sys.argv[1]
-s = sys.argv[2]
-s = s.upper()
-city = c + s
-student_file = sys.argv[3]
-version = sys.argv[4]
-year = sys.argv[5]
+
+#c = sys.argv[1]
+#s = sys.argv[2]
+#s = s.upper()
+#city = c + s
+#student_file = sys.argv[3]
+#version = sys.argv[4]
+#year = sys.argv[5]
 
 #
 # Open both files and merge
@@ -369,6 +369,32 @@ def add_type(TYPE,TYPE_stud,st_edit):
 _, _, _, mc['TYPE_stud'] = zip(*mc['st_edit'].map(standardize_street))
 # Add TYPE (from raw/autoclean) if no TYPE_stud (from student) amd TYPE exists
 mc['st_edit'] = mc.apply(lambda x: add_type(x['TYPE'],x['TYPE_stud'],x['st_edit']),axis=1)
+
+#
+# Re-add DIR to autoclean if it was removed
+#
+
+def readd_dir(overall_match, DIR):
+	if str(DIR) != 'nan' and str(overall_match) != 'nan':
+		if not overall_match.startswith(DIR+' '):
+			return DIR + ' ' + overall_match
+		else:
+			return overall_match			
+	else:
+		return overall_match
+
+mc['overall_match2'] = mc.apply(lambda x: readd_dir(x['overall_match'],x['DIR']),axis=1)
+
+mc_readd_dir = mc[mc['overall_match']!=mc['overall_match2']]
+mc_readd_dir = mc_readd_dir[mc_readd_dir['overall_match'].astype(str) != 'nan']
+mc_readd_dir = mc_readd_dir[['overall_match','overall_match2']].drop_duplicates()
+mc_readd_dir.to_csv('streets_w_dirs.csv')
+
+mc.loc[mc['overall_match2']=='N NE Kingshighway St','overall_match2'] = 'NE Kingshighway St'
+mc.loc[mc['overall_match2']=='NW W Florissant Ave','overall_match2'] = 'W Florissant Ave'
+
+mc['overall_match_wrong'] = mc['overall_match']
+mc['overall_match'] = mc['overall_match2']
 
 #
 # Run fuzzy matching from autoclean to add TYPE to st_edit as needed
