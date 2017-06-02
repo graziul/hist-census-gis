@@ -1,22 +1,27 @@
 library(rgdal)
 library(spdep)
 library(plyr)
+
 trim <- function( x ) {
   gsub("(^[[:space:]]+|[[:space:]]+$)", "", x)
 }
 
+modefunc <- function(x){
+  tabresult <- tabulate(x)
+  themode <- which(tabresult == max(tabresult))
+  if(sum(tabresult == max(tabresult))>1) themode <- NA
+  return(themode)
+}
 
 #Set Folder Where Shapefiles Are Located
-  setwd("C:/Users/Matthew/Google Drive/Maps/Shape Files/San Antonio 1930-40") #Home
   setwd("C:/Users/mmarti24/Google Drive/Maps/Shape Files/San Antonio 1930-40") #Work
   sa<-readOGR(dsn=getwd(), layer="PostGridEdit_Pblocks30", stringsAsFactors = F) #Shapefile
   myvars<-c("pblk_id")
   sa<-sa[myvars]
-  View(sa@data)
-  
+
 #Make Spatial Weight Matrix - Queen Contiguity
   sa_queen<-poly2nb(sa, queen=F)
-  summary(sa_queen)
+  
 #Create List of Neighbors
   neighs<-data.frame(matrix(sa_queen, byrow=T))
   names(neighs)[1]<-"Full_List"  #Change column name to something usable
@@ -35,25 +40,78 @@ trim <- function( x ) {
   pblk_id<-neighs$pblk_id  #List of Physical Block ids to be used in loop
   FirstE<-neighs$FirstE   #List of Choices from automated ED-Block numbering
   max_replace<-length(FirstE) #Number of replacements loops runs through
-
+  Start<-0  #These numbers must not be identical in order for the loop to work
+  End<-1
+  cnt<-0
+  
+  while (Start!=End){
   #Create new variables equal to maximum number of neighbors
-  for (j in 1:max){
-    eval(parse(text = paste0('neighs$Region.Neigh_', j, ' <- trim(sapply(strsplit(as.character(neighs$Full_List),\',\'), "[", j))')))
-    eval(parse(text = paste0('neighs$ED.Neigh_', j, ' <-eval(parse(text = paste0(\'neighs$Region.Neigh_\', j)))')))
-    eval(parse(text = paste0('neighs$Replace_', j, '<-0')))
+  for (q in 1:1){
+    for (j in 1:3){
+      eval(parse(text = paste0('neighs$Region.Neigh_', j, ' <- trim(sapply(strsplit(as.character(neighs$Full_List),\',\'), "[", j))')))
+      eval(parse(text = paste0('neighs$ED.Neigh_', j, ' <-eval(parse(text = paste0(\'neighs$Region.Neigh_\', j)))')))
+      eval(parse(text = paste0('neighs$Replace_', j, '<-0')))
     #Label Neighbors
-    for (i in 1:max_replace){
-      eval(parse(text = paste0('neighs$Replace_', j, 
+      for (i in 1:max_replace){
+        eval(parse(text = paste0('neighs$Replace_', j, 
                                '<-ifelse(pblk_id[i]==eval(parse(text = paste0(\'neighs$Region.Neigh_\', j))), (i), 
                                eval(parse(text = paste0(\'neighs$Replace_\', j))))')))
-      eval(parse(text = paste0('neighs$ED.Neigh_', j,
+        eval(parse(text = paste0('neighs$ED.Neigh_', j,
                                '<-ifelse(pblk_id[i]==eval(parse(text = paste0(\'neighs$Region.Neigh_\', j))) & 
                                eval(parse(text = paste0(\'neighs$Replace_\', j)))==(i), 
                                gsub(neighs$pblk_id[i], FirstE[i], eval(parse(text = paste0(\'neighs$ED.Neigh_\', j)))), 
                                eval(parse(text = paste0(\'neighs$ED.Neigh_\', j))))')))
+        }
+    
+      #Delete Variables No Longer needed *Region.Neigh & Replace
+        myvars<-c(paste('Replace_', j, sep = ""), paste('Region.Neigh_', j, sep=""))
+        neighs<-neighs[!names(neighs) %in% myvars]
+      #Change to Numeric
+        eval(parse(text = paste0('neighs$ED.Neigh_', j, '<-as.numeric(eval(parse(text = paste0(\'neighs$ED.Neigh_\', j))))')))
     }
-    #Delete Variables No Longer needed *Region.Neigh & Replace
-    myvars<-c(paste('Replace_', j, sep = ""), paste('Region.Neigh_', j, sep=""))
+    
+    #Subset data for only blocks yet to be labeled
+     filled<-subset(neighs, neighs$FirstE!=0)
+     missing<-subset(neighs, neighs$FirstE==0)
+    
+    #Calculate Summary Statistics of ED-Block Choices. This must be done in a loop like this in order to run
+    #rowSums and discard missing values that are sure to exist
+    myvars<-NULL
+    for (x in 1:3){
+      myvars1<-c(paste('ED.Neigh_', x, sep = ""))
+      myvars<-cbind(myvars1,myvars)
+      
+    }
+    
+    missing$Total<-rowSums(missing[,myvars], na.rm=T)
+    missing$Max<-apply(missing[,myvars], 1, max ,na.rm=T)
+    missing$Min<-apply(missing[,myvars], 1, min, na.rm=T)
+    missing$Means<-round(rowMeans(missing[,myvars], na.rm=T),0)
+    missing$Means_Comp<-round(((missing$Total - (missing$Max+missing$Min))/(missing$Num_neigh-2)), 2)
+    missing$Mode<-apply(missing[,myvars], 1, modefunc)
+    
+    #Start Renaming Blocks
+    missing$FirstE<-ifelse(missing$Means==missing$Mode & !is.na(missing$Mode), missing$Mode, missing$FirstE)
+    missing$FirstE<-ifelse(missing$Means_Comp==missing$Mode & !is.na(missing$Mode & missing$FirstE==0), missing$Mode, missing$FirstE)
+    #Keep Only PID and FirstE
+    myvars<-c("pblk_id", "FirstE")
+    missing<-missing[myvars]
+    filled<-filled[myvars]
+    All<-rbind(filled, missing)
+    
+    Start<-table(neighs$FirstE!=0)
+    Start<-as.numeric(Start[2])
+    End<-table(All$FirstE!=0)
+    End<-as.numeric(End[2])
+    
+    neighs$org_first<-neighs$FirstE
+    myvars<-c("FirstE")
     neighs<-neighs[!names(neighs) %in% myvars]
-  }  
-  
+    neighs<-merge(x=neighs, y=All, by="pblk_id", all.x=T)
+    
+    cnt=cnt+1
+    print(paste("Interation ", cnt))
+    print(paste("Number of Blocks Labeled ", End))
+    
+  } 
+}
