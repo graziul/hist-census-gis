@@ -5,6 +5,9 @@ import os
 import pickle
 arcpy.env.overwriteOutput=True
 
+#Note: This is one way to reduce the number of ties, but it requires street ranges
+#arcpy.Dissolve_management(in_features="StLouisMO_1930_stgrid_edit_Uns2", out_feature_class="S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_edit_Uns3.shp", dissolve_field="FULLNAME;CITY;STATE;MIN_LFROMA;MAX_LTOADD;MIN_RFROMA;MAX_RTOADD", statistics_fields="", multi_part="MULTI_PART", unsplit_lines="DISSOLVE_LINES")
+
 '''
 Arguments
 ---------
@@ -12,56 +15,56 @@ dbfile  : DBF file - Input to be imported
 upper   : Condition - If true, make column heads upper case
 '''
 def dbf2DF(dbfile, upper=True): #Reads in DBF files and returns Pandas DF
-    db = ps.open(dbfile) #Pysal to open DBF
-    d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-    #pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-    pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-    if upper == True: #Make columns uppercase if wanted 
-        pandasDF.columns = map(str.upper, db.header) 
-    db.close() 
-    return pandasDF
+	db = ps.open(dbfile) #Pysal to open DBF
+	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
+	#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
+	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
+	if upper == True: #Make columns uppercase if wanted 
+		pandasDF.columns = map(str.upper, db.header) 
+	db.close() 
+	return pandasDF
 
 def load_large_dta(fname):
 
-    reader = pd.read_stata(fname, iterator=True)
-    df = pd.DataFrame()
+	reader = pd.read_stata(fname, iterator=True)
+	df = pd.DataFrame()
 
-    try:
-        chunk = reader.get_chunk(100*1000)
-        while len(chunk) > 0:
-            df = df.append(chunk, ignore_index=True)
-            chunk = reader.get_chunk(100*1000)
-            print '.',
-            sys.stdout.flush()
-    except (StopIteration, KeyboardInterrupt):
-        pass
+	try:
+		chunk = reader.get_chunk(100*1000)
+		while len(chunk) > 0:
+			df = df.append(chunk, ignore_index=True)
+			chunk = reader.get_chunk(100*1000)
+			print '.',
+			sys.stdout.flush()
+	except (StopIteration, KeyboardInterrupt):
+		pass
 
-    print '\nloaded {} rows\n'.format(len(df))
+	print '\nloaded {} rows\n'.format(len(df))
 
-    return df
+	return df
 
-file_path = sys.argv[1]
-city_name = sys.argv[2]
-state_abbr = sys.argv[2]
+#file_path = sys.argv[1]
+#city_name = sys.argv[2]
+#state_abbr = sys.argv[2]
 
-#file_path = "S:\\Projects\\1940Census\\StLouis" 
-#city_name = "StLouis"
-#state_abbr = "MO"
+file_path = "S:\\Projects\\1940Census\\StLouis" 
+city_name = "StLouis"
+state_abbr = "MO"
 microdata_file = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
 dir_path = file_path + "\\GIS_edited\\"
 
-block_dbf_file = dir_path + city_name + "_1930_Block_Choice_Map2test.dbf"
+#block_dbf_file = dir_path + city_name + "_1930_Block_Choice_Map2test.dbf"
+block_dbf_file = dir_path + city_name + "_1930_block_ED_checked.dbf"
 stgrid_file = dir_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
 out_file = dir_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
-block_shp_file = dir_path + city_name + "_1930_Block_Choice_Map2test.shp"
-pblk_grid_dict_file = gis_path + city_name + "_pblk_grid_dict.pkl"
-add_locator_updated = dir_path + city_name + "_addloc_updated"
+block_shp_file = dir_path + city_name + "_1930_block_ED_checked.shp"
 addresses = dir_path + city_name + "_1930_Addresses.csv"
-address_fields= "Street address; City city; State state; ZIP <None>"
 points30 = dir_path + city_name + "_1930_Points_updated.shp"
 
+pblk_file = block_shp_file #Note: This is the manually edited block file
+pblk_grid_file2 = dir_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ2.shp"
+
 # Load
-arcpy.CopyFeatures_management(stgrid_file,out_file)
 df_grid = dbf2DF(out_file.replace(".shp",".dbf"),upper=False)
 df_block = dbf2DF(block_dbf_file,upper=False)
 df_micro = load_large_dta(microdata_file)
@@ -70,50 +73,206 @@ vars_of_interest = ['ed','hn','autostud_street','block']
 df_micro = df_micro[vars_of_interest]
 df_micro = df_micro.dropna(how='any')
 df_micro['hn'] = df_micro['hn'].astype(int)
-df_micro['edblock'] = df_micro['ed'].astype(str)+'-'+df_micro['block']
+
+#Create ED-block variable (standardized against block map)
+#Turn ED=0 into blank 
+df_micro['ed1'] = df_micro['ed'].astype(str).replace('0','')
+
+df_micro['block1'] = df_micro['block'].str.replace(' ','-')
+df_micro['block1'] = df_micro['block1'].str.replace('and','-')
+df_micro['block1'] = df_micro['block1'].str.replace('.','-')
+df_micro['block1'] = df_micro['block1'].replace('-+','-',regex=True)
+
+df_micro['edblock'] = df_micro['ed1'] + '-' + df_micro['block1']
+df_micro['edblock'] = df_micro['edblock'].replace('^-|-$','',regex=True)
+df_micro.loc[df_micro['block']=='','edblock'] = ''
+df_micro.loc[df_micro['ed']==0,'edblock'] = ''
+
+def get_cray_z_scores(arr) :
+	debug = False
+	if not None in arr :
+		inc_arr = np.unique(arr) #returns sorted array of unique values
+		if(len(inc_arr)>2) :
+			if debug : print("uniques: "+str(inc_arr))
+			median = np.median(inc_arr,axis=0)
+			diff = np.abs(inc_arr - median)
+			med_abs_deviation = np.median(diff)
+			mean_abs_deviation = np.mean(diff)
+			meanified_z_score = diff / (1.253314 * mean_abs_deviation)
+
+			if med_abs_deviation == 0 :
+					modified_z_score = diff / (1.253314 * mean_abs_deviation)
+			else :
+					modified_z_score = diff / (1.4826 * med_abs_deviation)
+			if debug : print ("MedAD Zs: "+str(modified_z_score))
+			if debug : print("MeanAD Zs: "+str(meanified_z_score))
+			if debug : print ("Results: "+str(meanified_z_score * modified_z_score > 16))
+
+			return dict(zip(inc_arr, meanified_z_score * modified_z_score > 16))    
+	return dict(zip(inc_arr, False))
 
 # Get house number ranges for block-street combinations from microdata
 df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
 blkst_hn_dict = {}
 for group, group_data in df_micro_byblkst:
-	blkst_hn_dict[group] = {'min_hn':group_data['hn'].min(), 'max_hn':group_data['hn'].max()}
+	try:
+		cray_dict = get_cray_z_scores(group_data['hn'])
+		hn_range = [k for k,v in cray_dict.items() if not v]
+		blkst_hn_dict[group] = {'min_hn':min(hn_range), 'max_hn':max(hn_range)}
+	except:
+		pass
 
 # Get dictionary linking edblock to pblk_id
-bn_var = 'auto_bn'
-temp = df_block.loc[df_block[bn_var]!='',[bn_var,'pblk_id']]
+bn_var = 'am_bn'
+temp = df_block.loc[df_block[bn_var]!='',[bn_var,'ed','pblk_id']]
 pblk_edblock_dict = temp.set_index('pblk_id')[bn_var].to_dict()
+pblk_ed_dict = temp.set_index('pblk_id')['ed'].to_dict()
 
-# Load dictionary linking pblk_id to grid_id
-pblk_grid_dict = pickle.load(open(pblk_grid_dict_file,'rb'))
+field_mapSJ = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+ed "ed" true true false 10 Long 0 10 ,First,#,%s,ed,-1,-1;
+FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (pblk_file, pblk_file, stgrid_file, stgrid_file)
+arcpy.SpatialJoin_analysis(target_features=pblk_file, join_features=stgrid_file, out_feature_class=pblk_grid_file2, 
+	join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
+	match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
+df_pblk_grid = dbf2DF(pblk_grid_file2.replace(".shp",".dbf"),upper=False)
 
-# Create dictionary linking grid_id to edblock
-grid_edblock_dict = {}
-for pblk, grid_id_list in pblk_grid_dict.items():
-	for grid_id in grid_id_list:
-		try:
-			grid_edblock_dict[grid_id] = pblk_edblock_dict[int(pblk)]
-		except:
-			pass
+# Create dictionary linking grid_id to fullname
+grid_fullname_dict = df_pblk_grid.set_index('grid_id').to_dict()['FULLNAME']
 
-# Use edblock to assign street ranges
+# Create dictionary linking grid_id to list of edblocks it intersects
+grid_edblock_dict = {grid_id:[pblk_edblock_dict[int(pblk_id)] for pblk_id in pblk_id_list] for grid_id, pblk_id_list in grid_pblk_dict.items()}
+
+grid_hn_dict = {}
+for grid_id, edblock_list in grid_edblock_dict.items():
+	try:
+		min_hn = max([blkst_hn_dict[i,grid_fullname_dict[grid_id]]['min_hn'] for i in edblock_list])
+		max_hn = min([blkst_hn_dict[i,grid_fullname_dict[grid_id]]['max_hn'] for i in edblock_list])
+		eds = [i.split("-")[0] for i in edblock_list] 
+		grid_hn_dict[grid_id] = {'min_hn':min_hn, 'max_hn':max_hn, 'ed':max(set(eds), key=eds.count)}
+	except:
+		pass
+
+arcpy.CopyFeatures_management(stgrid_file,out_file)
+
+#Add ED field
+arcpy.AddField_management(out_file, "ed", "TEXT", 5, "", "","", "", "")
 cursor = arcpy.UpdateCursor(out_file)
 for row in cursor:
 	grid_id = row.getValue('grid_id')
 	st_name = row.getValue('FULLNAME')
 	try:
-		edblock = grid_edblock_dict[grid_id]
-		blkst_hn = blkst_hn_dict[edblock,st_name]
-		blkst_hn_range = range(blkst_hn['min_hn'],blkst_hn['max_hn']+1)
-		evensList = [x for x in blkst_hn_range if x % 2 == 0]
-		oddsList = [x for x in blkst_hn_range if x % 2 != 0]
-		row.setValue('MIN_LFROMA',min(evensList))
-		row.setValue('MAX_LTOADD',max(evensList))
-		row.setValue('MIN_RFROMA',min(oddsList))
-		row.setValue('MAX_RTOADD',max(oddsList))
+		hn_range = range(grid_hn_dict[grid_id]['min_hn'],grid_hn_dict[grid_id]['max_hn']+1)
+		evensList = [x for x in hn_range if x % 2 == 0]
+		oddsList = [x for x in hn_range if x % 2 != 0]
+		row.setValue('MIN_LFROMA', min(evensList))
+		row.setValue('MAX_LTOADD', max(evensList))
+		row.setValue('MIN_RFROMA', min(oddsList))
+		row.setValue('MAX_RTOADD', max(oddsList))
+		row.setValue('ed', int(grid_hn_dict[grid_id]['ed']))
 	except:
 		pass
 	cursor.updateRow(row)
 del(cursor)
+
+old = True
+
+if old:
+	add_locator = dir_path + city_name + "_addlocOld"
+	arcpy.DeleteField_management(out_file, ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD'])
+	arcpy.AddField_management(out_file, "MIN_LFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_LTOADD", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MIN_RFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_RTOADD", "TEXT", 5, "", "","", "", "")
+	# Use edblock to assign street ranges
+	cursor = arcpy.UpdateCursor(out_file)
+	for row in cursor:
+		grid_id = row.getValue('grid_id')
+		st_name = row.getValue('FULLNAME')
+		try:
+			hn_range = range(grid_hn_dict[grid_id]['min_hn'],grid_hn_dict[grid_id]['max_hn']+1)
+			evensList = [x for x in hn_range if x % 2 == 0]
+			oddsList = [x for x in hn_range if x % 2 != 0]
+			row.setValue('MIN_LFROMA', min(evensList))
+			row.setValue('MAX_LTOADD', max(evensList))
+			row.setValue('MIN_RFROMA', min(oddsList))
+			row.setValue('MAX_RTOADD', max(oddsList))
+			row.setValue('ed', int(grid_hn_dict[grid_id]['ed']))
+		except:
+			pass
+		cursor.updateRow(row)
+	del(cursor)
+else:
+	# Use edblock to assign street ranges
+	cursor = arcpy.UpdateCursor(out_file)
+	for row in cursor:
+		grid_id = row.getValue('grid_id')
+		st_name = row.getValue('FULLNAME')
+		try:
+			row.setValue('ed', int(grid_hn_dict[grid_id]['ed']))
+		except:
+			pass
+		cursor.updateRow(row)
+	del(cursor)
+	add_locator = dir_path + city_name + "_addlocContemp"
+
+#Dissolve 
+
+#combo_id = ['FULLNAME','MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD','ed','CITY','STATE']
+df = dbf2DF(out_file.replace(".shp",".dbf"),upper=False)
+df['combo_id'] = pd.factorize(df.FULLNAME+df.MIN_LFROMA+df.MAX_LTOADD+df.MIN_RFROMA+df.MAX_RTOADD+df.ed)[0]
+
+csv_file = dir_path + "\\temp_for_dbf.csv"
+df.to_csv(csv_file)
+arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp.dbf")
+os.remove(out_file.replace('.shp','.dbf'))
+os.remove(csv_file)
+os.rename(dir_path+"\\temp_for_shp.dbf",out_file.replace('.shp','.dbf'))
+os.remove(dir_path+"\\temp_for_shp.dbf.xml")
+os.remove(dir_path+"\\temp_for_shp.cpg")
+
+temp1 = dir_path + city_name + state_abbr + "_1930_Temp_GridToGeocode_Dissolve.shp"
+temp2 = dir_path + city_name + state_abbr + "_1930_Temp_GridToGeocode.shp"
+
+#Dissolve on combo id
+arcpy.Dissolve_management(in_features=out_file, out_feature_class=temp1, dissolve_field='combo_id', statistics_fields="", multi_part="MULTI_PART", unsplit_lines="DISSOLVE_LINES")
+
+#Spatial join (ONE_TO_MANY)
+field_mapD = """combo_id "combo_id" true true false 10 Long 0 10 ,First,#,%s,combo_id,-1,-1;
+Field1 "Field1" true true false 80 Text 0 0 ,First,#,%s,Field1,-1,-1;
+CITY "CITY" true true false 80 Text 0 0 ,First,#,%s,CITY,-1,-1;
+FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+JOIN_FID "JOIN_FID" true true false 80 Text 0 0 ,First,#,%s,JOIN_FID,-1,-1;
+MIN_LFROMA "MIN_LFROMA" true true false 80 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
+MAX_LTOADD "MAX_LTOADD" true true false 80 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
+MIN_RFROMA "MIN_RFROMA" true true false 80 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
+MAX_RTOADD "MAX_RTOADD" true true false 80 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
+STATE "STATE" true true false 80 Text 0 0 ,First,#,%s,STATE,-1,-1;
+ed "ed" true true false 80 Text 0 0 ,First,#,%s,ed,-1,-1;
+grid_id "grid_id" true true false 80 Text 0 0 ,First,#,%s,grid_id,-1,-1;
+combo_id_1 "combo_id_1" true true false 10 Long 0 10 ,First,#,%s,combo_id,-1,-1""" % (temp1, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file)
+arcpy.SpatialJoin_analysis(target_features=temp1, join_features=out_file, out_feature_class=temp2, join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapD, match_option="INTERSECT", search_radius="", distance_field_name="")
+
+#Keep only uniques
+if old:
+	togeocode_shp_file = dir_path + city_name + state_abbr + "_1930_GridToGeocodeOldNoOutlier.shp"
+else:
+	togeocode_shp_file = dir_path + city_name + state_abbr + "_1930_GridToGeocodeContemp.shp"
+arcpy.MakeFeatureLayer_management(temp2,"edit_lyr")
+arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "combo_id" = "combo_id_1" ')
+arcpy.CopyFeatures_management("edit_lyr", togeocode_shp_file)
+arcpy.DeleteFeatures_management(temp1)
+arcpy.DeleteFeatures_management(temp2)
+
+#Make sure address locator doesn't already exist - if it does, delete it
+if old:
+	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(city_name+"_addlocOldNoOutlier")]
+else:
+	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(city_name+"_addlocContemp")]
+
+for f in add_loc_files:
+	if os.path.isfile(f):
+		os.remove(f)
 
 #Recreate Address Locator
 field_map="'Feature ID' FID VISIBLE NONE; \
@@ -128,8 +287,8 @@ field_map="'Feature ID' FID VISIBLE NONE; \
 'Suffix Direction' <None> VISIBLE NONE; \
 'Left City or Place' CITY VISIBLE NONE; \
 'Right City or Place' CITY VISIBLE NONE; \
-'Left ZIP Code' <None> VISIBLE NONE; \
-'Right ZIP Code' <None> VISIBLE NONE; \
+'Left ZIP Code' ed VISIBLE NONE; \
+'Right ZIP Code' ed VISIBLE NONE; \
 'Left State' STATE VISIBLE NONE; \
 'Right State' STATE VISIBLE NONE; \
 'Left Street ID' <None> VISIBLE NONE; \
@@ -145,13 +304,9 @@ field_map="'Feature ID' FID VISIBLE NONE; \
 'Left Additional Field' <None> VISIBLE NONE; \
 'Right Additional Field' <None> VISIBLE NONE; \
 'Altname JoinID' <None> VISIBLE NONE"
-arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", in_reference_data=out_file, in_field_map=field_map, out_address_locator=add_locator_updated, config_keyword="")
+address_fields= "Street address; City city; State state; ZIP ed"
+arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", in_reference_data=togeocode_shp_file, in_field_map=field_map, out_address_locator=add_locator, config_keyword="")
 
-#Make sure address locator doesn't already exist - if it does, delete it
-add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addloc_updated")]
-for f in add_loc_files:
-	if os.path.isfile(f):
-		os.remove(f)
 
 #Geocode Points
-arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
+#arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
