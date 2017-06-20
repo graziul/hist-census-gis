@@ -37,17 +37,18 @@ modefunc <- function(x){
 
   neighs$Num_neigh<-str_count(neighs$Full_List, ",") + 1 #Counts nunmber of commas then adds 1 for total neigbors
   max<-max(neighs$Num_neigh) #Maximum number of neighbors = maximum number of columns
-  pblk_id<-neighs$pblk_id  #List of Physical Block ids to be used in loop
-  FirstE<-neighs$FirstE   #List of Choices from automated ED-Block numbering
-  max_replace<-length(FirstE) #Number of replacements loops runs through
+  max_replace<-length(neighs$FirstE) #Number of replacements loops runs through
   Start<-0  #These numbers must not be identical in order for the loop to work
   End<-1
   cnt<-0
+  Iteration_FirstE<-data.frame(pblk_id)
   
-  while (Start!=End){
+ while (Start!=End){
   #Create new variables equal to maximum number of neighbors
   for (q in 1:1){
-    for (j in 1:3){
+    pblk_id<-neighs$pblk_id  #List of Physical Block ids to be used in loop
+    FirstE<-neighs$FirstE   #List of Choices from automated ED-Block numbering
+    for (j in 1:max){
       eval(parse(text = paste0('neighs$Region.Neigh_', j, ' <- trim(sapply(strsplit(as.character(neighs$Full_List),\',\'), "[", j))')))
       eval(parse(text = paste0('neighs$ED.Neigh_', j, ' <-eval(parse(text = paste0(\'neighs$Region.Neigh_\', j)))')))
       eval(parse(text = paste0('neighs$Replace_', j, '<-0')))
@@ -77,12 +78,12 @@ modefunc <- function(x){
     #Calculate Summary Statistics of ED-Block Choices. This must be done in a loop like this in order to run
     #rowSums and discard missing values that are sure to exist
     myvars<-NULL
-    for (x in 1:3){
+    for (x in 1:max){
       myvars1<-c(paste('ED.Neigh_', x, sep = ""))
       myvars<-cbind(myvars1,myvars)
       
     }
-    
+
     missing$Total<-rowSums(missing[,myvars], na.rm=T)
     missing$Max<-apply(missing[,myvars], 1, max ,na.rm=T)
     missing$Min<-apply(missing[,myvars], 1, min, na.rm=T)
@@ -104,14 +105,20 @@ modefunc <- function(x){
     End<-table(All$FirstE!=0)
     End<-as.numeric(End[2])
     
-    neighs$org_first<-neighs$FirstE
+    #Test Iterations of FirstE
+    neighs$Orig<-neighs$FirstE #Keep FirstE in Separate Column
+
     myvars<-c("FirstE")
     neighs<-neighs[!names(neighs) %in% myvars]
     neighs<-merge(x=neighs, y=All, by="pblk_id", all.x=T)
     
+    neighs$Changed<-ifelse(neighs$FirstE==neighs$Orig, 0, 1)
+    myvars<-c("pblk_id", "FirstE", "Changed")
+    FE<-neighs[myvars]
+    Iteration_FirstE<-merge(x=Iteration_FirstE, y=FE, by="pblk_id", all.x=T)
+    
     cnt=cnt+1
     print(paste("Interation ", cnt))
     print(paste("Number of Blocks Labeled ", End))
-    
-  } 
+  }
 }
