@@ -130,6 +130,14 @@ def rename_variables(df, year):
 		df['ed'] = df['ed'].str.split('.').str[0]
 		df['ed'] = df['ed'].str.lstrip('0')
 
+	# Some years/cities have ED as a combination of [city code]-[ED number]
+	def remove_dash(ed):
+		if '-' in ed:
+			return ed.split('-')[1]
+		else:
+			return ed
+	df['ed'] = df['ed'].apply(lambda x: remove_dash(x))
+
 	# House number
 	'''
 	def pick_best_raw_hn(hn1, hn2, hn_match):
