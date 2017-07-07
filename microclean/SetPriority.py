@@ -33,14 +33,14 @@ def set_priority(df):
 	df['enum_street'] = df['street_raw'].apply(lambda x: name_int_dict[x])
 
 	prev = 0
-	splits = np.append(np.where((np.diff(df['enum_street']) != 0) | (np.diff(df['check_bool']) != 0))[0],len(df['enum_street'])-1)
+	splits = np.append(np.where((np.diff(df['enum_street'].astype(np.float32)) != 0) | (np.diff(df['check_bool'].astype(np.float32)) != 0))[0],len(df['enum_street'])-1)
 	splits = np.insert(splits+1,0,0)
 	
 	#Generator crucial for reducing memory usage (Boston at 150gb+ without it)
 	enum_check_list = (np.arange(0,df['enum_street'].size+1,1)[splits[i]:splits[i+1]] for i in range(0,len(splits)-1))
 	df['enum_seq'] = 0
 	for i in range(len(splits)-1):
-		df.ix[list(enum_check_list.next()),'enum_seq'] = i
+		df.iloc[list(enum_check_list.next()),'enum_seq'] = i
 
 	#Multiple sequences of same street in single ED 
 	def gen_list(x):
