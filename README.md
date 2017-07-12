@@ -1,6 +1,5 @@
 # hist-census-gis
 <h1>Historical Census GIS project</h1>
-<h2>Geocoding historical Census data by hook or by crook</h3>
 <p>This repository exists to serve as a place to share and collaboratively write code that automates various parts of complicated data cleaning processes.</p>
 <h2>Code</h2>
 <p>The root directory contains scripts that call code in subdirectories (i.e. Clean.py calls scripts under the /microclean directory). Subdirectories contain related files, either for performing a specific task or for performing a class of tasks, and are typically further organized by programming language.</p>
