@@ -1,0 +1,11 @@
+*This file splits the big file into state-level text files for 1900
+*Note that the list of states is hard-coded -- may cause problems in the future.
+global city="Alabama ArizonaTerritory Arkansas California Colorado Connecticut Delaware DistrictOfColumbia Florida Georgia Illinois Indiana Iowa Kansas Kentucky Louisiana Maine Maryland Massachusetts Michigan Minnesota Missouri Montana Nebraska NewHampshire NewJersey NewYork NorthCarolina Ohio Oklahoma Oregon Pennsylvania RhodeIsland SouthCarolina Tennessee Texas Utah Virginia Washington WestVirginia Wisconsin"
+
+foreach file in $city {
+
+import delimited 1900_`file'.txt, delimiter("|") clear
+keep imageid pid general_family_num_orig self_residence_info_age general_age_years ycord self_residence_place_city general_self_residence_place_cou general_enumeration_district_ori general_self_birth_date_year_ori self_birth_date_empty self_birth_place_empty father_birth_place_empty indexed_sheet_number self_empty_info_maritalstatus mother_birth_place_empty general_number_children_living indexed_ethnicity_std_fs self_empty_info_race self_empty_info_relationtohead self_empty_info_gender general_years_married general_self_empty_info_relation general_self_empty_info_race_mul general_self_birth_place_empty_m self_residence_place_county self_residence_place_state general_institution_fs indexed_enumeration_district general_id_orig general_self_residence_place_emp general_order_on_page general_page_number indexed_gsu_film_number_fs indexed_image_nbr_fs general_page_letter general_self_residence_info_age_ general_roll indexed_t_sheet_number_letter_fs general_archive_rollnumber general_integer_imageid general_nara_roll
+
+export delimited 1900_`file'_toR.txt, delimiter("|") replace
+}
