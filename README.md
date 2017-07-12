@@ -6,7 +6,7 @@
 <p>Not all project members are fluent in all languages used here, but internal documentation is expected to make code interpretable to those with a basic familiarity with each language.</p>
 <h2>SIS measure</h2>
 <p>One part of the project involves using sequence of enumeration to calculate a measure of segregation based on "runs" of same race neighbors (Grigoryeva and Reuf 2015).</p>
-<p>Grigoryeva, Angelina, and Martin Ruef. 2015. “The Historical Demography of Racial Segregation.” American Sociological Review 80 (4): 814–42. doi:10.1177/0003122415589170.</p>
+<p>Grigoryeva, Angelina, and Martin Ruef. 2015. “The Historical Demography of Racial Segregation.” American Sociological Review 80 (4): 814–42. <a href="http://journals.sagepub.com/doi/abs/10.1177/0003122415589170">doi:10.1177/0003122415589170</a>.</p>
 <h2>Geocoding historical Census data by hook or by crook</h3>
 <p>This part of the project is a largely automated (but partially manual) ETL process that produces geocoded historical data for all residents of 69 cities in 1930. We are currently refining how we perform house number range assignments based on historical census data and testing support for 1940. A similar process will be applied to 1900, 1910, and 1920 data as resources become available.</p>
 <h3>Goals for each city</h3>
