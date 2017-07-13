@@ -7,7 +7,7 @@ library(data.table) ##for large data manipulation
 library(dplyr) ##for rename and join functions
 library(dtplyr) ##to make dplyr play nice with data.table
 
-to.out.1930 <- fread("full1930us.txt",fill=TRUE)
+to.out.1930 <- fread("full1930us.txt",fill=TRUE) ##read in the big file
 lookup.table <- to.out.1930[,c("serial","statefip","stdcity","stcounty","enumdist","dwelling","dwseq","dwsize","street","us1930d_0061","ownershp"),with=FALSE] ##Create a lookup table to give the person records household attributes
 lookup.table <- lookup.table[!is.na(lookup.table$serial),] ##Get rid of anything that isn't going to match (person records, missing values on key)
 
@@ -18,9 +18,10 @@ to.out.1930.p.short <- left_join(to.out.1930.p.short,lookup.table,by="serial") #
 to.out.1930.p.short <- as.data.table(to.out.1930.p.short) ##left-join turns dt into a tibble, turn it back into a dt
 fwrite(to.out.1930.p.short,"us1930personrecords.txt",sep="|",eol="\r\n") ##write out the person file
 
-p.1930 <- fread("us1930personrecords.txt",fill=TRUE)
+p.1930 <- fread("us1930personrecords.txt",fill=TRUE) ##read in what you just wrote out
 
-#p.1930 <- to.out.1930.p.short ##Rename this dt now that it's no longer output
+#p.1930 <- to.out.1930.p.short ##Rename this dt now that it's no longer output (alternative to previous line)
+
 rm(to.out.1930.p.short) ##Remove the old one
 statelist <- unique(p.1930$statefip) ##Create a vector of the state names that appear in the person file
 for (i in 1:length(statelist)) { ##Initialize loop
