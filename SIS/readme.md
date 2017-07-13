@@ -4,7 +4,7 @@ Nate Frey, July 2017
 
 SUMMARY
 
-This document is a comprehensive guide to how the data processing steps have worked for the 1880-1940 SIS x Ethnicity Project to date. Using it, the documentation in the scripts I have run, and readme files in the relevant directories, it should be possible to repeat every step of the process. 
+This document is a comprehensive guide to how the data processing steps have worked for the 1880-1940 SIS x Ethnicity Project to date. Using it, the documentation in the scripts I have run, and readme files in the relevant subdirectories, it should be possible to repeat every step of the process. 
 
 KEY POINTS
 
