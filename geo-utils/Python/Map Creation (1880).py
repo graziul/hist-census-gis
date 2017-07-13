@@ -21,11 +21,12 @@ arcpy.env.overwriteOutput=True
 #"Omaha", "Washington", "NewHaven"
 #"ForeignBorn", "German", "Male-Female_SEI"
 
-for name in ["Omaha", "Washington", "NewHaven"]:
-    for maptype in ["ForeignBorn", "German", "Male-Female_SEI"]:
+for name in ["Omaha", "Washington"]: #This is the city name
+    for maptype in ["ForeignBorn"]: #This is the variable name
         print "Working On: " + name + " - " + maptype + ".mxd"
         
-        Addresses = "Z:\Projects\\Preparing 1880 Files\Online Maps\Data\City_Summary - Address\\Address_sum_" + name + ".csv"    
+        Addresses = "Z:\Projects\\Preparing 1880 Files\Online Maps\Data\City_Summary - Building\\Building_sum_" + name + ".csv"
+        
         M = "Z:\Projects\\Preparing 1880 Files\Online Maps\Shapefiles\Multi Unit\\" + name + "_MultiUnit.shp"
         M2 = "Z:\Projects\\Preparing 1880 Files\Online Maps\Shapefiles\Multi Unit\\" + name + "_MultiUnit_2.shp"
         M_Layer= "Z:\Projects\\Preparing 1880 Files\Online Maps\Shapefiles\Multi Unit\\" + name + "_MultiUnit.lyr"
@@ -81,6 +82,8 @@ for name in ["Omaha", "Washington", "NewHaven"]:
         arcpy.AddJoin_management(SG_Layer, "seg_id_n", Segment, "segment_id", "KEEP_COMMON")
         arcpy.CopyFeatures_management(SG_Layer, StreetGrid)
 
+        #Use New ED Files in City_Summary - ED\\
+        #Make new templates with these data as well
         ED= "Z:\Projects\\Preparing 1880 Files\Online Maps\Shapefiles\ED\\" + name + "_ED.shp"
         
     # ED Templates #
@@ -172,15 +175,21 @@ for name in ["Omaha", "Washington", "NewHaven"]:
             legend.updateItem(lyr, styleItem_all)
         legend.adjustColumnCount(2)
 
+    #Create New Variable that changes names of Arc Variable Name - Use for Aesthtic Purposes
+        if "Male-Female_SEI" in maptype:
+            varname="SEI (15-64)"
+        if "ForeignBorn" in maptype:
+            varname="Foreign Born"            
+
     #Add Legend Title to Map
         for elm in arcpy.mapping.ListLayoutElements(mxd, "TEXT_ELEMENT"):
                 if elm.text == "Label_Title": # whatever your Label element is named here
-                    elm.text = maptype + " Composition in:"
+                    elm.text = varname + " Composition in:"
                     break
     #Add Title to Map
         for elm2 in arcpy.mapping.ListLayoutElements(mxd, "TEXT_ELEMENT"):
                 if elm2.text == "Title": # whatever your text element is named here
-                    elm2.text = maptype + " Composition of " + name + " in 1880"
+                    elm2.text = varname + " Composition of " + name + " in 1880"
                     break
         print "Writing PDF"
 
