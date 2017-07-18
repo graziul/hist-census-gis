@@ -14,7 +14,7 @@
 •	Script 2: make1880fullfile.do
 
     o	Mashes all of the city .dta files together and outputs a pipe-delimited full1880.txt 
-    file.
+    file -- all variables still present at this step.
 
 •	Switch directories: /home/s4-data/LatestCities/SIS
 
