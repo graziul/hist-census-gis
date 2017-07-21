@@ -16,6 +16,8 @@ KEY POINTS
 
 •	Several key R packages are needed for almost everything: data.table, dplyr, dtplyr, ggplot2. There might be others, see relevant scripts. Paul might have to put some of these on the server for you, specifically the ones that have dependencies outside of R.
 
+•	The "etc" folder contains the neighbor index code and the Hispanics code.
+
 KNOWN PROBLEMS – GENERAL 
 
 •	Some variables are simply missing. Some are missing entirely in certain years; others are missing in certain cities in certain years. Notably this includes: enumeration districts in certain New York cities in 1900; serial/pid for certain cities in NY and IL in 1900 and/or 1910; house numbers in 1920 (although we suspect those are in the file and just aren’t delineated properly). In general our answer to all of these things has been to say we will wait for revised versions of the files from MPC that theoretically will be cleaner and work from there.
