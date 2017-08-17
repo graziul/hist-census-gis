@@ -32,21 +32,21 @@ city_info_df = pd.read_csv(city_info_file)
 city_info_list = city_info_df.values.tolist()
 '''
 
-c = 'StLouis'
-s = 'MO'
-city = c + s
-student_file = 'StLouisMO_ForStudentsV4_rush.dta'
-version = 4
-year = 1930
-
-
-#c = sys.argv[1]
-#s = sys.argv[2]
-#s = s.upper()
+#c = 'StLouis'
+#s = 'MO'
 #city = c + s
-#student_file = sys.argv[3]
-#version = sys.argv[4]
-#year = sys.argv[5]
+#student_file = 'StLouisMO_ForStudentsV4_rush.dta'
+#version = 4
+#year = 1930
+
+c = sys.argv[1]
+c = c.replace(' ','')
+s = sys.argv[2]
+s = s.upper()
+city = c + s
+student_file = sys.argv[3]
+version = sys.argv[4]
+year = sys.argv[5]
 
 #
 # Open both files and merge
