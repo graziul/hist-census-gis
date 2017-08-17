@@ -24,21 +24,14 @@ import fuzzyset
 
 csv.field_size_limit(sys.maxsize)
 
+# Set path and data file names
 file_path = '/home/s4-data/LatestCities' 
+studentcleaned_file_name = file_path + '/%s/studentcleaned/%s' % (str(year),student_file)
+autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city.replace(' ',''),str(version))
+autostud_file_name = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.csv')
+autostud_file_stata = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.dta')
 
-'''
-city_info_file = file_path + '/CityInfo.csv' 
-city_info_df = pd.read_csv(city_info_file)
-city_info_list = city_info_df.values.tolist()
-'''
-
-#c = 'StLouis'
-#s = 'MO'
-#city = c + s
-#student_file = 'StLouisMO_ForStudentsV4_rush.dta'
-#version = 4
-#year = 1930
-
+# These capture information from the command prompt
 c = sys.argv[1]
 c = c.replace(' ','')
 s = sys.argv[2]
@@ -49,9 +42,10 @@ version = sys.argv[4]
 year = sys.argv[5]
 
 #
-# Open both files and merge
+# Helper functions
 #
 
+#Function to load large Stata files
 def load_large_dta(fname):
 
     reader = pd.read_stata(fname, iterator=True)
@@ -71,29 +65,7 @@ def load_large_dta(fname):
 
     return df
 
-studentcleaned_file_name = file_path + '/%s/studentcleaned/%s' % (str(year),student_file)
-autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city.replace(' ',''),str(version))
-
-sc = load_large_dta(studentcleaned_file_name)
-tp = pd.read_csv(autocleaned_file_name, iterator=True, chunksize=10000,low_memory=False)
-ac = pd.concat(tp, ignore_index=True)
-
-vars_formerge = ['image_id','line_num','clean_priority','street_raw',
-	'street_precleanedhn','st','stname_flag','checked_st','checked_hn','inst','nonstreet',
-	'ed_edit','hn_edit','institution_edit','block_edit','st_edit']
-
-#if int(version) == 1 or int(version) == 2:
-sc_formerge = sc[vars_formerge].drop_duplicates(['image_id','line_num','st_edit'])
-mc = ac.merge(sc_formerge,on=['image_id','line_num','clean_priority'],indicator=True)
-
-if len(mc) != sum(mc['_merge'] == 'both'):
-	print('Merge error')
-del mc['_merge']
-
-#
-# Add TYPE (from raw/autoclean) if no TYPE_stud (from student) amd TYPE exists
-#
-
+#Function to standardize street name
 def standardize_street(st):
 	runAgain = False
 	st = st.rstrip('\n')
@@ -351,55 +323,42 @@ def standardize_street(st):
 	else :
 		return [st, DIR, NAME, TYPE]
 
-# Use to look for np.nan
-def nan_equal(a,b):
-	try:
-		np.testing.assert_equal(a,b)
-	except AssertionError:
-		return False
-	return True
+#Function to load Steve Morse data
+def load_steve_morse(city,state,year):
 
-def add_type(TYPE,TYPE_stud,st_edit):
-	if ~nan_equal(TYPE,np.NaN) & (TYPE_stud == ''):
-		return str(st_edit) + ' ' + TYPE
-	else:
-		return st_edit
+	#NOTE: This dictionary must be built independently of this script
+	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'rb'))
+	sm_st_ed_dict_nested = sm_st_ed_dict_file[(city,'%s' % (state.lower()))]
 
-# Get TYPE from student cleaned street names
-_, _, _, mc['TYPE_stud'] = zip(*mc['st_edit'].map(standardize_street))
-# Add TYPE (from raw/autoclean) if no TYPE_stud (from student) amd TYPE exists
-mc['st_edit'] = mc.apply(lambda x: add_type(x['TYPE'],x['TYPE_stud'],x['st_edit']),axis=1)
+	#Flatten dictionary
+	temp = {k:v for d in [v for k,v in sm_st_ed_dict_nested.items()] for k,v in d.items()}
 
-#
-# Re-add DIR to autoclean if it was removed
-#
+	#Capture all Steve Morse streets in one list
+	sm_all_streets = temp.keys()
 
-def readd_dir(overall_match, DIR):
-	if str(DIR) != 'nan' and str(overall_match) != 'nan':
-		if not overall_match.startswith(DIR+' '):
-			return DIR + ' ' + overall_match
+	#
+	# Build a Steve Morse (sm) ED-to-Street (ed_st) dictionary (dict)
+	#
+
+	sm_ed_st_dict = {}
+	#Initialize a list of street names without an ED in Steve Morse
+	sm_ed_st_dict[''] = []
+	for st, eds in temp.items():
+		#If street name has no associated EDs (i.e. street name not found in Steve Morse) 
+		#then add to dictionary entry for no ED
+		if eds is None:
+			sm_ed_st_dict[''].append(st)
 		else:
-			return overall_match			
-	else:
-		return overall_match
+			#For every ED associated with a street name...
+			for ed in eds:
+				#Initalize an empty list if ED has no list of street names yet
+				sm_ed_st_dict[ed] = sm_ed_st_dict.setdefault(ed, [])
+				#Add street name to the list of streets
+				sm_ed_st_dict[ed].append(st)
 
-mc['overall_match2'] = mc.apply(lambda x: readd_dir(x['overall_match'],x['DIR']),axis=1)
+	return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
 
-mc_readd_dir = mc[mc['overall_match']!=mc['overall_match2']]
-mc_readd_dir = mc_readd_dir[mc_readd_dir['overall_match'].astype(str) != 'nan']
-mc_readd_dir = mc_readd_dir[['overall_match','overall_match2']].drop_duplicates()
-mc_readd_dir.to_csv('streets_w_dirs.csv')
-
-mc.loc[mc['overall_match2']=='N NE Kingshighway St','overall_match2'] = 'NE Kingshighway St'
-mc.loc[mc['overall_match2']=='NW W Florissant Ave','overall_match2'] = 'W Florissant Ave'
-
-mc['overall_match_wrong'] = mc['overall_match']
-mc['overall_match'] = mc['overall_match2']
-
-#
-# Run fuzzy matching from autoclean to add TYPE to st_edit as needed
-#
-
+#Function to find fuzzy street name matches using Steve Morse data
 def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
 
 	num_records = df['st_edit'].notnull().sum()
@@ -466,8 +425,7 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
 
 	#Helper function (necessary since dictionary built only for cases without validated exact matches)
 	def get_fuzzy_match(exact_match,street,ed):
-		#Only look at cases without validated exact match
-#        if not (exact_match & ed_match):
+		#Only look at cases without validated exact match 
 		if not (exact_match):
 			#Need to make sure "Unnamed" street doesn't get fuzzy matched
 			if 'Unnamed' in street:
@@ -490,45 +448,87 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
 
 	return df
 
-def load_steve_morse(city,state,year):
+#
+# Step 0: Open both files and merge
+#
 
-	#NOTE: This dictionary must be built independently of this script
-	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year),str(year)),'rb'))
-	sm_st_ed_dict_nested = sm_st_ed_dict_file[(city,'%s' % (state.lower()))]
+# Load data and merge
+sc = load_large_dta(studentcleaned_file_name)
+tp = pd.read_csv(autocleaned_file_name, iterator=True, chunksize=10000,low_memory=False)
+ac = pd.concat(tp, ignore_index=True)
 
-	#Flatten dictionary
-	temp = {k:v for d in [v for k,v in sm_st_ed_dict_nested.items()] for k,v in d.items()}
+vars_formerge = ['image_id','line_num','clean_priority','street_raw',
+	'street_precleanedhn','st','stname_flag','checked_st','checked_hn','inst','nonstreet',
+	'ed_edit','hn_edit','institution_edit','block_edit','st_edit']
 
-	#Capture all Steve Morse streets in one list
-	sm_all_streets = temp.keys()
+#if int(version) == 1 or int(version) == 2: 
+sc_formerge = sc[vars_formerge].drop_duplicates(['image_id','line_num','st_edit'])
+mc = ac.merge(sc_formerge,on=['image_id','line_num','clean_priority'],indicator=True)
 
-	#
-	# Build a Steve Morse (sm) ED-to-Street (ed_st) dictionary (dict)
-	#
+if len(mc) != sum(mc['_merge'] == 'both'):
+	print('Merge error')
+del mc['_merge']
 
-	sm_ed_st_dict = {}
-	#Initialize a list of street names without an ED in Steve Morse
-	sm_ed_st_dict[''] = []
-	for st, eds in temp.items():
-		#If street name has no associated EDs (i.e. street name not found in Steve Morse) 
-		#then add to dictionary entry for no ED
-		if eds is None:
-			sm_ed_st_dict[''].append(st)
+#
+# Step 1: Add TYPE (from raw/autoclean) if no TYPE_stud (from student) amd TYPE exists
+#
+
+#Function to look for np.nan
+def nan_equal(a,b):
+	try:
+		np.testing.assert_equal(a,b)
+	except AssertionError:
+		return False
+	return True
+
+#Function to add TYPE
+def add_type(TYPE,TYPE_stud,st_edit):
+	if ~nan_equal(TYPE,np.NaN) & (TYPE_stud == ''):
+		return str(st_edit) + ' ' + TYPE
+	else:
+		return st_edit
+
+# Get TYPE from student cleaned street names
+_, _, _, mc['TYPE_stud'] = zip(*mc['st_edit'].map(standardize_street))
+# Add TYPE (from raw/autoclean) if no TYPE_stud (from student) amd TYPE exists
+mc['st_edit'] = mc.apply(lambda x: add_type(x['TYPE'],x['TYPE_stud'],x['st_edit']),axis=1)
+
+#
+# Step 2: Re-add DIR to autoclean if it was removed
+#
+
+def readd_dir(overall_match, DIR):
+	if str(DIR) != 'nan' and str(overall_match) != 'nan':
+		if not overall_match.startswith(DIR+' '):
+			return DIR + ' ' + overall_match
 		else:
-			#For every ED associated with a street name...
-			for ed in eds:
-				#Initalize an empty list if ED has no list of street names yet
-				sm_ed_st_dict[ed] = sm_ed_st_dict.setdefault(ed, [])
-				#Add street name to the list of streets
-				sm_ed_st_dict[ed].append(st)
+			return overall_match			
+	else:
+		return overall_match
 
-	return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
+# Readd DIR
+mc['overall_match2'] = mc.apply(lambda x: readd_dir(x['overall_match'],x['DIR']),axis=1)
+
+# Save list of streets with DIR
+mc_readd_dir = mc[mc['overall_match']!=mc['overall_match2']]
+mc_readd_dir = mc_readd_dir[mc_readd_dir['overall_match'].astype(str) != 'nan']
+mc_readd_dir = mc_readd_dir[['overall_match','overall_match2']].drop_duplicates()
+streets_w_dirs_file = file_path + '/%s/studentcleaned/streets_w_dirs%s%s.csv' % (str(year), city, state)
+mc_readd_dir.to_csv(streets_w_dirs_file)
+
+# Rename 'overall_match' variables to reflect which might not have DIR
+mc['overall_match_wrong'] = mc['overall_match']
+mc['overall_match'] = mc['overall_match2']
+
+#
+# Step 3: Run fuzzy matching from autoclean to add TYPE to st_edit as needed (i.e. add "St")
+#
 
 sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(c,s,year)
 mc = find_fuzzy_matches(mc,c,'st_edit',sm_all_streets,sm_ed_st_dict)
 
 #
-# Find best street (autoclean vs student cleaned)
+# Step 4: Find best street (autoclean vs student cleaned)
 #
 
 def find_best_street(overall_match,st_edit_matched,checked_st,clean_priority):
@@ -545,7 +545,7 @@ def find_best_street(overall_match,st_edit_matched,checked_st,clean_priority):
 mc['autostud_street'] = mc.apply(lambda x: find_best_street(x['overall_match'],x['st_edit_matched'],x['checked_st'],x['clean_priority']),axis=1)
 
 #
-# Format and save file "CITY_StudAuto.dta"
+# Step 5 (final): Format and save file "CITY_StudAuto.dta"
 #
 
 # Change names for later use
@@ -559,16 +559,12 @@ mc.rename(columns={'overall_match':'overall_match_auto',
 # Change "St " or "St. " at start of street into "Saint "
 
 mc = mc.apply(lambda x: x.str.strip() if isinstance(x, str) else x).replace('', '.')
-
-autostud_file_name = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.csv')
 mc.to_csv(autostud_file_name)
 
-autostud_file_stata = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.dta')
-
-## Set do-file information
+# Set do-file information
 dofile = file_path + "/ConvertCsvToDta.do"
 cmd = ["stata","-b","do", dofile, "%s" % (autostud_file_name), "%s" % (autostud_file_stata),"&"] 
-## Run do-file
+# Run do-file
 subprocess.call(cmd) 
-
+# Cleanup .csv file
 os.remove(autostud_file_name)
