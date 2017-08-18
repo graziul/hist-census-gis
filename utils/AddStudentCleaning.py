@@ -8,7 +8,7 @@
 #					
 #				ex: 
 #	 
-#				python AddStudentCleaning.py AlbanyNY AlbanyNY_ForStudentsV1_ashley.dta 1 1930
+#				python AddStudentCleaning.py Albany NY AlbanyNY_ForStudentsV1_ashley.dta 1 1930
 #
 # Note:			Student file MUST BE ON RHEA SERVER in the "studentcleaned" directory
 #
@@ -24,15 +24,9 @@ import fuzzyset
 
 csv.field_size_limit(sys.maxsize)
 
-# Set path and data file names
-file_path = '/home/s4-data/LatestCities' 
-studentcleaned_file_name = file_path + '/%s/studentcleaned/%s' % (str(year),student_file)
-autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city.replace(' ',''),str(version))
-autostud_file_name = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.csv')
-autostud_file_stata = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.dta')
-
 # These capture information from the command prompt
 c = sys.argv[1]
+c_spaces = c
 c = c.replace(' ','')
 s = sys.argv[2]
 s = s.upper()
@@ -40,6 +34,18 @@ city = c + s
 student_file = sys.argv[3]
 version = sys.argv[4]
 year = sys.argv[5]
+
+# Set path and data file names
+file_path = '/home/s4-data/LatestCities' 
+studentcleaned_file_name = file_path + '/%s/studentcleaned/%s' % (str(year),student_file)
+autostud_file_name = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.csv')
+autostud_file_stata = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.dta')
+
+# NOTE: There was a significant error in V1 and V2 where DIR = TYPE for some reason
+if int(version) < 3:
+	autocleaned_file_name = file_path + '/%s/autocleaned/V5/%s_AutoCleanedV5.csv' % (str(year),city.replace(' ',''))
+else:
+	autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city.replace(' ',''),str(version))
 
 #
 # Helper functions
@@ -454,6 +460,8 @@ def find_fuzzy_matches(df,city,street,sm_all_streets,sm_ed_st_dict):
 
 # Load data and merge
 sc = load_large_dta(studentcleaned_file_name)
+if int(version) == 2:
+	sc['st'] = ''
 tp = pd.read_csv(autocleaned_file_name, iterator=True, chunksize=10000,low_memory=False)
 ac = pd.concat(tp, ignore_index=True)
 
@@ -461,8 +469,8 @@ vars_formerge = ['image_id','line_num','clean_priority','street_raw',
 	'street_precleanedhn','st','stname_flag','checked_st','checked_hn','inst','nonstreet',
 	'ed_edit','hn_edit','institution_edit','block_edit','st_edit']
 
-#if int(version) == 1 or int(version) == 2: 
 sc_formerge = sc[vars_formerge].drop_duplicates(['image_id','line_num','st_edit'])
+
 mc = ac.merge(sc_formerge,on=['image_id','line_num','clean_priority'],indicator=True)
 
 if len(mc) != sum(mc['_merge'] == 'both'):
@@ -488,10 +496,19 @@ def add_type(TYPE,TYPE_stud,st_edit):
 	else:
 		return st_edit
 
+#Function to blank st_edit if st_edit==TYPE
+def blank_st_edit(st_edit, TYPE):
+	if st_edit == TYPE:
+		return ''
+	else:
+		return st_edit
+
 # Get TYPE from student cleaned street names
 _, _, _, mc['TYPE_stud'] = zip(*mc['st_edit'].map(standardize_street))
 # Add TYPE (from raw/autoclean) if no TYPE_stud (from student) amd TYPE exists
 mc['st_edit'] = mc.apply(lambda x: add_type(x['TYPE'],x['TYPE_stud'],x['st_edit']),axis=1)
+# Now replace st_edit with '' if st_edit == TYPE (e.g. st_edit == "Road")
+mc['st_edit'] = mc.apply(lambda x: blank_st_edit(x['st_edit'],x['TYPE']), axis=1)
 
 #
 # Step 2: Re-add DIR to autoclean if it was removed
@@ -513,7 +530,7 @@ mc['overall_match2'] = mc.apply(lambda x: readd_dir(x['overall_match'],x['DIR'])
 mc_readd_dir = mc[mc['overall_match']!=mc['overall_match2']]
 mc_readd_dir = mc_readd_dir[mc_readd_dir['overall_match'].astype(str) != 'nan']
 mc_readd_dir = mc_readd_dir[['overall_match','overall_match2']].drop_duplicates()
-streets_w_dirs_file = file_path + '/%s/studentcleaned/streets_w_dirs%s%s.csv' % (str(year), city, state)
+streets_w_dirs_file = file_path + '/%s/studentcleaned/streets_w_dirs%s%s.csv' % (str(year), c, s)
 mc_readd_dir.to_csv(streets_w_dirs_file)
 
 # Rename 'overall_match' variables to reflect which might not have DIR
@@ -524,7 +541,7 @@ mc['overall_match'] = mc['overall_match2']
 # Step 3: Run fuzzy matching from autoclean to add TYPE to st_edit as needed (i.e. add "St")
 #
 
-sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(c,s,year)
+sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(c_spaces,s,year)
 mc = find_fuzzy_matches(mc,c,'st_edit',sm_all_streets,sm_ed_st_dict)
 
 #
