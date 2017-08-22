@@ -1,5 +1,15 @@
-#Python 2.7.8 (default, Jun 30 2014, 16:08:48) [MSC v.1500 64 bit (AMD64)] on win32
-#Type "copyright", "credits" or "license()" for more information.
+#
+# Name:			Create Blocks and Block Points.py
+#
+# Author(s):	Matt Martinez (adapted for AssignBlockNums.py by Chris Graziul)
+#
+# Purpose:		Use street grid and microdata to create blocks and perform initial geocode
+#
+# Usage:		python "Create Blocks and Block Points.py" [path] [city_name] [state abbreviation] 					
+#
+# File types:	Edited street grid shapefiles
+#				StudAuto microdata files
+#
 
 import arcpy
 import os
@@ -10,20 +20,20 @@ import subprocess
 dir_path = sys.argv[1] + "\\GIS_edited\\"
 name = sys.argv[2]
 state = sys.argv[3]
-
-#dir_path = "S:\\Projects\\1940Census\\StLouis\\GIS_edited\\"
-#name = "StLouis"
-#state = "MO"
-
-####WORKS    arcpy.CreateAddressLocator_geocoding("US Address - Dual Ranges", "'Z:\Projects\\1940Census\Block Creation\San Antonio\SanAntonio_1930_stgrid.shp' 'Primary Table'", "'Feature ID' FID VISIBLE NONE;'*From Left' LFROMADD VISIBLE NONE;'*To Left' LTOADD VISIBLE NONE;'*From Right' RFROMADD VISIBLE NONE;'*To Right' RTOADD VISIBLE NONE;'Prefix Direction' <None> VISIBLE NONE;'Prefix Type' <None> VISIBLE NONE;'*Street Name' FULLNAME VISIBLE NONE;'Suffix Type' <None> VISIBLE NONE;'Suffix Direction' <None> VISIBLE NONE;'Left City or Place' CITY VISIBLE NONE;'Right City or Place' CITY VISIBLE NONE;'Left ZIP Code' <None> VISIBLE NONE;'Right ZIP Code' <None> VISIBLE NONE;'Left State' state VISIBLE NONE;'Right State' state VISIBLE NONE;'Left Street ID' <None> VISIBLE NONE;'Right Street ID' <None> VISIBLE NONE;'Display X' <None> VISIBLE NONE;'Display Y' <None> VISIBLE NONE;'Min X value for extent' <None> VISIBLE NONE;'Max X value for extent' <None> VISIBLE NONE;'Min Y value for extent' <None> VISIBLE NONE;'Max Y value for extent' <None> VISIBLE NONE;'Left parity' <None> VISIBLE NONE;'Right parity' <None> VISIBLE NONE;'Left Additional Field' <None> VISIBLE NONE;'Right Additional Field' <None> VISIBLE NONE;'Altname JoinID' <None> VISIBLE NONE", "Z:\Projects\\1940Census\Block Creation\San Antonio\SanAntonio_addloc","")
+#start_from = sys.argv[4]
 
 # overwrite output
 arcpy.env.overwriteOutput=True
 
+#THIS IS AN ONGOING ISSUE: WHICH VERSION TO START FROM? PAY CLOSE ATTENTION!
+#if int(start_from) = 1940:
+grid_1940 = "S:\\Projects\\1940Census\\DirAdd\\" + name + state + "_1940_stgrid_diradd.shp"
+grid = dir_path + name + state + "_1940_stgrid_edit.shp"
+arcpy.CopyFeatures_management(grid_1940, grid)
+#if int(start_from) = 1930:
+
 #Create Paths to be used throughout Process
 reference_data = dir_path + name + state + "_1930_stgrid_edit_Uns2.shp 'Primary Table'"
-grid = dir_path + name + state + "_1930_stgrid_edit.shp"
-#grid = dir_path + name + "_1930_Added_Directions.shp"
 grid_uns =  dir_path + name + state + "_1930_stgrid_edit_Uns.shp"
 grid_uns2 =  dir_path + name + state + "_1930_stgrid_edit_Uns2.shp"
 dissolve_grid = dir_path + name + "_1930_stgrid_Dissolve.shp"
@@ -157,8 +167,6 @@ fieldName = "RTOADD"
 expression = "replace(!RTOADD!)"
 arcpy.CalculateField_management(grid, fieldName, expression, "PYTHON", codeblock_max)
 
-#arcpy.DeleteField_management(split_grid,['FID_StLoui'])
-
 #Spatial join split_grid to grid to get unique seg_id for split segments
 field_map_spatjoin = """FULLNAME \"FULLNAME\" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
 LFROMADD \"LFROMADD\" true true false 80 Text 0 0 ,First,#,%s,LFROMADD,-1,-1; 
@@ -213,248 +221,6 @@ arcpy.CopyFeatures_management(grid_uns,grid_uns2)
 expression="!FID! + 1"
 arcpy.AddField_management(grid_uns2, "grid_id", "LONG", 4, "", "","", "", "")
 arcpy.CalculateField_management(grid_uns2, "grid_id", expression, "PYTHON_9.3")
-
-def change_ns(name_type,first_n,fids_n,fids_s):
-	cursor = arcpy.UpdateCursor(grid_uns2)
-	for row in cursor:
-		fid = row.getValue('JOIN_FID')
-		st_name = row.getValue('FULLNAME')
-		if (st_name == name_type and fid >= first_n and fid not in fids_s) or fid in fids_n:
-			row.setValue('FULLNAME','N '+name_type)
-		if (st_name == name_type and fid < first_n and fid not in fids_n) or fid in fids_s:
-			row.setValue('FULLNAME','S '+name_type)
-		cursor.updateRow(row)
-		del(row)
-	del(cursor)
-
-if name == "StLouis":
-
-	#
-	# Broadway St splits N/S at Market St,  is first N Broadway St
-	#
-
-	first_n = 6637
-	fids_n = []
-	fids_s = []
-
-	change_ns("Broadway St",first_n,fids_n,fids_s)
-
-	#
-	# Grand Ave splits N/S at Laclede Ave,  is first N Grand Ave (becomes Grand Blvd in contemporary)
-	#
-
-	# Issue with "Grand Kingshighway St" - should be changed to "Grand Ave" prior to anything else
-	first_n = 7785
-	fids_n = []
-	fids_s = []
-
-	change_ns("Grand Ave",first_n,fids_n,fids_s)
-
-	#
-	# Garrison Ave splits N/S at Laclede Ave
-
-	first_n = 7575
-	fids_n = []
-	fids_s = []
-
-	change_ns("Garrison Ave",first_n,fids_n,fids_s)
-
-	#
-	# Sarah St splits N/S at Forest Park Ave
-
-	first_n = 7946
-	fids_n = []
-	fids_s = []
-
-	change_ns("Sarah St",first_n,fids_n,fids_s)
-
-	#
-	# Ewing Ave splits N/S at Market Ave
-
-	first_n = 7394
-	fids_n = []
-	fids_s = []
-
-	change_ns("Ewing Ave",first_n,fids_n,fids_s)
-
-	#
-	# Boyle Ave splits N/S at Forest Park Blvd
-	#
-
-	first_n = 8042
-	fids_n = []
-	fids_s = []
-
-	change_ns("Boyle Ave",first_n,fids_n,fids_s)
-
-	#
-	# Compton Ave splits N/S at Olive St
-	#
-
-	first_n = 7889
-	fids_n = []
-	fids_s = []
-
-	change_ns("Compton Ave",first_n,fids_n,fids_s)
-
-
-	#
-	# For numbered streets, Market St. splits N/S
-	#
-
-	# 2nd St
-	first_n = 6531
-	fids_n = []
-	fids_s = []
-
-	change_ns("2nd St",first_n,fids_n,fids_s)
-
-	# 3rd St
-	first_n = 6564
-	fids_n = []
-	fids_s = []
-
-	change_ns("3rd St",first_n,fids_n,fids_s)
-
-	# 4th St
-	first_n = 6604
-	fids_n = []
-	fids_s = []
-
-	change_ns("4th St",first_n,fids_n,fids_s)
-
-	# 5th St
-	first_n = 6564
-	fids_n = []
-	fids_s = []
-
-	change_ns("5th St",first_n,fids_n,fids_s)
-
-	# 6th St
-	first_n = 6669
-	fids_n = []
-	fids_s = []
-
-	change_ns("6th St",first_n,fids_n,fids_s)
-
-	# 7th St
-	first_n = 6706
-	fids_n = []
-	fids_s = []
-
-	change_ns("7th St",first_n,fids_n,fids_s)
-
-	# 8th St
-	first_n = 6741
-	fids_n = []
-	fids_s = []
-
-	change_ns("8th St",first_n,fids_n,fids_s)
-
-	# 9th St
-	first_n = 6770
-	fids_n = []
-	fids_s = []
-
-	change_ns("9th St",first_n,fids_n,fids_s)
-
-	# 10th St
-	first_n = 6810
-	fids_n = []
-	fids_s = []
-
-	change_ns("10th St",first_n,fids_n,fids_s)
-
-	# 11th st
-	first_n = 6843
-	fids_n = []
-	fids_s = []
-
-	change_ns("11th St",first_n,fids_n,fids_s)
-
-	# 12th St (becomes 12th Blvd at Market, unsure what to do)
-	#first_n = -1
-	#fids_n = []
-	#fids_s = []
-
-	#change_ns("12th St",first_n,fids_n,fids_s)
-
-	# 13th St
-	first_n = 6934
-	fids_n = []
-	fids_s = []
-
-	change_ns("13th St",first_n,fids_n,fids_s)
-
-	# 14th St
-	first_n = 6974
-	fids_n = []
-	fids_s = []
-
-	change_ns("14th St",first_n,fids_n,fids_s)
-
-	# 15th St
-	first_n = 7014
-	fids_n = []
-	fids_s = []
-
-	change_ns("15th St",first_n,fids_n,fids_s)
-
-	# 16th St
-	first_n = 7056
-	fids_n = []
-	fids_s = []
-
-	change_ns("16th St",first_n,fids_n,fids_s)
-
-	# 17th St
-	first_n = 7088
-	fids_n = []
-	fids_s = []
-
-	change_ns("17th St",first_n,fids_n,fids_s)
-
-	# 18th St
-	first_n = 7127
-	fids_n = []
-	fids_s = []
-
-	change_ns("18th St",first_n,fids_n,fids_s)
-
-	# 19th St
-	first_n = 7275
-	fids_n = []
-	fids_s = []
-
-	change_ns("18th St",first_n,fids_n,fids_s)
-
-	# 20th St
-	first_n = 7198
-	fids_n = []
-	fids_s = []
-
-	change_ns("20th St",first_n,fids_n,fids_s)
-
-	# 21st St
-	first_n = 7251
-	fids_n = []
-	fids_s = []
-
-	change_ns("20th St",first_n,fids_n,fids_s)
-
-	# 22nd St
-	first_n = 7286
-	fids_n = []
-	fids_s = []
-
-	change_ns("22nd St",first_n,fids_n,fids_s)
-
-	# 23rd St
-	first_n = 7331
-	fids_n = []
-	fids_s = []
-
-	change_ns("23rd St",first_n,fids_n,fids_s)
 
 #Make sure address locator doesn't already exist - if it does, delete it
 add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addloc")]
