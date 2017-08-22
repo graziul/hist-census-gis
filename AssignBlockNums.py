@@ -14,11 +14,13 @@ from colorama import AnsiToWin32, init
 #state_abbr = "MO"
 #r_path = "C:\Program Files\\R\\R-3.3.2\\bin\Rscript"
 #script_path = "C:\Users\\cgraziul\\hist-census-gis"
+r_path = "C:\Program Files\\R\\R-3.4.1\\bin\Rscript"
+script_path = "C:\Users\\cgraziul\\hist-census-gis"
 
 city_name = sys.argv[1]
 state_abbr = sys.argv[2]
-r_path = sys.argv[3]
-script_path = sys.argv[4]
+#r_path = sys.argv[3]
+#script_path = sys.argv[4]
 
 city_name = city_name.replace(" ","")
 file_path = "S:\Projects\\1940Census\\%s" % (city_name) #TO DO: Directories need to be city_name+state_abbr
@@ -108,7 +110,7 @@ else:
 
 # Assigns block numbers using 1930 block maps. Applies custom built OCR engine 
 # and Matlab toolboxes to produce shapefiles.  
-
+'''
 cprint("Step 3: Runing OCR script\n", attrs=['bold','underline'], file=AnsiToWin32(sys.stdout))
 
 # Run OCR script
@@ -126,7 +128,7 @@ if t != 0:
 	cprint("Error integrating OCR block numbering results for "+city_name+"\n", 'red', file=AnsiToWin32(sys.stdout))
 else:
 	cprint("OK!\n", 'green', file=AnsiToWin32(sys.stdout))
-
+'''
 #
 # Step 4: Set confidence
 #
