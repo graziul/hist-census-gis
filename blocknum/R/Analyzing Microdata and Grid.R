@@ -111,7 +111,7 @@ state_abbr <- args[3]
   table(grid30$old_st_name) 
   table(grid30$new_st_name)
 
-#Keep Unique MicroData Street Names
+  #Keep Unique MicroData Street Names
   m_st<-subset(mdata, !duplicated(mdata$fullname))
   myvars<-c("fullname", "ed", "ppst", "priority")
   m_st<-m_st[myvars]
@@ -119,29 +119,52 @@ state_abbr <- args[3]
   grid<-subset(grid30, !duplicated(grid30$fullname))
   grid1<-as.character(grid$fullname)
   
-#Marking streets in the microdata and also in the grid
+  #Marking streets in the microdata and also in the grid
   m_st$ingrid<-m_st1%in% grid1
-  table(m_st$ingrid)
-#Keep only streets in microdata, but not in grid
+  #table(m_st$ingrid)
+  #Keep only streets in microdata, but not in grid
   m<-m_st[which(m_st$ingrid=="FALSE"),]
   #Add if there is evidence of a street name change either as an old street name or a new one.
-    st<-as.character(m$fullname)
-    #Grab all old street names before they were changed
-    old<-as.character(new$Old)
-    #Grab all new street names after they were changed  
-    newest<-new$New
+  #st<-as.character(m$fullname)
+  #Grab all old street names before they were changed
+  #old<-as.character(new$Old)
+  #Grab all new street names after they were changed  
+  #newest<-new$New
   
-  m$old_name_evidence<-st %in% old
-  m$new_name_evidence<-st %in% newest
+  #m$old_name_evidence<-st %in% old
+  #m$new_name_evidence<-st %in% newest
   
-  write.csv(m, paste(dir_path,city_name,"_Streets_To_Check.csv",sep=""))
+  #attach list of block numbers for each street to check
+  for(a in 1:dim(m)[1]){
+    m$eds[a] <- as.character(unique(mdata[mdata$fullname==m$fullname[a],"ed"])) %>% paste(collapse = ", ")
+  }
   
-#Marking Streets in the grid, but not in the microdata
+  #attach list of block numbers for each street to check
+  for(a in 1:dim(m)[1]){
+    m$blocks[a] <- unique(mdata[mdata$fullname==m$fullname[a],"mblk"]) %>% paste(collapse = ", ")
+  }
+  
+  m$flag <- "unchecked"
+  m$type <- NULL
+  m$mblk <- NULL
+  m$hn <- NULL
+  m$address <- NULL
+  m$state <- NULL
+  m$city <- NULL
+  m$person <- NULL
+  m$ingrid <- NULL
+  m$ed <- NULL
+  
+  write.csv(m, paste(dir_path,city_name,"_Streets_To_Check.csv",sep=""), row.names = F)
+  
+  #Marking Streets in the grid, but not in the microdata
   grid$indata<-grid1 %in% m_st1
   table(grid$indata)
   g<-grid[which(grid$indata=="FALSE"),]
   myvars<-c("fullname")
   g<-g[myvars]
-  write.csv(g, paste(dir_path,city_name,"_Streets_InGrid_NotInMdata.csv",sep=""))
+  write.csv(g, paste(dir_path,city_name,"_Streets_InGrid_NotInMdata.csv",sep=""), row.names = F)
+  
+  
 
   
