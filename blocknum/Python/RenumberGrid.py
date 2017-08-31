@@ -92,7 +92,7 @@ def get_cray_z_scores(arr) :
 	debug = False
 	if not None in arr :
 		inc_arr = np.unique(arr) #returns sorted array of unique values
-		if(len(inc_arr)>2) :
+		if(len(inc_arr)>=2) :
 			if debug : print("uniques: "+str(inc_arr))
 			median = np.median(inc_arr,axis=0)
 			diff = np.abs(inc_arr - median)
@@ -109,7 +109,11 @@ def get_cray_z_scores(arr) :
 			if debug : print ("Results: "+str(meanified_z_score * modified_z_score > 16))
 
 			return dict(zip(inc_arr, meanified_z_score * modified_z_score > 16))    
-	return dict(zip(inc_arr, False))
+	try:
+		return {inc_arr[0]:False}
+	except:
+		pass
+
 
 # Get house number ranges for block-street combinations from microdata
 df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
