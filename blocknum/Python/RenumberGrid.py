@@ -1,5 +1,6 @@
 import pysal as ps
 import pandas as pd
+import numpy as np
 import arcpy
 import os
 import pickle
@@ -55,7 +56,7 @@ dir_path = file_path + "\\GIS_edited\\"
 
 #block_dbf_file = dir_path + city_name + "_1930_Block_Choice_Map2test.dbf"
 block_dbf_file = dir_path + city_name + "_1930_block_ED_checked.dbf"
-stgrid_file = dir_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+stgrid_file = dir_path + city_name + state_abbr + "_1930_stgrid_editFtoL.shp"
 out_file = dir_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
 block_shp_file = dir_path + city_name + "_1930_block_ED_checked.shp"
 addresses = dir_path + city_name + "_1930_Addresses.csv"
@@ -114,17 +115,32 @@ def get_cray_z_scores(arr) :
 	except:
 		pass
 
+'''
+df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
+blkst_hn_dict = {}
+bad_blkst = []
+for group, group_data in df_micro_byblkst:
+	
+	try:
+		cray_dict = get_cray_z_scores(group_data['hn'])
+		hn_range = [k for k,v in cray_dict.items() if not v]
+		blkst_hn_dict[group] = {'min_hn':min(hn_range), 'max_hn':max(hn_range)}
+	except:
+		bad_blkst.append(group)
+'''
 
 # Get house number ranges for block-street combinations from microdata
 df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
 blkst_hn_dict = {}
+bad_blkst = []
 for group, group_data in df_micro_byblkst:
 	try:
 		cray_dict = get_cray_z_scores(group_data['hn'])
 		hn_range = [k for k,v in cray_dict.items() if not v]
 		blkst_hn_dict[group] = {'min_hn':min(hn_range), 'max_hn':max(hn_range)}
 	except:
-		pass
+		bad_blkst.append(group)
+
 
 # Get dictionary linking edblock to pblk_id
 bn_var = 'am_bn'
@@ -140,6 +156,12 @@ arcpy.SpatialJoin_analysis(target_features=pblk_file, join_features=stgrid_file,
 	join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
 	match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
 df_pblk_grid = dbf2DF(pblk_grid_file2.replace(".shp",".dbf"),upper=False)
+
+# Create dictionary linking grid_id to pblk
+grid_pblk_dict = {}
+grouped_grid = df_pblk_grid.groupby(['grid_id'])
+for grid_id, pblk_df in grouped_grid:
+	grid_pblk_dict[grid_id] = pblk_df['pblk_id'].tolist()
 
 # Create dictionary linking grid_id to fullname
 grid_fullname_dict = df_pblk_grid.set_index('grid_id').to_dict()['FULLNAME']
@@ -220,57 +242,9 @@ else:
 	del(cursor)
 	add_locator = dir_path + city_name + "_addlocContemp"
 
-#Dissolve 
-
-#combo_id = ['FULLNAME','MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD','ed','CITY','STATE']
-df = dbf2DF(out_file.replace(".shp",".dbf"),upper=False)
-df['combo_id'] = pd.factorize(df.FULLNAME+df.MIN_LFROMA+df.MAX_LTOADD+df.MIN_RFROMA+df.MAX_RTOADD+df.ed)[0]
-
-csv_file = dir_path + "\\temp_for_dbf.csv"
-df.to_csv(csv_file)
-arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp.dbf")
-os.remove(out_file.replace('.shp','.dbf'))
-os.remove(csv_file)
-os.rename(dir_path+"\\temp_for_shp.dbf",out_file.replace('.shp','.dbf'))
-os.remove(dir_path+"\\temp_for_shp.dbf.xml")
-os.remove(dir_path+"\\temp_for_shp.cpg")
-
-temp1 = dir_path + city_name + state_abbr + "_1930_Temp_GridToGeocode_Dissolve.shp"
-temp2 = dir_path + city_name + state_abbr + "_1930_Temp_GridToGeocode.shp"
-
-#Dissolve on combo id
-arcpy.Dissolve_management(in_features=out_file, out_feature_class=temp1, dissolve_field='combo_id', statistics_fields="", multi_part="MULTI_PART", unsplit_lines="DISSOLVE_LINES")
-
-#Spatial join (ONE_TO_MANY)
-field_mapD = """combo_id "combo_id" true true false 10 Long 0 10 ,First,#,%s,combo_id,-1,-1;
-Field1 "Field1" true true false 80 Text 0 0 ,First,#,%s,Field1,-1,-1;
-CITY "CITY" true true false 80 Text 0 0 ,First,#,%s,CITY,-1,-1;
-FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-JOIN_FID "JOIN_FID" true true false 80 Text 0 0 ,First,#,%s,JOIN_FID,-1,-1;
-MIN_LFROMA "MIN_LFROMA" true true false 80 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
-MAX_LTOADD "MAX_LTOADD" true true false 80 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
-MIN_RFROMA "MIN_RFROMA" true true false 80 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
-MAX_RTOADD "MAX_RTOADD" true true false 80 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
-STATE "STATE" true true false 80 Text 0 0 ,First,#,%s,STATE,-1,-1;
-ed "ed" true true false 80 Text 0 0 ,First,#,%s,ed,-1,-1;
-grid_id "grid_id" true true false 80 Text 0 0 ,First,#,%s,grid_id,-1,-1;
-combo_id_1 "combo_id_1" true true false 10 Long 0 10 ,First,#,%s,combo_id,-1,-1""" % (temp1, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file, out_file)
-arcpy.SpatialJoin_analysis(target_features=temp1, join_features=out_file, out_feature_class=temp2, join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapD, match_option="INTERSECT", search_radius="", distance_field_name="")
-
-#Keep only uniques
-if old:
-	togeocode_shp_file = dir_path + city_name + state_abbr + "_1930_GridToGeocodeOldNoOutlier.shp"
-else:
-	togeocode_shp_file = dir_path + city_name + state_abbr + "_1930_GridToGeocodeContemp.shp"
-arcpy.MakeFeatureLayer_management(temp2,"edit_lyr")
-arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "combo_id" = "combo_id_1" ')
-arcpy.CopyFeatures_management("edit_lyr", togeocode_shp_file)
-arcpy.DeleteFeatures_management(temp1)
-arcpy.DeleteFeatures_management(temp2)
-
 #Make sure address locator doesn't already exist - if it does, delete it
 if old:
-	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(city_name+"_addlocOldNoOutlier")]
+	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(city_name+"_addlocOld2017_09_01")]
 else:
 	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(city_name+"_addlocContemp")]
 
@@ -309,7 +283,7 @@ field_map="'Feature ID' FID VISIBLE NONE; \
 'Right Additional Field' <None> VISIBLE NONE; \
 'Altname JoinID' <None> VISIBLE NONE"
 address_fields= "Street address; City city; State state; ZIP ed"
-arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", in_reference_data=togeocode_shp_file, in_field_map=field_map, out_address_locator=add_locator, config_keyword="")
+arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", in_reference_data=out_file, in_field_map=field_map, out_address_locator=add_locator, config_keyword="")
 
 
 #Geocode Points
