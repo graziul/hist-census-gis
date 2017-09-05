@@ -383,7 +383,11 @@ def fix_dir(city):
 	except:
 		pass
 	try:
-		arcpy.CopyFeatures_management("S:\\Projects\\1940Census\\StreetGrids\\" + citystate + "_1940_stgrid_edit.shp", 
+		if citystate == "StLouisMO":
+			arcpy.CopyFeatures_management("S:\\Projects\\1940Census\\StLouis\\GIS_edited\\StLouisMO_1930_stgrid_edit.shp", 
+			stedit_shp_file)
+		else:
+			arcpy.CopyFeatures_management("S:\\Projects\\1940Census\\StreetGrids\\" + citystate + "_1940_stgrid_edit.shp", 
 			stedit_shp_file)
 	except Exception as e:
 		print("Error loading 1940 street grid for %s" % (citystate))
@@ -503,7 +507,7 @@ def fix_dir(city):
 	df_sj2['st_t2'] = df_sj2['st_t2'].str.rstrip()
 
 	# Fix blank street names
-#	df_sj2['FULLSTD'] = df_sj2.apply(lambda x: fix_blank_names(x['FULLSTD_e'], x['FULLSTD_t1'], x['FULLSTD_t2']), axis=1)
+ #	df_sj2['FULLSTD'] = df_sj2.apply(lambda x: fix_blank_names(x['FULLSTD_e'], x['FULLSTD_t1'], x['FULLSTD_t2']), axis=1)
 
 	# Add DIR if called for
 	df_sj2['DIR_fix'], df_sj2['DIR_mismatch'] = zip(*df_sj2.apply(lambda x: add_dir(x['DIR_e'], x['DIR_t1'], x['DIR_t2'], x['st_e'], x['st_t1'], x['st_t2']), axis=1))
@@ -554,8 +558,8 @@ def fix_dir(city):
 	df_gaps = dbf2DF(gaps_file.replace('.shp','.dbf'),upper=False)
 	# Make dictionary for FID to TARGET FID
 	fid_dict = {target_fid:df_group['FULLNAME'].tolist() for target_fid, df_group in df_gaps.groupby('TARGET_FID')}
-#	for target_fid, df_group in df_diradd.groupby('TARGET_FID'):
-#		fid_dict[target_fid] = df_group['FULLNAME'].tolist()
+ #	for target_fid, df_group in df_diradd.groupby('TARGET_FID'):
+ #		fid_dict[target_fid] = df_group['FULLNAME'].tolist()
 	# run through FIDs from original Target file	
 	def fill_gap(curFID, fullname):
 		_, st_dir, st_name, st_type = standardize_street(fullname)
