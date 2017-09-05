@@ -40,7 +40,7 @@ version = 5
 
 datestr = time.strftime("%Y_%m_%d")
 
-def clean_microdata(city_info):
+def clean_microdata(city_info, debug=False):
 
 	#
 	# Step 0: Initialize a bunch of variables for use throughout
@@ -97,7 +97,7 @@ def clean_microdata(city_info):
 	# Step 3a: Import street names from 1940 street grid  
 	st_grid_st_list = get_streets_from_1940_street_grid(city,state)
 
-	# Step 3b: Identify exact matches based on Steve Morse and 1940 street grid
+	# Step 3b: Identify exact matches based on 1930 Steve Morse and 1940 street grid
 	df, exact_info = find_exact_matches(df, city, 'street_precleanedHN', sm_all_streets, sm_st_ed_dict, st_grid_st_list)
 
 	#
