@@ -123,7 +123,7 @@ if len(has_state) == 1:
 print "Working On: " + name + " Creating Physical Blocks"
 ##### #Create Physical Blocks# #####
 #First Dissolve St_Grid lines
-arcpy.Dissolve_management(grid, dissolve_grid, "FULLNAME")
+arcpy.Dissolve_management(grid, dissolve_grid, "FULLNAME", multi_part="SINGLE_PART", unsplit_lines="DISSOLVE_LINES")
 #Second Split Lines at Intersections
 arcpy.FeatureToLine_management(dissolve_grid, split_grid)
 #Third Create Physical Blocks using Feature to Polygon
@@ -132,6 +132,7 @@ arcpy.FeatureToPolygon_management(split_grid, pblocks)
 expression="!FID! + 1"
 arcpy.AddField_management(pblocks, "pblk_id", "LONG", 4, "", "","", "", "")
 arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
+
 
 print "Working On: " + name + " Geocode\n"
 ##### #Geocode Points# #####
