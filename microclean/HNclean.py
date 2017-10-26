@@ -43,6 +43,7 @@ def make_int(s):
         return None
 
 def is_none(n) :
+#    print(n)
     if(type(n)==str) :
         return n=='' or n==None
     else :
@@ -85,23 +86,24 @@ def standardize_hn(s):
 
 def get_linenum(df,ind) :
     if ind>=0 and ind<len(df) :
-        return df.ix[ind,'line_num']
+        return df.loc[ind,'line_num']
     else :
         return None
 
 def get_name(df,ind) :
     if ind>=0 and ind<len(df) :
-        if df.ix[ind,'street'] == "" :
+        if df.loc[ind,'street'] == "" :
             return None
         else :
-            return df.ix[ind,'street']
+            return df.loc[ind,'street']
     else :
         print ("GET NAME OUT OF BOUNDS "+str(ind))
         return -1 #different return values for out of bounds vs. stname missing
 
 def get_hn(df,ind) :
     if ind>=0 and ind<len(df) :
-        return df.ix[ind,'hn']
+#        print(ind)
+        return df.loc[ind,'hn']
     else :
         # SHOULD RETURN -1 HERE OR SOMETHING, CONSEQUENCES?
         return None
@@ -114,44 +116,44 @@ def get_dwelling(df,ind,numeric=False) :
     if ind>=0 and ind<len(df) :
         if(numeric) :
             debug = False
-            dw = re.search('([0-9]+)([ \-/]*[A-Za-z.]|[ \-/]+[0-9]| 1/2)?([ \-/]+[Rr]ear)?$',df.ix[ind,'dn'])
+            dw = re.search('([0-9]+)([ \-/]*[A-Za-z.]|[ \-/]+[0-9]| 1/2)?([ \-/]+[Rr]ear)?$',df.loc[ind,'dn'])
             if(not dw==None) :
-                if(dw.group(1)!=df.ix[ind,'dn']) :
-                    if(debug) : print("dwelling# %s was fixed to: %s" % (df.ix[ind,'dn'],""))
+                if(dw.group(1)!=df.loc[ind,'dn']) :
+                    if(debug) : print("dwelling# %s was fixed to: %s" % (df.loc[ind,'dn'],""))
                     dw = dw.group(1)
                 else :
                     dw = dw.string
-            else : dw = df.ix[ind,'dn']
+            else : dw = df.loc[ind,'dn']
             try :
                 dw = int(dw)
                 if(debug) : print(dw)
                 return dw
             except ValueError :
                 if(not dw=='') :
-                    if(debug) : print("Exception. dwelling# at %s is: %s" %(ind,df.ix[ind,'dn']))
+                    if(debug) : print("Exception. dwelling# at %s is: %s" %(ind,df.loc[ind,'dn']))
                 return -1
         else :
-            return df.ix[ind,'dn']
+            return df.loc[ind,'dn']
     else :
         #-2 is adjacent to -1. Use -3 instead.
         return -3
 
 def get_fam(df,ind) :
     if ind>=0 and ind<len(df) :
-        return df.ix[ind,'fam_id']
+        return df.loc[ind,'fam_id']
     else :
         return -1
 
 def get_relid(df,ind) :
     if ind>=0 and ind<len(df) :
-        return df.ix[ind,'rel_id']
+        return df.loc[ind,'rel_id']
     else :
         return -1
 
 def get_ed(df,ind) :
     #ED can eventually go where imageid is in the input .txt varlist ([ind][0])
     if ind>=0 and ind<len(df) :
-        return df.ix[ind,'ed']
+        return df.loc[ind,'ed']
     else :
         return -1
 
@@ -244,6 +246,7 @@ def num_seq(df,ind,chk_num,chk_dir,debug=False) : #chk_dir = 1|-1 depending on t
 
 #wrapper function for num_seq recursion#
 def seq_match_num(df,ind) : 
+#    print(ind)
     num = get_hn(df,ind)
     if is_none(num) : #if housenum undefined, consider it a singleton seq
         return [ind,ind]
@@ -357,7 +360,7 @@ def hn_seq_err_fix(df,ind) :
     p = str(get_hn(df,ind-1)) #prev num
     n = str(get_hn(df,ind+1)) #next num
     if(n==p) :
-            print("thing: "+df.ix[ind,'line_num']+" "+p+" "+hn+" "+n)
+            print("thing: "+df.loc[ind,'line_num']+" "+p+" "+hn+" "+n)
     #if dwelling num is same as previous or consecutive; if not, don't try to fix
     #also check if that dwelling num was enumerated elsewheres, compare if so
     #also check if the housenum is changing mid-household (should stay same obv)
@@ -396,7 +399,9 @@ def is_HN_OUTLIER(ed,st,hn,ED_ST_HN_dict_r):
 
 
 def ed_hn_outlier_chk(ed,st,hn) :
-    if(is_none(st) or is_none(hn) or ED_ST_HN_dict[(ed,st)] is None) :
+    if(st=='' or is_none(hn) or (ed,st) not in ED_ST_HN_dict.keys()) :
+        return -1
+    if(ED_ST_HN_dict[(ed,st)] is None):
         return -1
     else :
         return ED_ST_HN_dict[(ed,st)][hn]
@@ -422,7 +427,7 @@ def get_HN_SEQ(df,year,street,debug=False):
         try:
             HN_SEQ.append(seq_match_num(df,ind))
         except RuntimeError :
-            print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(df,ind))+" on page "+str(df.ix[ind,'line_num']))
+            print("STACK OVERFLOW...? ind was: "+str(ind)+", which is linenum "+str(get_linenum(df,ind))+" on page "+str(df.loc[ind,'line_num']))
         ind = HN_SEQ[len(HN_SEQ)-1][1]+1
     if debug:
         avg_seq_len = round(np.mean(np.diff(HN_SEQ)),1)
