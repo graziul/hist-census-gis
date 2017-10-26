@@ -6,16 +6,8 @@ import os
 import pickle
 arcpy.env.overwriteOutput=True
 
-#Note: This is one way to reduce the number of ties, but it requires street ranges
-#arcpy.Dissolve_management(in_features="StLouisMO_1930_stgrid_edit_Uns2", out_feature_class="S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_edit_Uns3.shp", dissolve_field="FULLNAME;CITY;STATE;MIN_LFROMA;MAX_LTOADD;MIN_RFROMA;MAX_RTOADD", statistics_fields="", multi_part="MULTI_PART", unsplit_lines="DISSOLVE_LINES")
-
-'''
-Arguments
----------
-dbfile  : DBF file - Input to be imported
-upper   : Condition - If true, make column heads upper case
-'''
-def dbf2DF(dbfile, upper=True): #Reads in DBF files and returns Pandas DF
+# Function to reads in DBF files and return Pandas DF
+def dbf2DF(dbfile, upper=True): 
 	db = ps.open(dbfile) #Pysal to open DBF
 	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
 	#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
@@ -56,7 +48,8 @@ dir_path = file_path + "\\GIS_edited\\"
 
 #block_dbf_file = dir_path + city_name + "_1930_Block_Choice_Map2test.dbf"
 block_dbf_file = dir_path + city_name + "_1930_block_ED_checked.dbf"
-stgrid_file = dir_path + city_name + state_abbr + "_1930_stgrid_editFtoL.shp"
+#stgrid_file = dir_path + city_name + state_abbr + "_1930_stgrid_editFtoL.shp"
+stgrid_file = dir_path + name + state + "_1930_stgrid_edit_Uns2_dupAddrFixed.shp"
 out_file = dir_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
 block_shp_file = dir_path + city_name + "_1930_block_ED_checked.shp"
 addresses = dir_path + city_name + "_1930_Addresses.csv"
@@ -114,20 +107,6 @@ def get_cray_z_scores(arr) :
 		return {inc_arr[0]:False}
 	except:
 		pass
-
-'''
-df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
-blkst_hn_dict = {}
-bad_blkst = []
-for group, group_data in df_micro_byblkst:
-	
-	try:
-		cray_dict = get_cray_z_scores(group_data['hn'])
-		hn_range = [k for k,v in cray_dict.items() if not v]
-		blkst_hn_dict[group] = {'min_hn':min(hn_range), 'max_hn':max(hn_range)}
-	except:
-		bad_blkst.append(group)
-'''
 
 # Get house number ranges for block-street combinations from microdata
 df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
@@ -282,8 +261,12 @@ field_map="'Feature ID' FID VISIBLE NONE; \
 'Left Additional Field' <None> VISIBLE NONE; \
 'Right Additional Field' <None> VISIBLE NONE; \
 'Altname JoinID' <None> VISIBLE NONE"
-address_fields= "Street address; City city; State state; ZIP ed"
-arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", in_reference_data=out_file, in_field_map=field_map, out_address_locator=add_locator, config_keyword="")
+address_fields= "Street address; City city; State state"
+arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", 
+	in_reference_data=out_file, 
+	in_field_map=field_map, 
+	out_address_locator=add_locator, 
+	config_keyword="")
 
 
 #Geocode Points
