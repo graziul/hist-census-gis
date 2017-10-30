@@ -1,7 +1,7 @@
 #
 # Name:			Create Blocks and Block Points.py
 #
-# Author(s):	Matt Martinez (adapted for AssignBlockNums.py by Chris Graziul, seperated into seperate functions by Joey Danko)
+# Author(s):	Matt Martinez (adapted for AssignBlockNums.py by Chris Graziul, divided into seperate functions by Joey Danko)
 #
 # Purpose:		Use street grid and microdata to create blocks and perform initial geocode
 #
