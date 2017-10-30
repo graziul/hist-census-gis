@@ -17,7 +17,6 @@ import sys
 import re
 from operator import itemgetter
 <<<<<<< HEAD
-<<<<<<< HEAD
 
 #dir_path = "S:\\Projects\\1940Census\\StLouis\\GIS_edited\\"
 #name = "StLouis"
@@ -25,20 +24,12 @@ from operator import itemgetter
 =======
 import pandas as pd
 >>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
-=======
-import pandas as pd
-
-dir_path = "S:\\Projects\\1940Census\\StLouis\\GIS_edited_Joey\\"
-name = "StLouis"
-state = "MO"
->>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
 
 dir_path = sys.argv[1] + "\\GIS_edited\\"
 name = sys.argv[2]
 state = sys.argv[3]
 #start_from = sys.argv[4]
 
-<<<<<<< HEAD
 <<<<<<< HEAD
 # overwrite output
 arcpy.env.overwriteOutput=True
@@ -56,14 +47,9 @@ grid_uns2 =  dir_path + name + state + "_1930_stgrid_edit_Uns2.shp"
 reference_data = dir_path + name + state + "_1930_stgrid_edit_Uns2_dupAddrFixed.shp 'Primary Table'"
 grid = dir_path + name + state + "_1940_stgrid_edit.shp"
 >>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
-=======
-reference_data = dir_path + name + state + "_1930_stgrid_edit_Uns2_dupAddrFixed.shp 'Primary Table'"
-grid = dir_path + name + state + "_1940_stgrid_edit.shp"
->>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
 dissolve_grid = dir_path + name + "_1930_stgrid_Dissolve.shp"
 split_grid = dir_path + name + "_1930_stgrid_Split.shp"
 pblocks = dir_path + name + "_1930_Pblk.shp"
-<<<<<<< HEAD
 <<<<<<< HEAD
 add_locator = dir_path + name + "_addloc"
 #'_1930_Addresses.csv' originates from 'Create 1930 and 1940 Address Files.R' code
@@ -72,9 +58,6 @@ address_fields="Street address; City city; State state"
 points30 = dir_path + name + "_1930_Points.shp"
 pblk_points = dir_path + name + "_1930_Pblk_Points.shp"
 temp = dir_path + name + "_temp.shp"
-=======
-#start_from = sys.argv[4]
->>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
 
 field_map="'Feature ID' FID VISIBLE NONE; \
 '*From Left' MIN_LFROMA VISIBLE NONE; \
@@ -510,7 +493,6 @@ def fix_dup_address_ranges(grid_uns2):
 	for err in TopoErrors :
 		addresses.write(str(err[0])+"\n")
 
-<<<<<<< HEAD
 	addresses.close()
 
 	return "Fixed duplicate addrses ranges"
@@ -988,8 +970,6 @@ def geocode(dir_path, name):
         arcpy.SpatialJoin_analysis(points30, pblocks, pblk_points, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
         print("The script has finished executing the 'SpatialJoin' tool")
 
-=======
->>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
 print("The script has started to work and is running the 'street.py' function")
 street(name, state)
 print("The script has finished executing the 'street.py' function and has now started executing 'physical_blocks.py' function")
@@ -997,7 +977,4 @@ physical_blocks(dir_path, name)
 print("The script has finished executing the 'physical_blocks.py' function and has now started executing 'geocode.py' function")
 geocode(dir_path, name)
 print("The script has finished executing the 'geocode.py' function and the entire script is complete")
-<<<<<<< HEAD
->>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
-=======
 >>>>>>> parent of 4e04f61... Merge branch 'master' of https://github.com/graziul/hist-census-gis
