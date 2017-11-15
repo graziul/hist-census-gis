@@ -9,9 +9,13 @@ from microclean.HNclean import *
 from microclean.SetPriority import *
 
 # Version number
-version = 5
+version = 6
 
 # Changelog
+#
+# V6
+#	- Added fuzzy matching against 1940 grid, 1930 Chicago group grid, and contemporary grid (using ED maps)
+#	- Updated Steve Morse dictionaries (harmonized TYPE across decades)
 #
 # V5
 #	- Integrated street names from edited 1940 street grid in matching process*
@@ -40,7 +44,7 @@ version = 5
 
 datestr = time.strftime("%Y_%m_%d")
 
-def clean_microdata(city_info, debug=False):
+def clean_microdata(city_info, ed_map=False, debug=False):
 
 	#
 	# Step 0: Initialize a bunch of variables for use throughout
@@ -55,16 +59,16 @@ def clean_microdata(city_info, debug=False):
 	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
 	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
 
- 	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
- 		print("%s is done" % (city))
- 		return None
+#	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
+#		print("%s is done" % (city))
+#		return None
 
 	HN_SEQ = {}
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-	init()
- 	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
+#	init()
+ #	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -105,13 +109,14 @@ def clean_microdata(city_info, debug=False):
 	#
 
 	# Step 4a: Search for fuzzy matches
-	df, fuzzy_info = find_fuzzy_matches(df, city, 'street_precleanedHN', sm_all_streets, sm_ed_st_dict)
+	ed_map = True
+	df, fuzzy_info = find_fuzzy_matches(df, city, state, 'street_precleanedHN', sm_all_streets, sm_ed_st_dict, ed_map)
 
 	# Step 4b: Use fuzzy matches to get house number sequences
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df['street_precleanedHN']
-	df.loc[df['fuzzy_match_sm_bool'],street_var] = df['fuzzy_match_sm']
-	HN_SEQ_new = {}
+	df.loc[df['current_match_bool'],street_var] = df['current_match']
+	HN_SEQ = {}
 	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
 	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
 
@@ -154,7 +159,7 @@ def clean_microdata(city_info, debug=False):
 		student_vars = ['hhid','hhorder','institution','rel_id','dn','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','check_ed','clean_priority']
 	if year==1930:
 		df['street_fuzzy_match'] = ''
-		df.loc[~df['overall_match_bool'],'street_fuzzy_match'] = df['fuzzy_match_sm']		
+		df.loc[~df['overall_match_bool'],'street_fuzzy_match'] = df['fuzzy_match']		
 		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','street_fuzzy_match','overall_match','clean_priority']
 
 	df = df[student_vars]
