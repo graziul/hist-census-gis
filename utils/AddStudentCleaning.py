@@ -41,7 +41,7 @@ studentcleaned_file_name = file_path + '/%s/studentcleaned/%s' % (str(year),stud
 autostud_file_name = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.csv')
 autostud_file_stata = file_path + '/%s/autostudcleaned/%s' % (str(year),city.replace(' ','') + '_StudAuto.dta')
 
-# NOTE: There was a significant error in V1 and V2 where DIR = TYPE for some reason
+# NOTE: There was a significant error in V1 and V2 where DIR = TYPE for some reason5
 if int(version) < 3:
 	autocleaned_file_name = file_path + '/%s/autocleaned/V5/%s_AutoCleanedV5.csv' % (str(year),city.replace(' ',''))
 else:
@@ -471,7 +471,10 @@ vars_formerge = ['image_id','line_num','clean_priority','street_raw',
 
 sc_formerge = sc[vars_formerge].drop_duplicates(['image_id','line_num','st_edit'])
 
-mc = ac.merge(sc_formerge,on=['image_id','line_num','clean_priority'],indicator=True)
+try:
+	mc = ac.merge(sc_formerge,on=['image_id','line_num','clean_priority'],indicator=True)
+except:
+	mc = ac.merge(sc_formerge,on=['image_id','line_num'],indicator=True)
 
 if len(mc) != sum(mc['_merge'] == 'both'):
 	print('Merge error')
@@ -498,7 +501,7 @@ def add_type(TYPE,TYPE_stud,st_edit):
 
 #Function to blank st_edit if st_edit==TYPE
 def blank_st_edit(st_edit, TYPE):
-	if st_edit == TYPE:
+	if st_edit.strip() == TYPE:
 		return ''
 	else:
 		return st_edit
@@ -533,6 +536,7 @@ mc_readd_dir = mc_readd_dir[['overall_match','overall_match2']].drop_duplicates(
 streets_w_dirs_file = file_path + '/%s/studentcleaned/streets_w_dirs%s%s.csv' % (str(year), c, s)
 mc_readd_dir.to_csv(streets_w_dirs_file)
 
+
 # Rename 'overall_match' variables to reflect which might not have DIR
 mc['overall_match_wrong'] = mc['overall_match']
 mc['overall_match'] = mc['overall_match2']
@@ -560,6 +564,14 @@ def find_best_street(overall_match,st_edit_matched,checked_st,clean_priority):
 		return ''
 
 mc['autostud_street'] = mc.apply(lambda x: find_best_street(x['overall_match'],x['st_edit_matched'],x['checked_st'],x['clean_priority']),axis=1)
+
+def get_guess(autostud_street, street_precleanedhn):
+	if autostud_street == '':
+		return street_precleanedhn
+	else:
+		return autostud_street
+
+mc['st_best_guess'] = mc.apply(lambda x: get_guess(x['autostud_street'],x['street_precleanedhn']), axis=1)
 
 #
 # Step 5 (final): Format and save file "CITY_StudAuto.dta"
