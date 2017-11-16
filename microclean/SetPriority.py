@@ -119,27 +119,27 @@ def set_priority(df):
 	return df, priority_info
 
 def create_overall_match_variables(df,street_post_fuzzy=None):
-	if street_post_fuzzy is None:
-		street_post_fuzzy = 'street_post_fuzzy'
-	try:
-		post = '_' + street_post_fuzzy.split('_')[3].split('HN')[0]
-	except:
-		post = ''
 
-	df['sm_fuzzy_match_blank_fix'+post] = (df[street_post_fuzzy] == '') & (df[street_post_fuzzy+'HN'] != df[street_post_fuzzy])
-	df['fuzzy_match_sm_bool'+post+'HN'] = np.where(df['fuzzy_match_sm_bool'+post] | df['sm_fuzzy_match_blank_fix'+post],True,False)
+	#Tabulate the fuzzy matches
+ 	df['fuzzy_match_bool'] = np.where(df['current_match_bool'] & ~df['exact_match_bool'],True,False)
+ 	#Make sure to include blank fixes (and changes due to house number sequences)
+	df['fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
+	df['fuzzy_match_boolHN'] = np.where(df['fuzzy_match_bool'] | df['fuzzy_match_blank_fix'],True,False)
 
-	df['overall_match'+post] = ''
-	df['overall_match_type'+post] = ''
-	df['overall_match_bool'+post] = False
+	#Incorporate street names from blank fixing into current_match
+	df.loc[df['fuzzy_match_blank_fix'],'current_match'] = df['street_post_fuzzyHN']
+	df.loc[df['fuzzy_match_blank_fix'],'current_match_bool'] = True
 
-	df.loc[df['fuzzy_match_sm_bool'+post+'HN'],'overall_match'+post] = df['street_post_fuzzy'+post+'HN']
-	df.loc[df['exact_match_bool'+post],'overall_match'+post] = df['street_precleaned'+post+'HN']
+	#Create overall_match
+	df['overall_match'] = df['current_match']
+	df['overall_match_bool'] = df['current_match_bool']
 
-	df.loc[df['fuzzy_match_sm_bool'+post+'HN'],'overall_match_type'+post] = 'Fuzzy'
-	df.loc[df['exact_match_bool'+post],'overall_match_type'+post] = 'Exact'
+	df.loc[df['overall_match_bool'],'overall_match'] = df['current_match']
+	df.loc[df['fuzzy_match_boolHN'],'overall_match_type'] = 'Fuzzy'
+	df.loc[df['exact_match_bool'],'overall_match_type'] = 'Exact'
 
-	df.loc[(df['overall_match_type'+post] == 'Exact') | (df['overall_match_type'+post] == 'Fuzzy'),'overall_match_bool'+post] = True 
+	del df['current_match']
+	del df['current_match_bool']
 
 	return df
 
