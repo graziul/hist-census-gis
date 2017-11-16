@@ -17,8 +17,9 @@ import sys
 import re
 from operator import itemgetter
 import pandas as pd
+import pysal as ps
 
-dir_path = "S:\\Projects\\1940Census\\StLouis\\GIS_edited\\"
+dir_path = "S:/Projects/1940Census/StLouis/GIS_edited/"
 name = "StLouis"
 state = "MO"
 geocode_file = ""
@@ -32,66 +33,74 @@ geocode_file = sys.argv[4]
 """
 
 different_geocode = False
-if geocode_file not "":
+if geocode_file != "":
 	different_geocode = True
 
 # overwrite output
 arcpy.env.overwriteOutput=True
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
-def street(name, state):
-	#THIS IS AN ONGOING ISSUE: WHICH VERSION TO START FROM? PAY CLOSE ATTENTION!
+def street(dir_path, name, state):
+
+	#Create Paths to be used throughout Process
 	grid = dir_path + name + state + "_1940_stgrid_edit.shp"
 	grid_1940 = "S:\\Projects\\1940Census\\DirAdd\\" + name + state + "_1940_stgrid_diradd.shp"
-	arcpy.CopyFeatures_management(grid_1940, grid)
-	#Create Paths to be used throughout Process
 	dissolve_grid = dir_path + name + "_1930_stgrid_Dissolve.shp"
 	temp = dir_path + name + "_temp.shp"
 	split_grid = dir_path + name + "_1930_stgrid_Split.shp"
 	grid_uns =  dir_path + name + state + "_1930_stgrid_edit_Uns.shp"
 	grid_uns2 =  dir_path + name + state + "_1930_stgrid_edit_Uns2.shp"
 
-	#Check CITY and STATE, standardized and add if it doens't exist yet
-	fields_raw = arcpy.ListFields(grid)
-	fields = [i.name for i in fields_raw]
+	# Function to reads in DBF files and return Pandas DF
+	def dbf2DF(dbfile, upper=False): 
+		if dbfile.split('.')[1] == 'shp':
+			dbfile = dbfile.replace('.shp','.dbf')
+		db = ps.open(dbfile) #Pysal to open DBF
+		d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
+		#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
+		pandasDF = pd.DataFrame(d) #Convert to Pandas DF
+		if upper == True: #Make columns uppercase if wanted 
+			pandasDF.columns = map(str.upper, db.header) 
+		db.close() 
+		return pandasDF
 
-	r_city = re.compile('[Cc][Ii][Tt][Yy]')
-	has_city = filter(r_city.match,fields)
+	# Function to save Pandas DF as DBF file 
+	def save_dbf(df, shapefile_name, field_map = False):
+		dir_temp = '/'.join(shapefile_name.split('/')[:-1])
+		file_temp = shapefile_name.split('/')[-1]
+		csv_file = dir_temp + "/temp_for_dbf.csv"
+		df.to_csv(csv_file,index=False)
+		try:
+			os.remove(dir_temp + "/schema.ini")
+		except:
+			pass
 
-	def add_city(grid, name):
-		arcpy.AddField_management(grid,'CITY','TEXT')
-		cur = arcpy.UpdateCursor(grid)
-		for row in cur:
-			row.setValue('CITY',name)
-			cur.updateRow(row)
-		del cur
+		# Add a specific field mapping for a special case
+		if field_map:
+			file = csv_file
+			field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+			CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
+			STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
+			MIN_LFROMA "MIN_LFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
+			MAX_LTOADD "MAX_LTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
+			MIN_RFROMA "MIN_RFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
+			MAX_RTOADD "MAX_RTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
+			grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, file, file, file, file, file)
+		else:
+			field_map = None
 
-	if len(has_city) == 0:
-			 add_city(grid, name)
-	if len(has_city) == 1:
-		if has_city[0] != 'CITY':
-			arcpy.DeleteField_management(grid, has_city[0])
-			add_city(grid, name)
-	r_state = re.compile('[Ss][Tt][Aa][Tt][Ee]')
-	has_state = filter(r_state.match,fields)
+		arcpy.TableToTable_conversion(in_rows=csv_file, 
+			out_path=dir_temp, 
+			out_name="temp_for_shp.dbf",
+			field_mapping=field_map)
+		os.remove(shapefile_name.replace('.shp','.dbf'))
+		os.remove(csv_file)
+		os.rename(dir_temp+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(dir_temp+"/temp_for_shp.dbf.xml")
+		os.remove(dir_temp+"/temp_for_shp.cpg")
 
-	def add_state(grid, state):
-		arcpy.AddField_management(grid,'STATE','TEXT')
-		cur = arcpy.UpdateCursor(grid)
-		for row in cur:
-			row.setValue('STATE',state)
-			cur.updateRow(row)
-		del cur
-
-	if len(has_state) == 0:
-		add_state(grid, state)
-	if len(has_state) == 1:
-		if has_state[0] != 'STATE':
-			arcpy.DeleteField_management(grid, has_state[0])
-			add_state(grid, state)
-
-	##### #Geocode Points# #####
-	#Unsplit lines before creating address locator (more involved than expected)
+	#Create copy of "diradd" file to use as grid
+	arcpy.CopyFeatures_management(grid_1940, grid)
 
 	#Can't <null> blank values, so when Dissolve Unsplit lines aggregates MIN replace with big number
 	codeblock_min = """def replace(x):
@@ -118,65 +127,69 @@ def street(name, state):
 	arcpy.CalculateField_management(grid, fieldName, expression, "PYTHON", codeblock_max)
 
 	fieldName = "RTOADD"
-
 	expression = "replace(!RTOADD!)"
-
 	arcpy.CalculateField_management(grid, fieldName, expression, "PYTHON", codeblock_max)
 
-	#First Dissolve St_Grid lines
-	arcpy.Dissolve_management(grid, dissolve_grid, "FULLNAME", multi_part="SINGLE_PART", unsplit_lines="DISSOLVE_LINES")
-	#Second Split Lines at Intersections
-	arcpy.FeatureToLine_management(dissolve_grid, split_grid)
+	#First Dissolve completely St_Grid
+	grid_id_grid = dir_path + 'StLouisMO_grid_id.shp'
+	arcpy.Dissolve_management(grid, grid_id_grid, 
+		multi_part="SINGLE_PART", 
+		unsplit_lines="DISSOLVE_LINES")
 
-	#Spatial join split_grid to grid to get unique seg_id for split segments
-	field_map_spatjoin = """FULLNAME \"FULLNAME\" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-	LFROMADD \"LFROMADD\" true true false 80 Text 0 0 ,First,#,%s,LFROMADD,-1,-1; 
-	LTOADD \"LTOADD\" true true false 80 Text 0 0 ,First,#,%s,LTOADD,-1,-1; 
-	RFROMADD \"RFROMADD\" true true false 80 Text 0 0 ,First,#,%s,RFROMADD,-1,-1; 
-	RTOADD \"RTOADD\" true true false 80 Text 0 0 ,First,#,%s,RTOADD,-1,-1; 
-	NEWSS \"NEWSS\" true true false 9 Long 0 9 ,First,#,%s,NEWSS,-1,-1; 
-	NAMEREV \"NAMEREV\" true true false 9 Long 0 9 ,First,#,%s,NAMEREV,-1,-1; 
-	Shape_Leng \"Shape_Leng\" true true false 24 Double 15 23 ,First,#,%s,Shape_Leng,-1,-1; 
-	NEWSS30 \"NEWSS30\" true true false 24 Double 15 23 ,First,#,%s,NEWSS30,-1,-1; 
-	NAMEREV30 \"NAMEREV30\" true true false 24 Double 15 23 ,First,#,%s,NAMEREV30,-1,-1; 
-	CITY \"CITY\" true true false 254 Text 0 0 ,First,#,%s,CITY,-1,-1; 
-	STATE \"STATE\" true true false 254 Text 0 0 ,First,#,%s,STATE,-1,-1; 
-	FID_StLoui \"FID_StLoui\" true true false 10 Long 0 10 ,First,#,%s,FID_StLoui,-1,-1; 
-	FULLNAME_1 \"FULLNAME_1\" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1; 
-	Seg_ID \"Seg_ID\" true true false 10 Long 0 10 ,First,#,%s,Seg_ID,-1,-1""" % (grid, grid, grid, grid, grid, grid, grid, grid, grid, grid, grid, grid, split_grid, split_grid, split_grid)
-	arcpy.SpatialJoin_analysis(target_features=split_grid, join_features=grid, out_feature_class=temp, 
-		join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_map_spatjoin,
-		match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
+	#Add a unique, static identifier (so ranges can be changed later)
+	expression="!FID! + 1"
+	arcpy.AddField_management(grid_id_grid, "grid_id", "LONG", 4, "", "","", "", "")
+	arcpy.CalculateField_management(grid_id_grid, "grid_id", expression, "PYTHON_9.3")
 
-	#Dissolve on seg_id to unsplit street segments
-	arcpy.Dissolve_management(in_features=temp, out_feature_class=grid_uns, dissolve_field="FULLNAME;TARGET_FID;city;state", statistics_fields="LFROMADD MIN;LTOADD MAX;RFROMADD MIN;RTOADD MAX", multi_part="MULTI_PART", unsplit_lines="UNSPLIT_LINES")
+	#Intersect with grid
+	temp = dir_path + 'temp_step.shp'
+	arcpy.CopyFeatures_management(grid, temp)
+	arcpy.Intersect_analysis([temp, grid_id_grid], grid)
+	arcpy.DeleteFeatures_management(temp)
+
+	#Second Dissolve St_Grid lines
+	arcpy.Dissolve_management(in_features=grid, 
+		out_feature_class=grid_uns, 
+		dissolve_field="grid_id", 
+		statistics_fields="LFROMADD MIN;LTOADD MAX;RFROMADD MIN;RTOADD MAX", 
+		unsplit_lines="UNSPLIT_LINES")
+
+	#Get the longest street name from multi-part segments
+	df_grid = dbf2DF(grid)
+	longest_name_dict = {}
+	problem_segments = {}
+	for grid_id, group in df_grid.groupby(['grid_id']):
+		max_chars = group['FULLNAME'].str.len().max()
+		longest_name = group.loc[group['FULLNAME'].str.len()==max_chars,'FULLNAME'].drop_duplicates().tolist()
+		if len(longest_name) > 1:
+			problem_segments[grid_id] = longest_name
+		# Always returns first entry in longest name (a list of names equal in length to max_chars)
+		longest_name_dict[grid_id] = longest_name[0]
+
+	#Assign longest street name by grid_id (also add city and state for geolocator)
+	df_grid_uns = dbf2DF(grid_uns)
+	df_grid_uns['CITY'] = name
+	df_grid_uns['STATE'] = state
+	df_grid_uns['FULLNAME'] = df_grid_uns.apply(lambda x: longest_name_dict[x['grid_id']], axis=1)
 
 	#Blank out the big/small numbers now that aggregation is done
-	codeblock = """def replace(x):
+
+	# Function to blank out big/small numbers
+	def replace_nums(x):
 		if x == "999999" or x == "-1":
 			return ' '
 		else:
-			return x"""
+			return x
 
-	fieldName = "MIN_LFROMA"
-	expression = "replace(!MIN_LFROMA!)"
-	arcpy.CalculateField_management(grid_uns, fieldName, expression, "PYTHON", codeblock)
+	hn_ranges = ["MIN_LFROMA", "MIN_RFROMA", "MAX_LTOADD", "MAX_RTOADD"]
+	for field in hn_ranges:
+		df_grid_uns[field] = df_grid_uns[field].astype(str)
+		df_grid_uns[field] = df_grid_uns.apply(lambda x: replace_nums(x[field]), axis=1)
 
-	fieldName = "MIN_RFROMA"
-	expression = "replace(!MIN_RFROMA!)"
-	arcpy.CalculateField_management(grid_uns, fieldName, expression, "PYTHON", codeblock)
-
-	fieldName = "MAX_LTOADD"
-	expression = "replace(!MAX_LTOADD!)"
-	arcpy.CalculateField_management(grid_uns, fieldName, expression, "PYTHON", codeblock)
-
-	fieldName = "MAX_RTOADD"
-	expression = "replace(!MAX_RTOADD!)"
-	arcpy.CalculateField_management(grid_uns, fieldName, expression, "PYTHON", codeblock)
-
-	#Fix grid problems (OFFLOAD TO SEPARATE SCRIPT)
+	save_dbf(df_grid_uns, grid_uns, field_map=True)
 
 	#Add a unique, static identifier (so ranges can be changed later)
+	arcpy.DeleteField_management(grid_uns, "grid_id")
 	expression="!FID! + 1"
 	arcpy.AddField_management(grid_uns, "grid_id", "LONG", 4, "", "","", "", "")
 	arcpy.CalculateField_management(grid_uns, "grid_id", expression, "PYTHON_9.3")
@@ -184,6 +197,8 @@ def street(name, state):
 	#Fix duplicate address ranges
 	t = fix_dup_address_ranges(grid_uns)
 	print(t)
+
+	return problem_segments
 
 # Amory's code for fixing duplicate address ranges
 def fix_dup_address_ranges(grid_uns):
@@ -511,7 +526,7 @@ def attach_pblk_id(dir_path, name, points30):
 
 print("The script has started to work and is running the 'street' function")
 
-street(name, state)
+problem_segments = street(dir_path, name, state)
 print("The script has finished executing the 'street' function and has now started executing 'physical_blocks' function")
 
 physical_blocks(dir_path, name)
