@@ -22,6 +22,8 @@ arcpy.env.overwriteOutput=True
 city = 'StLouis'
 state = 'MO'
 
+street_var = 'st_best_guess'
+
 dir_path = "S:/Projects/1940Census/%s" % (city) #TO DO: Directories need to be city_name+state_abbr
 grid_1930 = "S:/Projects/1940Census/DirAdd/" + city + state + "_1940_stgrid_diradd.shp"
 grid = dir_path + "/GIS_edited/" + city + state + "_1940_stgrid_diradd.shp"
@@ -340,8 +342,9 @@ def save_dbf(df, shapefile, dir_path):
 # Load files
 df_grid = dbf2DF(grid.replace('.shp','.dbf'))
 df_micro = load_large_dta(microdata_file_name)
-df_micro = df_micro[['ed','block','hn','autostud_street','dir','name','type','checked_st']]
-df_micro['autostud_streetOld'] = df_micro['autostud_street']
+#df_micro = df_micro[['ed','block','hn',street_var,'dir','name','type','checked_st']]
+df_micro[street_var+'_old'] = df_micro[street_var]
+#df_micro_backup = df_micro
 
 def get_dir(st):
 	_, DIR, _, _ = standardize_street(st)
@@ -372,9 +375,9 @@ ed_grouped = df_dir_ed.groupby(['ed'])
 for ed, group in ed_grouped:
 	ed_dir_dict[ed] = group['DIR'].tolist()
 
-# Get dictionary of {autostud_street:list(DIRs)} and delete any that have combination of N/S and E/W
-df_name_dir = df_micro[['autostud_street','dir','name','type']]
-df_name_dir['st'], df_name_dir['dir'], df_name_dir['name'], df_name_dir['type'] = zip(*df_name_dir.apply(lambda x: standardize_street(x['autostud_street']), axis=1))
+# Get dictionary of {street_var:list(DIRs)} and delete any that have combination of N/S and E/W
+df_name_dir = df_micro[[street_var,'dir','name','type']]
+df_name_dir['st'], df_name_dir['dir'], df_name_dir['name'], df_name_dir['type'] = zip(*df_name_dir.apply(lambda x: standardize_street(x[street_var]), axis=1))
 df_name_dir['st'] = (df_name_dir['name'] + ' ' + df_name_dir['type']).str.strip()
 df_name_dir = df_name_dir.drop_duplicates(['dir','st'])
 df_name_dir = df_name_dir.loc[df_name_dir['dir']!='']
@@ -395,40 +398,47 @@ def check_st_dirs(dirs):
 micro_st_dir_dict = {k:v for k,v in micro_st_dir_dict.items() if check_st_dirs(v)}
 
 # Create function for pre-pending DIR to select streets
-def prepend_dir(ED, DIR, NAME, TYPE, autostud_street):
+def prepend_dir(ED, street_var):
+	_, DIR, NAME, TYPE = standardize_street(street_var)
 	#If DIR exists, return current values
 	if DIR != '':
-		return DIR, autostud_street
+		return DIR, street_var
 	else:
 		try:
 			st = (NAME + ' ' + TYPE).strip()
 			micro_st_dirs = micro_st_dir_dict[st]
 			ed_dirs = ed_dir_dict[ED]
+		#	print([st, micro_st_dirs, ed_dirs])
 			#If ED has single DIR, see if street has same DIR
 			if len(ed_dirs) == 1 and ed_dirs == micro_st_dirs:
-				DIR = ed_dirs[0]
-				autostud_street = (DIR + ' ' + NAME + ' ' + TYPE).strip()
-				return DIR, autostud_street
+				new_DIR = ed_dirs[0]
+				new_street = (new_DIR + ' ' + NAME + ' ' + TYPE).strip()
+		#		print(new_street)
+				return new_DIR, new_street
 			#If street has single DIR, see if it's in the ED
 			if len(micro_st_dirs) == 1 and micro_st_dirs in ed_dirs:
-				DIR = micro_st_dirs[0]
-				autostud_street = (DIR + ' ' + NAME + ' ' + TYPE).strip()
-				return DIR, autostud_street
+				new_DIR = micro_st_dirs[0]
+				new_street = (new_DIR + ' ' + NAME + ' ' + TYPE).strip()
+		#		print(new_street)
+				return new_DIR, new_street
 			#If ED has multiple DIRs, see if 
 	#		if len(ed_dirs) > 1 and micro_st_dirs:
 	#		if len(micro_st_dirs) > 1 and set(micro):
 			else:
-				return DIR, autostud_street
+				return DIR, street_var
 		except:
-			return DIR, autostud_street
+			return DIR, street_var
 
-df_micro['dir'], df_micro['autostud_street'] = zip(*df_micro.apply(lambda x: prepend_dir(x['ed'], x['dir'], x['name'], x['type'], x['autostud_streetOld']), axis=1))	
+df_micro['dir'], df_micro[street_var] = zip(*df_micro.apply(lambda x: prepend_dir(x['ed'], x[street_var+'_old']), axis=1))	
 
-df_micro['changed'] = df_micro['autostud_street'] != df_micro['autostud_streetOld']
-df_micro['changed'].sum()
+df_micro['changed_Dir'] = df_micro[street_var] != df_micro[street_var+'_old']
+print(df_micro['changed_Dir'].sum())
 
 file_name_students = dir_path + '/StataFiles_Other/1930/%s%s_StudAuto.csv' % (city, state)
 df_micro.to_csv(file_name_students)
 
+# Convert manually to .dta
 
+# Next script is Matt's Address creation script
 
+# Script after that is FixBlockNumsUsingMap.py
