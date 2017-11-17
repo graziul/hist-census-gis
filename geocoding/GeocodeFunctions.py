@@ -97,7 +97,6 @@ def save_dbf(df, shapefile_name):
 	os.remove(dir_temp+"/temp_for_shp.dbf.xml")
 	os.remove(dir_temp+"/temp_for_shp.cpg")
 
-
 # Add and calculate check field, save the result
 def is_touch(ED, neighbor):
 	a =  str(int(ED))
@@ -169,7 +168,6 @@ def geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,a
 		out_feature_class=gr, 
 		out_relationship_type="STATIC")
 	print("The program has finished the geocoding process and 'Geocode' function is complete")
-
 
 # Validate function (adjacent EDs)
 def validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file):
@@ -314,7 +312,9 @@ def validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notco
 	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=dir_path, out_name=residual_file)
 	os.remove(csv_file)
 
+#
 # Renumbered grid
+#
 
 # "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
 add = dir_path + "StLouis_1930_Addresses.csv"
@@ -341,7 +341,9 @@ geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_
 
 validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file="NotGeocoded.dbf")
 
+#
 # Contemporary grid
+#
 
 # "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
 add = dir_path + "NotGeocoded.dbf"
