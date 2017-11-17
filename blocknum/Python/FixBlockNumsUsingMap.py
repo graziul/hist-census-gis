@@ -71,12 +71,12 @@ dir_path = "S:\\Projects\\1940Census\\StLouis\\GIS_edited\\"
 name = "StLouis"
 state = "MO"
 
-# Geocode using street grid with 1930 HN ranges
+# Geocode using street grid with 1930 HN ranges (should be done already)
 add_locator_old = dir_path + name + "_addlocOld"
 addresses = dir_path + name + "_1930_Addresses.csv"
 address_fields_old="Street address; City CITY; State STATE; ZIP <None>"
-points30 = dir_path + name + "_1930_Points.shp"
-arcpy.GeocodeAddresses_geocoding(addresses, add_locator_old, address_fields_old, points30)
+points30 = dir_path + name + "_1930_Points_updated.shp"
+#arcpy.GeocodeAddresses_geocoding(addresses, add_locator_old, address_fields_old, points30)
 
 # Obtain residuals
 residual_addresses = dir_path + name + "_1930_Addresses_residual.csv"
@@ -98,8 +98,6 @@ temp_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith("tem
 for f in temp_files:
     if os.path.isfile(f):
         os.remove(f)
-
-#arcpy.DeleteFeatures_management(temp)
 
 # Geocode residuals using street grid with contemporary HN ranges
 add_locator_contemp = dir_path + name + "_addloc"
@@ -142,7 +140,10 @@ def fix_block(index, block):
 		return block
 
 df_micro['block'] = df_micro[['index','block_old']].apply(lambda x: fix_block(x['index'], x['block_old']), axis=1)
-df_micro['block_changed'] = df_micro['block'] != df_micro['block_old']
+df_micro['changed_Block'] = df_micro['block'] != df_micro['block_old']
+
+
+print(df_micro['changed_Block'].sum())
 
 # Save microdata file
 df_micro.to_csv(microdata_file.replace('.dta','.csv'))
