@@ -68,47 +68,50 @@ def load_large_dta(fname):
 
 
 dir_path = "S:\\Projects\\1940Census\\StLouis\\GIS_edited\\"
-name = "StLouis"
+city = "StLouis"
 state = "MO"
 
 # Geocode using street grid with 1930 HN ranges (should be done already)
-add_locator_old = dir_path + name + "_addlocOld"
-addresses = dir_path + name + "_1930_Addresses.csv"
+add_locator_old = dir_path + city + "_addlocOld"
+addresses = dir_path + city + "_1930_Addresses.csv"
 address_fields_old="Street address; City CITY; State STATE; ZIP <None>"
-points30 = dir_path + name + "_1930_Points_updated.shp"
+points30 = dir_path + city + "_1930_Points_updated.shp"
 #arcpy.GeocodeAddresses_geocoding(addresses, add_locator_old, address_fields_old, points30)
 
 # Obtain residuals
-residual_addresses = dir_path + name + "_1930_Addresses_residual.csv"
-temp = dir_path + "temp.shp"
-arcpy.MakeFeatureLayer_management(points30, "geocodelyr")
-arcpy.SelectLayerByAttribute_management("geocodelyr", "NEW_SELECTION", """ "Status" <> 'M' """)
-arcpy.CopyFeatures_management("geocodelyr",temp)
-df = dbf2DF(temp.replace('.shp','.dbf'))
-resid_vars = ['index','ed','fullname','state','city','address']
-df_resid = df[resid_vars]
-file_name = dir_path + name + "_1930_Addresses_residual.csv"
-if os.path.isfile(file_name):
-	os.remove(file_name)
-df_resid.to_csv(file_name)
-if os.path.isfile(file_name.replace('.csv','.dbf')):
-	os.remove(file_name.replace('.csv','.dbf'))
-arcpy.TableToTable_conversion(file_name,dir_path,name + "_1930_Addresses_residual.dbf")
-temp_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith("temp")]
-for f in temp_files:
-    if os.path.isfile(f):
-        os.remove(f)
+def get_residuals(city, dir_path):
+	residual_addresses = dir_path + city + "_1930_Addresses_residual.csv"
+	temp = dir_path + "temp.shp"
+	arcpy.MakeFeatureLayer_management(points30, "geocodelyr")
+	arcpy.SelectLayerByAttribute_management("geocodelyr", "NEW_SELECTION", """ "Status" <> 'M' """)
+	arcpy.CopyFeatures_management("geocodelyr",temp)
+	df = dbf2DF(temp.replace('.shp','.dbf'))
+	resid_vars = ['index','ed','fullname','state','city','address']
+	df_resid = df[resid_vars]
+	file_name = dir_path + city + "_1930_Addresses_residual.csv"
+	if os.path.isfile(file_name):
+		os.remove(file_name)
+	df_resid.to_csv(file_name)
+	if os.path.isfile(file_name.replace('.csv','.dbf')):
+		os.remove(file_name.replace('.csv','.dbf'))
+	arcpy.TableToTable_conversion(file_name,dir_path,city + "_1930_Addresses_residual.dbf")
+	temp_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith("temp")]
+	for f in temp_files:
+	    if os.path.isfile(f):
+	        os.remove(f)
+
+get_residuals(city, dir_path)
 
 # Geocode residuals using street grid with contemporary HN ranges
-add_locator_contemp = dir_path + name + "_addloc"
-addresses_resid = dir_path + name + "_1930_Addresses_residual.dbf"
+add_locator_contemp = dir_path + city + "_addloc"
+addresses_resid = dir_path + city + "_1930_Addresses_residual.dbf"
 address_fields_contemp="Street address; City city; State state"
-points30_resid = dir_path + name + "_1930_ResidPoints.shp"
+points30_resid = dir_path + city + "_1930_ResidPoints.shp"
 arcpy.GeocodeAddresses_geocoding(addresses_resid, add_locator_contemp, address_fields_contemp, points30_resid)
 
 # Intersect geocoded points with ED map
-ed_map = dir_path + name + "_1930_ED.shp"
-intersect_resid_ed = dir_path + name + "_1930_intersect_resid_ed.shp"
+ed_map = dir_path + city + "_1930_ED.shp"
+intersect_resid_ed = dir_path + city + "_1930_intersect_resid_ed.shp"
 arcpy.Intersect_analysis([ed_map, points30_resid], intersect_resid_ed)
 
 # Identify points in the correct ED
@@ -118,8 +121,8 @@ arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", """ "ed"
 arcpy.CopyFeatures_management("geocodelyr1",inrighted)
 
 # Intersect points in the correct ED with block map
-intersect_correct_ed = dir_path + name + "_1930_intersect_correct_ed.shp"
-block_shp_file = dir_path + name + "_1930_block_ED_checked.shp"
+intersect_correct_ed = dir_path + city + "_1930_intersect_correct_ed.shp"
+block_shp_file = dir_path + city + "_1930_block_ED_checked.shp"
 arcpy.Intersect_analysis([block_shp_file, inrighted], intersect_correct_ed)
 
 # Get correct block number based on block map and geocoded in correct ED
@@ -128,20 +131,22 @@ df_correct_ed['block'] = df_correct_ed['am_bn'].str.split('-').str[1:].str.join(
 fix_block_dict = df_correct_ed[['index','block']].set_index('index')['block'].to_dict()
 
 # Replace microdata block number with block map block number
-microdata_file = "S:\\Projects\\1940Census\\" + name + "\\StataFiles_other\\1930\\"  + name + state + "_StudAuto.dta"
-df_micro = load_large_dta(microdata_file)
-df_micro['block_old'] = df_micro['block']
+def replace_blocknum(city, state):
+	microdata_file = "S:\\Projects\\1940Census\\" + city + "\\StataFiles_other\\1930\\"  + city + state + "_StudAuto.dta"
+	df_micro = load_large_dta(microdata_file)
+	df_micro['block_old'] = df_micro['block']
 
-def fix_block(index, block):
-	try:
-		fix_block = fix_block_dict[index]
-		return fix_block
-	except:
-		return block
+	def fix_block(index, block):
+		try:
+			fix_block = fix_block_dict[index]
+			return fix_block
+		except:
+			return block
 
-df_micro['block'] = df_micro[['index','block_old']].apply(lambda x: fix_block(x['index'], x['block_old']), axis=1)
-df_micro['changed_Block'] = df_micro['block'] != df_micro['block_old']
+	df_micro['block'] = df_micro[['index','block_old']].apply(lambda x: fix_block(x['index'], x['block_old']), axis=1)
+	df_micro['changed_Block'] = df_micro['block'] != df_micro['block_old']
 
+replace_blocknum(city, state)
 
 print(df_micro['changed_Block'].sum())
 

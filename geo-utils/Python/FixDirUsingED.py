@@ -12,6 +12,7 @@
 import arcpy
 import pysal as ps
 import pandas as pd
+import subprocess
 import sys
 import re
 import os
@@ -21,18 +22,9 @@ arcpy.env.overwriteOutput=True
 
 city = 'StLouis'
 state = 'MO'
-
+r_path = "C:\Program Files\\R\\R-3.4.2\\bin\Rscript"
+script_path = "C:\Users\\cgraziul\\Documents\\GitHub\\hist-census-gis"
 street_var = 'st_best_guess'
-
-dir_path = "S:/Projects/1940Census/%s" % (city) #TO DO: Directories need to be city_name+state_abbr
-grid_1930 = "S:/Projects/1940Census/DirAdd/" + city + state + "_1940_stgrid_diradd.shp"
-grid = dir_path + "/GIS_edited/" + city + state + "_1940_stgrid_diradd.shp"
-ed_1930 = dir_path + "/GIS_edited/" + city + "_1930_block_ED_checked.shp"
-grid_ed_SJ = dir_path + "/GIS_edited/" + city + state + "_1930_grid_edSJ.shp"
-
-microdata_file_name = dir_path + "/StataFiles_Other/1930/" + city + state + "_StudAuto.dta"
-
-arcpy.CopyFeatures_management(grid_1930,grid)
 
 # Function to load large Stata files
 def load_large_dta(fname):
@@ -339,9 +331,19 @@ def save_dbf(df, shapefile, dir_path):
 	os.remove(dir_path+"\\temp_for_shp.dbf.xml")
 	os.remove(dir_path+"\\temp_for_shp.cpg")
 
+dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+grid_1930 = "S:/Projects/1940Census/DirAdd/" + city + state + "_1940_stgrid_diradd.shp"
+grid = dir_path + "/GIS_edited/" + city + state + "_1940_stgrid_diradd.shp"
+ed_1930 = dir_path + "/GIS_edited/" + city + "_1930_block_ED_checked.shp"
+grid_ed_SJ = dir_path + "/GIS_edited/" + city + state + "_1930_grid_edSJ.shp"
+
+microdata_file = dir_path + "/StataFiles_Other/1930/" + city + state + "_StudAuto.dta"
+
+arcpy.CopyFeatures_management(grid_1930,grid)
+
 # Load files
 df_grid = dbf2DF(grid.replace('.shp','.dbf'))
-df_micro = load_large_dta(microdata_file_name)
+df_micro = load_large_dta(microdata_file)
 #df_micro = df_micro[['ed','block','hn',street_var,'dir','name','type','checked_st']]
 df_micro[street_var+'_old'] = df_micro[street_var]
 #df_micro_backup = df_micro
@@ -375,13 +377,16 @@ ed_grouped = df_dir_ed.groupby(['ed'])
 for ed, group in ed_grouped:
 	ed_dir_dict[ed] = group['DIR'].tolist()
 
-# Get dictionary of {street_var:list(DIRs)} and delete any that have combination of N/S and E/W
+## I feel like this could be simplified significantly
+
+# Create dictionary of {street_var:list(DIRs)} and delete any that have combination of N/S and E/W
 df_name_dir = df_micro[[street_var,'dir','name','type']]
 df_name_dir['st'], df_name_dir['dir'], df_name_dir['name'], df_name_dir['type'] = zip(*df_name_dir.apply(lambda x: standardize_street(x[street_var]), axis=1))
 df_name_dir['st'] = (df_name_dir['name'] + ' ' + df_name_dir['type']).str.strip()
 df_name_dir = df_name_dir.drop_duplicates(['dir','st'])
 df_name_dir = df_name_dir.loc[df_name_dir['dir']!='']
 
+# Create dictionary of microdata streets and DIRs
 micro_st_dir_dict = {}
 st_grouped = df_name_dir.groupby(['st'])
 for st, group in st_grouped:
@@ -397,7 +402,9 @@ def check_st_dirs(dirs):
 		return False
 micro_st_dir_dict = {k:v for k,v in micro_st_dir_dict.items() if check_st_dirs(v)}
 
-# Create function for pre-pending DIR to select streets
+## ^^^
+
+# Pre-pend DIR to select streets
 def prepend_dir(ED, street_var):
 	_, DIR, NAME, TYPE = standardize_street(street_var)
 	#If DIR exists, return current values
@@ -431,8 +438,25 @@ def prepend_dir(ED, street_var):
 
 df_micro['dir'], df_micro[street_var] = zip(*df_micro.apply(lambda x: prepend_dir(x['ed'], x[street_var+'_old']), axis=1))	
 
+# Check how many streets had DIRs pre-pended
 df_micro['changed_Dir'] = df_micro[street_var] != df_micro[street_var+'_old']
 print(df_micro['changed_Dir'].sum())
+
+# Write addresses to file
+def get_addresses(city_name, state_abbr, r_path, script_path):
+
+	city_name = city_name.replace(" ","")
+	file_path = "S:\Projects\\1940Census\\%s" % (city_name) #TO DO: Directories need to be city_name+state_abbr
+	file_name = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
+
+	# Create 1930 addresses
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Create 1930 Address.R',file_path,city_name,file_name,state_abbr])
+	if t != 0:
+		print("Error generating 1930 addresses for "+city_name)
+	else:
+		print("OK!\n")
+
+get_addresses(city, state, r_path, script_path)
 
 file_name_students = dir_path + '/StataFiles_Other/1930/%s%s_StudAuto.csv' % (city, state)
 df_micro.to_csv(file_name_students)
