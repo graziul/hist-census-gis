@@ -552,18 +552,38 @@ mc = find_fuzzy_matches(mc,c,'st_edit',sm_all_streets,sm_ed_st_dict)
 # Step 4: Find best street (autoclean vs student cleaned)
 #
 
-def find_best_street(overall_match,st_edit_matched,checked_st,clean_priority):
-	if (type(overall_match) == str) & (overall_match != ''):
-		return overall_match
-	# This has to be fixed 
-	if (checked_st != 'c, ambiguous') & ~nan_equal(clean_priority,np.NaN):
-		return st_edit_matched
-	if (type(overall_match) != str) & (st_edit_matched != ''):
-		return st_edit_matched
-	else:
-		return ''
+def find_best_street(overall_match, st_edit, st_edit_matched, checked_st, clean_priority):
 
-mc['autostud_street'] = mc.apply(lambda x: find_best_street(x['overall_match'],x['st_edit_matched'],x['checked_st'],x['clean_priority']),axis=1)
+	# Overall_match has DIR
+	_, DIR_overall, _, _ = standardize_street(overall_match)
+	overall_match_dir_bool = DIR_overall != ''
+	# St_edit has DIR
+	_, DIR_st_edit, _, _ = standardize_street(st_edit)
+	st_edit_dir_bool = DIR_st_edit != ''
+	# St_edit_matched has DIR
+	_, DIR_st_edit_matched, _, _ = standardize_street(st_edit_matched)
+	st_edit_matched_dir_bool = DIR_st_edit_matched != ''	
+
+	# An overall_match exists
+	overall_match_exists = (type(overall_match) == str) & (overall_match != '')
+	# Unambiguously cleaned (manually)
+	unambig_cleaned = (checked_st != 'c, ambiguous') & ~nan_equal(clean_priority,np.NaN)
+	# No overall_match but manually cleaned (matched to Steve Morse)
+	no_overall_but_manual_match = (type(overall_match) != str) & (st_edit_matched != '')
+
+	# Use automated match if there is no unambiguously cleaned street name 
+	if overall_match_exists & ~unambig_cleaned:
+		return overall_match
+	# If automated match and unambiguously cleaned street exists...
+	if unambig_cleaned:
+		# Return st_edit if st_edit_matched has DIR and st_edit_matched does not have DIR
+		if st_edit_dir_bool & (st_edit_dir_bool != st_edit_matched_dir_bool):
+			return st_edit
+		# Otherwise, return st_edit_matched
+		else:
+			return st_edit_matched
+
+mc['autostud_street'] = mc.apply(lambda x: find_best_street(x['overall_match'],x['st_edit'],x['st_edit_matched'],x['checked_st'],x['clean_priority']),axis=1)
 
 def get_guess(autostud_street, street_precleanedhn):
 	if autostud_street == '':
