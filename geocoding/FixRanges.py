@@ -6,6 +6,9 @@ import pickle
 import arcpy
 import os
 
+# overwrite output
+arcpy.env.overwriteOutput=True
+
 # Function to reads in DBF files and return Pandas DF
 def dbf2DF(dbfile, upper=False): 
 	if dbfile.split('.')[1] == 'shp':
@@ -143,9 +146,8 @@ def fix_blanks(name, group, hn_ranges, blanks_dict):
 
 	return fix_blanks_dict_temp, blanks_fixable, blanks_fixed
 
-#shp_file="S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_renumbered.shp"
-
-shp_file = "S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_edit_Uns2.shp"
+shp_file="S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_renumbered.shp"
+#shp_file = "S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_edit_Uns2.shp"
 shp_file_fixed = shp_file.replace('.shp','bf.shp')
 arcpy.CopyFeatures_management(shp_file, shp_file_fixed)
 dbf_file=shp_file_fixed.replace('.shp','.dbf')
@@ -162,7 +164,10 @@ hn_ranges = [min_l, max_l, min_r, max_r]
 
 # Blank out zero house numbers
 for hn_range in hn_ranges:
-	df.loc[df[hn_range]=='0',hn_range] = ''
+	try:
+		df.loc[df[hn_range]=='0',hn_range] = ''
+	except:
+		df.loc[df[hn_range]==0,hn_range] = ''
 
 # Flip ranges when min > max
 df[hn_ranges] = df[hn_ranges].apply(lambda x: flip_ranges(x),axis=1)
@@ -200,11 +205,32 @@ for name in df['FULLNAME'].drop_duplicates().tolist():
 fix_blanks_dict = {k:v for k,v in fix_blanks_dict.items() if v != {}}
 blanks_dict = {k:v for k,v in blanks_dict.items() if v != dict(zip(hn_ranges,[[],[],[],[]]))}
 
-per_blanks_fixable = float(blanks_fixable_total)/(2*len(df))
+
+# Number of blank block faces (missing either hn)
+df_r = df[((df[min_r]=='') | (df[max_r]==''))]
+df_l = df[((df[min_l]=='') | (df[max_l]==''))]
+blank_block_faces = len(df_r) + len(df_l)
+per_blanks_total = float(blank_block_faces)/(2*len(df))
+print("Total blank block faces: "+str(blank_block_faces)+" (" + '{:.1%}'.format(per_blanks_total) + " of " + str(2*len(df)) + " block faces)")
+
+per_blanks_fixable = float(blanks_fixable_total)/blank_block_faces
 per_blanks_fixed = float(blanks_fixed_total)/blanks_fixable_total
 
-print("Fixable blanks: " + str(blanks_fixable_total) + " (" + '{:.1%}'.format(per_blanks_fixable) + " of " + str(2*len(df)) + " segment-sides)")
+print("Fixable blanks: " + str(blanks_fixable_total) + " (" + '{:.1%}'.format(per_blanks_fixable) + " of " + str(blank_block_faces) + " blank block faces)")
 print("Fixed blanks: " + str(blanks_fixed_total) + " (" + '{:.1%}'.format(per_blanks_fixed) + " of fixable blanks)")
+
+# Blank streets
+blank_streets = {}
+for name, group in df_grouped:
+	unique_hns = []
+	for hn_range in hn_ranges:
+		unique_hns.append(group[hn_range].drop_duplicates().tolist())
+		if unique_hns == [[''],[''],[''],['']]:
+			blank_streets[name] = len(group)
+per_blanks_unfixable = float(2*sum(blank_streets.values()))/(blank_block_faces-blanks_fixable_total)
+per_blanks_st = float(2*sum(blank_streets.values()))/blank_block_faces
+
+print("There are "+str(len(blank_streets))+" streets with no house number ranges ("+str(2*sum(blank_streets.values()))+ " blank block faces total), representing "+ '{:.1%}'.format(per_blanks_unfixable) +" of unfixable blank block faces and "+'{:.1%}'.format(per_blanks_st)+" of total blank block faces")
 
 def fill_in_blanks(x):
 	grid_id, min_left, max_left, min_right, max_right = x
@@ -235,3 +261,4 @@ df[min_l], df[max_l], df[min_r], df[max_r] = zip(*df[['grid_id']+hn_ranges].appl
 
 
 save_dbf(df, dbf_file.replace('.dbf','.shp'))
+
