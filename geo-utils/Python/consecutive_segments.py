@@ -22,7 +22,7 @@ for f in fields :
         fid_var = f.name
 
 #This should be the new standard for segment IDs:
-#fid_var = "grid_id"
+fid_var = "grid_id"
 
 field_names = [x.name for x in fields]
 
