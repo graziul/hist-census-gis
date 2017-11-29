@@ -26,11 +26,11 @@ state_abbr = "MO"
 dir_path = file_path + "\\GIS_edited\\"
 edit_shp_file = dir_path + "EmptyBlockToFillNumbers2.shp"
 block_shp_file = dir_path + city_name + "_1930_block_ED_checked.shp"
-temp_shp_file = dir_path + city_name + "_1930_block_temp.shp"
+ed_shp_file = dir_path + city_name + "_1930_ED.shp"
+temp_shp_file = dir_path + city_name + "_1930_temp.shp"
+dbf_file = dir_path + city_name + "_1930_temp.dbf"
 
 arcpy.CopyFeatures_management(edit_shp_file,temp_shp_file)
-
-dbf_file = dir_path + city_name + "_1930_block_temp.dbf"
 df = dbf2DF(dbf_file,upper=False)
 
 #Code to clean up automatic block numbers
@@ -63,6 +63,7 @@ os.rename(dir_path+"\\temp_for_shp.dbf",dbf_file)
 os.remove(dir_path+"\\temp_for_shp.dbf.xml")
 os.remove(dir_path+"\\temp_for_shp.cpg")
 
+#Select non-missing block numbers
 arcpy.MakeFeatureLayer_management(temp_shp_file,"edit_lyr")
 arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "am_bn" <> \'\' ')
 arcpy.CopyFeatures_management("edit_lyr",block_shp_file)
@@ -77,7 +78,17 @@ arcpy.CalculateField_management(temp_shp_file, "pblk_id", expression, "PYTHON_9.
 arcpy.CopyFeatures_management(temp_shp_file,block_shp_file)
 arcpy.DeleteFeatures_management(temp_shp_file)
 
+#Select non-missing EDs
+arcpy.CopyFeatures_management(edit_shp_file,temp_shp_file)
+arcpy.MakeFeatureLayer_management(temp_shp_file,"edit_lyr")
+arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "ed" <> \'\' ')
+arcpy.CopyFeatures_management("edit_lyr",ed_shp_file)
+arcpy.DeleteFeatures_management(temp_shp_file)
 
+#Dissolve by "ed"
+arcpy.Dissolve_management(in_features=ed_shp_file, out_feature_class=temp_shp_file, dissolve_field=["ed"], statistics_fields="", multi_part="MULTI_PART", unsplit_lines="DISSOLVE_LINES")
+arcpy.CopyFeatures_management(temp_shp_file,ed_shp_file)
+arcpy.DeleteFeatures_management(temp_shp_file)
 
 #### Could write dictionary to assign blocks {block:ed} that could then be used to fill in ED
 
