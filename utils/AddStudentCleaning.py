@@ -541,6 +541,13 @@ mc_readd_dir.to_csv(streets_w_dirs_file)
 mc['overall_match_wrong'] = mc['overall_match']
 mc['overall_match'] = mc['overall_match2']
 
+def fix_nan_st(st):
+	if nan_equal(st,np.NaN):
+		return ''
+	else:
+		return st
+mc['overall_match'] = mc.apply(lambda x: fix_nan_st(x['overall_match']), axis=1)
+
 #
 # Step 3: Run fuzzy matching from autoclean to add TYPE to st_edit as needed (i.e. add "St")
 #
