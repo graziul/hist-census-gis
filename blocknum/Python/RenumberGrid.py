@@ -17,6 +17,7 @@ def dbf2DF(dbfile, upper=False):
 	db.close() 
 	return pandasDF
 
+# Function to load large DTA files
 def load_large_dta(fname):
 
 	reader = pd.read_stata(fname, iterator=True)
@@ -36,34 +37,27 @@ def load_large_dta(fname):
 
 	return df
 
-#file_path = sys.argv[1]
-#name = sys.argv[2]
-#state = sys.argv[2]
-
-name = "StLouis"
-state = "MO"
-old = True
-
-def renumber_grid(name, state, old):
+# Renumber grid using microdata
+def renumber_grid(name, state):
 
 	#Paths
 	file_path = "S:\\Projects\\1940Census\\" + name 
-	microdata_file = file_path + "\\StataFiles_Other\\1930\\" + name + state + "_StudAuto.dta"
 	dir_path = file_path + "\\GIS_edited\\"
 
 	#Files
-	block_dbf_file = dir_path + name + "_1930_block_ED_checked.dbf"
+	microdata_file = file_path + "\\StataFiles_Other\\1930\\" + name + state + "_StudAuto.dta"
 	stgrid_file = dir_path + name + state + "_1930_stgrid_edit_Uns2.shp"
 	out_file = dir_path + name + state + "_1930_stgrid_renumbered.shp"
 	block_shp_file = dir_path + name + "_1930_block_ED_checked.shp"
+	block_dbf_file = block_shp_file.replace(".shp",".dbf")
 	addresses = dir_path + name + "_1930_Addresses.csv"
 	points30 = dir_path + name + "_1930_Points_updated.shp"
-
 	pblk_file = block_shp_file #Note: This is the manually edited block file
 	pblk_grid_file2 = dir_path + name + state + "_1930_Pblk_Grid_SJ2.shp"
+	add_locator = dir_path + name + "_addlocOld" 
 
 	# Load
-	df_grid = dbf2DF(out_file.replace(".shp",".dbf"),upper=False)
+	df_grid = dbf2DF(stgrid_file.replace(".shp",".dbf"),upper=False)
 	df_block = dbf2DF(block_dbf_file,upper=False)
 	df_micro = load_large_dta(microdata_file)
 
@@ -175,7 +169,13 @@ def renumber_grid(name, state, old):
 
 	#Add ED field
 	arcpy.AddField_management(out_file, "ed", "TEXT", 5, "", "","", "", "")
-	#### CHECK THIS, DOES out_file HAVE RANGES? DOES BELOW LEAVE CONTEMPORARY RANGES?
+
+	#Delete contemporary ranges and recreate HN range attributes
+	arcpy.DeleteField_management(out_file, ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD'])
+	arcpy.AddField_management(out_file, "MIN_LFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_LTOADD", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MIN_RFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_RTOADD", "TEXT", 5, "", "","", "", "")
 
 	#Add HN ranges and ED based on grid_id
 	cursor = arcpy.UpdateCursor(out_file)
@@ -196,51 +196,8 @@ def renumber_grid(name, state, old):
 		cursor.updateRow(row)
 	del(cursor)
 
-	if old:
-		add_locator = dir_path + name + "_addlocOld" #_nobchange"
-		arcpy.DeleteField_management(out_file, ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD'])
-		arcpy.AddField_management(out_file, "MIN_LFROMA", "TEXT", 5, "", "","", "", "")
-		arcpy.AddField_management(out_file, "MAX_LTOADD", "TEXT", 5, "", "","", "", "")
-		arcpy.AddField_management(out_file, "MIN_RFROMA", "TEXT", 5, "", "","", "", "")
-		arcpy.AddField_management(out_file, "MAX_RTOADD", "TEXT", 5, "", "","", "", "")
-		# Use edblock to assign street ranges
-		cursor = arcpy.UpdateCursor(out_file)
-		for row in cursor:
-			grid_id = row.getValue('grid_id')
-			st_name = row.getValue('FULLNAME')
-			try:
-				hn_range = range(grid_hn_dict[grid_id]['min_hn'],grid_hn_dict[grid_id]['max_hn']+1)
-				evensList = [x for x in hn_range if x % 2 == 0]
-				oddsList = [x for x in hn_range if x % 2 != 0]
-				row.setValue('MIN_LFROMA', min(evensList))
-				row.setValue('MAX_LTOADD', max(evensList))
-				row.setValue('MIN_RFROMA', min(oddsList))
-				row.setValue('MAX_RTOADD', max(oddsList))
-				row.setValue('ed', int(grid_hn_dict[grid_id]['ed']))
-			except:
-				pass
-			cursor.updateRow(row)
-		del(cursor)
-	else:
-		# Use edblock to assign street ranges
-		cursor = arcpy.UpdateCursor(out_file)
-		for row in cursor:
-			grid_id = row.getValue('grid_id')
-			st_name = row.getValue('FULLNAME')
-			try:
-				row.setValue('ed', int(grid_hn_dict[grid_id]['ed']))
-			except:
-				pass
-			cursor.updateRow(row)
-		del(cursor)
-		add_locator = dir_path + name + "_addlocContemp"
-
 	#Make sure address locator doesn't already exist - if it does, delete it
-	if old:
-		add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addlocOld")]
-	else:
-		add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addlocContemp")]
-
+	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addlocOld")]
 	for f in add_loc_files:
 		if os.path.isfile(f):
 			os.remove(f)
@@ -285,4 +242,10 @@ def renumber_grid(name, state, old):
 	#Geocode Points
 	arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
 
-renumber_grid(name, state, old)
+#name = sys.argv[2]
+#state = sys.argv[2]
+
+name = "StLouis"
+state = "MO"
+
+renumber_grid(name, state)
