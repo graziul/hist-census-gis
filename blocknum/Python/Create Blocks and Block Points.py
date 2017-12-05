@@ -129,23 +129,22 @@ def street(dir_path, name, state):
 	expression = "replace(!RTOADD!)"
 	arcpy.CalculateField_management(grid, fieldName, expression, "PYTHON", codeblock_max)
 
-	#First Dissolve completely St_Grid
-	grid_id_grid = dir_path + name + state + '_grid_id.shp'
-	arcpy.Dissolve_management(grid, grid_id_grid, 
+	#First Dissolve to create split_grid (no multi-part segments, split at intersections)
+	arcpy.Dissolve_management(grid, split_grid, 
 		multi_part="SINGLE_PART", 
 		unsplit_lines="DISSOLVE_LINES")
 
 	#Add a unique, static identifier (so ranges can be changed later)
 	expression="!FID! + 1"
-	arcpy.AddField_management(grid_id_grid, "grid_id", "LONG", 4, "", "","", "", "")
-	arcpy.CalculateField_management(grid_id_grid, "grid_id", expression, "PYTHON_9.3")
+	arcpy.AddField_management(split_grid, "grid_id", "LONG", 4, "", "","", "", "")
+	arcpy.CalculateField_management(split_grid, "grid_id", expression, "PYTHON_9.3")
 
 	#Intersect with grid
 	temp = dir_path + 'temp_step.shp'
 	arcpy.CopyFeatures_management(grid, temp)
-	arcpy.Intersect_analysis([temp, grid_id_grid], grid)
+	arcpy.Intersect_analysis([temp, split_grid], grid)
 	arcpy.DeleteFeatures_management(temp)
-	arcpy.DeleteFeatures_management(grid_id_grid)
+	#arcpy.DeleteFeatures_management(split_grid)
 
 	#Second Dissolve St_Grid lines
 	arcpy.Dissolve_management(in_features=grid, 
