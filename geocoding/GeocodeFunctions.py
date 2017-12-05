@@ -336,7 +336,6 @@ notcor = dir_path + "StLouisMO_1930_NotGeocodedCorrect.shp"
 # Correct geocode
 cor = dir_path + "StLouisMO_1930_GeocodedCorrect.shp"
 
-
 geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr)
 
 validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file="NotGeocoded.dbf")
@@ -368,6 +367,9 @@ geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_
 
 validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file="NotGeocoded_Contemp.dbf")
 
+#
+# Combine both geocodes to get the best geocode
+#
 
 def merge(list_of_shp):
 	for shp in list_of_shp:
