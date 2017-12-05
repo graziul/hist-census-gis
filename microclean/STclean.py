@@ -442,7 +442,7 @@ def load_steve_morse(city, state, year):
 
 specstd = {ord(u'’'): u"'", }
 def specials(error):
-  return specstd.get(ord(error.object[error.start]), u''), error.end
+	return specstd.get(ord(error.object[error.start]), u''), error.end
 codecs.register_error('specials', specials)
 
 #Function to load 1940 street grid data (no or incomplete ED information)
@@ -527,7 +527,7 @@ def get_stgrid_with_EDs(city, state, map_type):
 #
 
 #Function to do exact matching against Steve Morse street-ED lists
-def find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict, basic_info):
+def find_exact_matches_sm(df, street, sm_all_streets, basic_info):
 
 	post, num_records, num_streets = basic_info
 
@@ -603,7 +603,7 @@ def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, st_grid_
 	basic_info = [post,num_records,num_streets]
 
 	# Check for exact matches between microdata and Steve Morse
-	df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, sm_st_ed_dict,basic_info)
+	df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
 
 	# Check for exact matches between microdata and 1940 street grid 
 	df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
