@@ -19,18 +19,17 @@ from operator import itemgetter
 import pandas as pd
 import pysal as ps
 
-dir_path = "S:/Projects/1940Census/StLouis/GIS_edited/"
-name = "StLouis"
-state = "MO"
-geocode_file = ""
+#dir_path = "S:/Projects/1940Census/StLouis/GIS_edited/"
+#name = "StLouis"
+#state = "MO"
+#geocode_file = ""
 
 print("Start") # ERASE LATER
-"""
-dir_path = sys.argv[1] + "\\GIS_edited\\"
+
+dir_path = sys.argv[1] + "/GIS_edited/"
 name = sys.argv[2]
 state = sys.argv[3]
-geocode_file = sys.argv[4]
-"""
+geocode_file = ""
 
 different_geocode = False
 if geocode_file != "":
@@ -44,7 +43,7 @@ def street(dir_path, name, state):
 
 	#Create Paths to be used throughout Process
 	grid = dir_path + name + state + "_1940_stgrid_edit.shp"
-	grid_1940 = "S:\\Projects\\1940Census\\DirAdd\\" + name + state + "_1940_stgrid_diradd.shp"
+	grid_1940 = "S:/Projects/1940Census/DirAdd/" + name + state + "_1940_stgrid_diradd.shp"
 	dissolve_grid = dir_path + name + "_1930_stgrid_Dissolve.shp"
 	temp = dir_path + name + "_temp.shp"
 	split_grid = dir_path + name + "_1930_stgrid_Split.shp"
@@ -131,7 +130,7 @@ def street(dir_path, name, state):
 	arcpy.CalculateField_management(grid, fieldName, expression, "PYTHON", codeblock_max)
 
 	#First Dissolve completely St_Grid
-	grid_id_grid = dir_path + 'StLouisMO_grid_id.shp'
+	grid_id_grid = dir_path + name + state + '_grid_id.shp'
 	arcpy.Dissolve_management(grid, grid_id_grid, 
 		multi_part="SINGLE_PART", 
 		unsplit_lines="DISSOLVE_LINES")
@@ -146,6 +145,7 @@ def street(dir_path, name, state):
 	arcpy.CopyFeatures_management(grid, temp)
 	arcpy.Intersect_analysis([temp, grid_id_grid], grid)
 	arcpy.DeleteFeatures_management(temp)
+	arcpy.DeleteFeatures_management(grid_id_grid)
 
 	#Second Dissolve St_Grid lines
 	arcpy.Dissolve_management(in_features=grid, 

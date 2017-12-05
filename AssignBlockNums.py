@@ -8,8 +8,8 @@ import os
 import subprocess
 import sys
 
-city_name = "St Louis"
-state_abbr = "MO"
+city_name = "Providence"
+state_abbr = "RI"
 #r_path = "C:\Program Files\\R\\R-3.3.2\\bin\Rscript"
 #script_path = "C:\Users\\cgraziul\\hist-census-gis"
 r_path = "C:\Program Files\\R\\R-3.4.2\\bin\Rscript"
@@ -21,8 +21,9 @@ script_path = "C:\Users\\cgraziul\\Documents\\GitHub\\hist-census-gis"
 #script_path = sys.argv[4]
 
 city_name = city_name.replace(" ","")
-file_path = "S:\Projects\\1940Census\\%s" % (city_name) #TO DO: Directories need to be city_name+state_abbr
-file_name = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
+file_path = "S:/Projects/1940Census/%s" % (city_name) #TO DO: Directories need to be city_name+state_abbr
+#file_name = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
+file_name = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_AutoCleanedV5.csv"
 
 print("Combined script for automated block numbering (%s)\n" % (city_name))
 
