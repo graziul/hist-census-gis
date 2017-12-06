@@ -264,5 +264,5 @@ def standardize_street(st):
     if runAgain :
         return standardize_street(st)
     else :
-        return [st, DIR, NAME, TYPE]
+        return st, DIR, NAME, TYPE
 
