@@ -27,9 +27,14 @@ file_name = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + 
 
 print("Combined script for automated block numbering (%s)\n" % (city_name))
 
+# Paths
+
+paths = [r_path, script_path, file_path]
+
 # Functions
 
-def create_1930_addresses(r_path, script_path, file_path, city_name, file_name, state_abbr):
+def create_1930_addresses(city_name, state_abbr, file_name, paths):
+	r_path, script_path, file_path = paths
 	print("Creating 1930 addresses\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Create 1930 Address.R',file_path,city_name,file_name,state_abbr])
 	if t != 0:
@@ -37,7 +42,8 @@ def create_1930_addresses(r_path, script_path, file_path, city_name, file_name, 
 	else:
 		print("OK!\n")
 
-def create_blocks_and_block_points(script_path, file_path, city_name, state_abbr):
+def create_blocks_and_block_points(city_name, state_abbr, paths):
+	r_path, script_path, file_path = paths
 	print("Creating blocks and block points\n")
 	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\Create Blocks and Block Points.py",file_path,city_name,state_abbr])
 	if t != 0:
@@ -45,7 +51,8 @@ def create_blocks_and_block_points(script_path, file_path, city_name, state_abbr
 	else:
 		print("OK!\n")
 
-def identify_1930_eds(r_path, script_path, file_path, city_name):
+def identify_1930_eds(city_name, paths):
+	r_path, script_path, file_path = paths
 	print("Identifying 1930 EDs\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 EDs.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
@@ -53,7 +60,8 @@ def identify_1930_eds(r_path, script_path, file_path, city_name):
 	else:
 		print("OK!\n")
 
-def analyzing_microdata_and_grid(r_path, script_path, file_path, city_name, state_abbr):
+def analyzing_microdata_and_grid(city_name, state_abbr, paths):
+	r_path, script_path, file_path = paths
 	print("Analyzing microdata and grids\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
@@ -61,7 +69,8 @@ def analyzing_microdata_and_grid(r_path, script_path, file_path, city_name, stat
 	else:
 		print("OK!\n")
 
-def add_ranges_to_new_grid(r_path, script_path, file_path, city_name, file_name, state_abbr):
+def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
+	r_path, script_path, file_path = paths
 	print("Adding ranges to new grid\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Add Ranges to New Grid.R',file_path,city_name,file_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
@@ -69,7 +78,8 @@ def add_ranges_to_new_grid(r_path, script_path, file_path, city_name, file_name,
 	else:
 		print("OK!\n")
 
-def identify_1930_blocks(r_path, script_path, file_path, city_name):
+def identify_1930_blocks(city_name, paths):
+	r_path, script_path, file_path = paths
 	print("Identifying 1930 blocks\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 Blocks.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
@@ -77,7 +87,8 @@ def identify_1930_blocks(r_path, script_path, file_path, city_name):
 	else:
 		print("OK!\n")
 
-def get_block_desription_guesses(script_path, file_path, city_name, state_abbr):
+def get_block_desription_guesses(city_name, state_abbr, paths):
+	r_path, script_path, file_path = paths
 	print("Getting block numbers using block descriptions from microdata\n")
 	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunBlockDesc.py",file_path,city_name,state_abbr])
 	if t != 0:
@@ -85,7 +96,8 @@ def get_block_desription_guesses(script_path, file_path, city_name, state_abbr):
 	else:
 		print("OK!\n")
 
-def run_ocr(script_path, file_path, city_name):
+def run_ocr(city_name, paths):
+	r_path, script_path, file_path = paths
 	print("Runing Matlab script\n")
 	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunOCR.py",file_path,script_path],stdout=open(os.devnull, 'wb'))
 	if t != 0:
@@ -93,7 +105,8 @@ def run_ocr(script_path, file_path, city_name):
 	else:
 		print("OK!\n")
 
-def integrate_ocr(script_path, file_path, city_name, file_name):
+def integrate_ocr(city_name, file_name, paths):
+	r_path, script_path, file_path = paths
 	print("Integrating OCR block numbering results\n")
 	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\MapOCRintegration.py",file_path,city_name,file_name])
 	if t != 0:
@@ -101,7 +114,8 @@ def integrate_ocr(script_path, file_path, city_name, file_name):
 	else:
 		print("OK!\n")
 
-def set_blocknum_confidence(script_path, file_path, city_name):
+def set_blocknum_confidence(city_name, paths):
+	r_path, script_path, file_path = paths
 	print("Setting confidence\n")
 	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\SetConfidence.py",file_path,city_name])
 	if t != 0:
@@ -119,22 +133,22 @@ print("Step 1: Apply R algorithm\n")
 # onto the same physical block and decides  
 
 # Create 1930 addresses
-create_1930_addresses(r_path, script_path, file_path, city_name, file_name, state_abbr)
+create_1930_addresses(city_name, state_abbr, file_name, paths)
 
 # Create blocks and block points
-create_blocks_and_block_points(script_path, file_path, city_name, state_abbr)
+create_blocks_and_block_points(city_name, state_abbr, paths)
 
 # Identify 1930 EDs
-identify_1930_eds(r_path, script_path, file_path, city_name)
+identify_1930_eds(city_name, paths)
 
 # Analyze microdata and grid
-analyzing_microdata_and_grid(r_path, script_path, file_path, city_name, state_abbr)
+analyzing_microdata_and_grid(city_name, state_abbr, paths)
 
 # Add ranges to new grid
-#add_ranges_to_new_grid(r_path, script_path, file_path, city_name, file_name, state_abbr)		
+#add_ranges_to_new_grid(city_name, state_abbr, file_name, paths)		
 
 # Identify 1930 blocks
-identify_1930_blocks(r_path, script_path, file_path, city_name)
+identify_1930_blocks(city_name, paths)
 
 #
 # Step 2: Create and apply "block descriptions" based on microdata
@@ -147,7 +161,7 @@ identify_1930_blocks(r_path, script_path, file_path, city_name)
 print("Step 2: Block descriptions from microdata\n")
 
 # Get block description guesses
-get_block_desription_guesses(script_path, file_path, city_name, state_abbr)
+get_block_desription_guesses(city_name, state_abbr, paths)
 
 #
 # Step 3: Apply Matlab (OCR) algorithm (Author: Chris Graziul)
@@ -162,7 +176,7 @@ print("Step 3: Runing OCR script\n")
 #run_ocr(script_path, file_path, city_name)
 
 # Integrate OCR block numbering results
-#integrate_ocr(script_path, file_path, city_name, file_name)
+#integrate_ocr(city_name, file_name, paths)
 
 #
 # Step 4: Set confidence
@@ -174,4 +188,4 @@ print("Step 3: Runing OCR script\n")
 print("Step 4: Set confidence\n")
 
 # Integrate OCR block numbering results
-set_blocknum_confidence(script_path, file_path, city_name)
+set_blocknum_confidence(city_name, paths)
