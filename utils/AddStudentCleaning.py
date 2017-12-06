@@ -26,14 +26,21 @@ csv.field_size_limit(sys.maxsize)
 
 # These capture information from the command prompt
 c = sys.argv[1]
-c_spaces = c
-c = c.replace(' ','')
 s = sys.argv[2]
-s = s.upper()
-city = c + s
 student_file = sys.argv[3]
 version = sys.argv[4]
 year = sys.argv[5]
+
+#c = "St Louis"
+#s = "MO"
+#student_file = "StLouisMO_ForStudentsV4_rush.dta"
+#version = 6
+#year = 1930
+
+c_spaces = c
+c = c.replace(' ','')
+s = s.upper()
+city = c + s
 
 # Set path and data file names
 file_path = '/home/s4-data/LatestCities' 
@@ -536,7 +543,6 @@ mc_readd_dir = mc_readd_dir[['overall_match','overall_match2']].drop_duplicates(
 streets_w_dirs_file = file_path + '/%s/studentcleaned/streets_w_dirs%s%s.csv' % (str(year), c, s)
 mc_readd_dir.to_csv(streets_w_dirs_file)
 
-
 # Rename 'overall_match' variables to reflect which might not have DIR
 mc['overall_match_wrong'] = mc['overall_match']
 mc['overall_match'] = mc['overall_match2']
@@ -546,7 +552,7 @@ def fix_nan_st(st):
 		return ''
 	else:
 		return st
-mc['overall_match'] = mc.apply(lambda x: fix_nan_st(x['overall_match']), axis=1)
+mc['overall_match'] = mc['overall_match'].apply(fix_nan_st)
 
 #
 # Step 3: Run fuzzy matching from autoclean to add TYPE to st_edit as needed (i.e. add "St")
@@ -562,13 +568,13 @@ mc = find_fuzzy_matches(mc,c,'st_edit',sm_all_streets,sm_ed_st_dict)
 def find_best_street(overall_match, st_edit, st_edit_matched, checked_st, clean_priority):
 
 	# Overall_match has DIR
-	_, DIR_overall, _, _ = standardize_street(overall_match)
+	_, DIR_overall, NAME_overall, TYPE_overall = standardize_street(overall_match)
 	overall_match_dir_bool = DIR_overall != ''
 	# St_edit has DIR
-	_, DIR_st_edit, _, _ = standardize_street(st_edit)
+	_, DIR_st_edit, NAME_st_edit, TYPE_st_edit = standardize_street(st_edit)
 	st_edit_dir_bool = DIR_st_edit != ''
 	# St_edit_matched has DIR
-	_, DIR_st_edit_matched, _, _ = standardize_street(st_edit_matched)
+	_, DIR_st_edit_matched, NAME_st_edit_matched, TYPE_st_edit_matched = standardize_street(st_edit_matched)
 	st_edit_matched_dir_bool = DIR_st_edit_matched != ''	
 
 	# An overall_match exists
@@ -586,9 +592,18 @@ def find_best_street(overall_match, st_edit, st_edit_matched, checked_st, clean_
 		# Return st_edit if st_edit_matched has DIR and st_edit_matched does not have DIR
 		if st_edit_dir_bool & (st_edit_dir_bool != st_edit_matched_dir_bool):
 			return st_edit
+		# Return overall_match if NAME + TYPE are the same as st_edit/st_edit_matched but overall_match has DIR and st_edit does not
+		# st_edit/st_edit_matched have no DIR, but overall_match has DIR
+		overall_only_dir_bool = (~st_edit_dir_bool & ~st_edit_matched_dir_bool & overall_match_dir_bool)
+		# overall_match NAME+TYPE is the same as st_edit_matched NAME+TYPE
+		same_name_type = (NAME_st_edit_matched+TYPE_st_edit_matched).strip() == (NAME_st_edit_matched+TYPE_st_edit_matched).strip()
+		if overall_only_dir_bool & same_name_type:
+			return overall_match
 		# Otherwise, return st_edit_matched
 		else:
 			return st_edit_matched
+	else:
+		return ''
 
 mc['autostud_street'] = mc.apply(lambda x: find_best_street(x['overall_match'],x['st_edit'],x['st_edit_matched'],x['checked_st'],x['clean_priority']),axis=1)
 
