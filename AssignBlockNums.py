@@ -4,15 +4,13 @@
 #	
 #
 
-import os
-import subprocess
-import sys
+from blocknum.blocknum import *
 
-city_name = "Providence"
-state_abbr = "RI"
+city_name = "Akron"
+state_abbr = "OH"
 #r_path = "C:\Program Files\\R\\R-3.3.2\\bin\Rscript"
 #script_path = "C:\Users\\cgraziul\\hist-census-gis"
-r_path = "C:\Program Files\\R\\R-3.4.2\\bin\Rscript"
+r_path = "C:\Program Files\\R\\R-3.4.2\\bin\\Rscript"
 script_path = "C:\Users\\cgraziul\\Documents\\GitHub\\hist-census-gis"
 
 #city_name = sys.argv[1]
@@ -30,98 +28,6 @@ print("Combined script for automated block numbering (%s)\n" % (city_name))
 # Paths
 
 paths = [r_path, script_path, file_path]
-
-# Functions
-
-def create_1930_addresses(city_name, state_abbr, file_name, paths):
-	r_path, script_path, file_path = paths
-	print("Creating 1930 addresses\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Create 1930 Address.R',file_path,city_name,file_name,state_abbr])
-	if t != 0:
-		print("Error generating 1930 addresses for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def create_blocks_and_block_points(city_name, state_abbr, paths):
-	r_path, script_path, file_path = paths
-	print("Creating blocks and block points\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\Create Blocks and Block Points.py",file_path,city_name,state_abbr])
-	if t != 0:
-		print("Error creating blocks and block points for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def identify_1930_eds(city_name, paths):
-	r_path, script_path, file_path = paths
-	print("Identifying 1930 EDs\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 EDs.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-	if t != 0:
-		print("Error identifying 1930 EDs for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def analyzing_microdata_and_grid(city_name, state_abbr, paths):
-	r_path, script_path, file_path = paths
-	print("Analyzing microdata and grids\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-	if t != 0:
-		print("Error analyzing microdata and grid for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
-	r_path, script_path, file_path = paths
-	print("Adding ranges to new grid\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Add Ranges to New Grid.R',file_path,city_name,file_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-	if t != 0:
-		print("Error adding ranges to new grid for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def identify_1930_blocks(city_name, paths):
-	r_path, script_path, file_path = paths
-	print("Identifying 1930 blocks\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 Blocks.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-	if t != 0:
-		print("Error identifying 1930 blocks for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def get_block_desription_guesses(city_name, state_abbr, paths):
-	r_path, script_path, file_path = paths
-	print("Getting block numbers using block descriptions from microdata\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunBlockDesc.py",file_path,city_name,state_abbr])
-	if t != 0:
-		print("Error getting block description guesses for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def run_ocr(city_name, paths):
-	r_path, script_path, file_path = paths
-	print("Runing Matlab script\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunOCR.py",file_path,script_path],stdout=open(os.devnull, 'wb'))
-	if t != 0:
-		print("Error running Matlab OCR script for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def integrate_ocr(city_name, file_name, paths):
-	r_path, script_path, file_path = paths
-	print("Integrating OCR block numbering results\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\MapOCRintegration.py",file_path,city_name,file_name])
-	if t != 0:
-		print("Error integrating OCR block numbering results for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
-def set_blocknum_confidence(city_name, paths):
-	r_path, script_path, file_path = paths
-	print("Setting confidence\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\SetConfidence.py",file_path,city_name])
-	if t != 0:
-		print("Error setting confidence for for "+city_name+"\n")
-	else:
-		print("OK!\n")
 
 #
 # Step 1: Apply R algorithm (Author: Matt Martinez)
