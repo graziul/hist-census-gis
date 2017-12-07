@@ -11,7 +11,7 @@ library(reshape)
 library(reshape2)
 library(maptools)
 library(rgdal)
-library(rJava)
+#library(rJava)
 library(xlsx) 
 
 args <- commandArgs(trailingOnly = TRUE)
