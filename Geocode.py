@@ -30,17 +30,17 @@ paths = [r_path, script_path, dir_path]
 #
 
 microdata_file = dir_path + "/StataFiles_Other/1930/" + city + state + "_StudAuto.dta"
-df = load_large_dta(file_name)
+df = load_large_dta(microdata_file)
 
 # Create 1930 addresses
-create_1930_addresses(city_name=city_name, 
-	state_abbr=state_abbr, 
+create_1930_addresses(city_name=city, 
+	state_abbr=state, 
 	paths=paths, 
 	df=df)
 
 # Create blocks and block points (gets Uns2 and points30)
-create_blocks_and_block_points(city_name=city_name, 
-	state_abbr=state_abbr, 
+create_blocks_and_block_points(city_name=city, 
+	state_abbr=state, 
 	paths=paths)
 
 # Identify 1930 EDs (this will eventually incorporate Amory's ED map)
@@ -53,16 +53,19 @@ create_blocks_and_block_points(city_name=city_name,
 #
 
 df_micro = fix_micro_dir_using_ed_map(city_name=city, 
-	state_abbr=state, 
-	street_var=grid_street_var,
+	state_abbr=state,
+	micro_street_var=micro_street_var, 
+	grid_street_var=grid_street_var,
+	paths=paths,
 	df_micro=df)
 
 #
 # Step 3: Use microdata to fix street grid names
 #
 
-fix_st_grid_names(city_name=city_spaces, 
+fix_st_grid_names(city_spaces=city_spaces, 
 	state_abbr=state, 
+	micro_street_var=micro_street_var, 
 	grid_street_var=grid_street_var,
 	paths=paths, 
 	df_micro=df_micro)
@@ -74,20 +77,20 @@ fix_st_grid_names(city_name=city_spaces,
 # First, update addresses and contemporary geocode
 
 # Create 1930 addresses (now uses updated addresses in df_micro)
-create_1930_addresses(city_name=city_name, 
-	state_abbr=state_abbr, 
+create_1930_addresses(city_name=city, 
+	state_abbr=state, 
 	paths=paths, 
 	df=df_micro)
 
 # Create blocks and block points (gets Uns2 and points30)
-create_blocks_and_block_points(city_name=city_name, 
-	state_abbr=state_abbr, 
+create_blocks_and_block_points(city_name=city, 
+	state_abbr=state, 
 	paths=paths)
 
 # Second, fix microdata block numbers using updated geocode/microdata
 
-df_micro = fix_micro_blocks_using_ed_map(city_name=city_name, 
-	state_abbr=state_abbr, 
+df_micro = fix_micro_blocks_using_ed_map(city_name=city, 
+	state_abbr=state, 
 	paths=paths, 
 	df_micro=df_micro)
 
@@ -109,12 +112,12 @@ geo_path = dir_path + '/GIS_edited/'
 # Common files
 
 # "vm" is the verified map (e.g., ED or block map)
-vm = geo_path + city_name + "_1930_ED.shp"
+vm = geo_path + city + "_1930_ED.shp"
 # Feature Class to Feature Class file
-fc = city_name + state_abbr + "_1930_ED_Feature.shp"
+fc = city + state + "_1930_ED_Feature.shp"
 # Spatial weights files:
-swm_file = geo_path + city_name + state_abbr + "_1930_spatweight.swm"
-swm_table = geo_path + city_name + state_abbr + "_1930_swmTab.dbf"
+swm_file = geo_path + city + state + "_1930_spatweight.swm"
+swm_table = geo_path + city + state + "_1930_swmTab.dbf"
 
 # Common variables
 
@@ -146,24 +149,24 @@ tr = "MAX_RTOADD"
 #
 
 # "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
-add = geo_path + city_name + "_1930_Addresses.csv"
+add = geo_path + city + "_1930_Addresses.csv"
 # "sg" is the name of the street grid on which the previous list of addresses will be geocoded
-sg = geo_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
+sg = geo_path + city + state + "_1930_stgrid_renumbered.shp"
 # Amory's formatted EDs dbf
-fe = geo_path + city_name + state_abbr + "_1930_formattedEDs.dbf"
-fe_file = city_name + state_abbr + "_1930_formattedEDs.dbf"
+fe = geo_path + city + state + "_1930_formattedEDs.dbf"
+fe_file = city + state + "_1930_formattedEDs.dbf"
 # "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
-al = geo_path + city_name + "_addloc_ED"
+al = geo_path + city + "_addloc_ED"
 # "gr" is the filename of the geocoding results
-gr = geo_path + city_name + state_abbr + "_1930_geocode_renumberedED.shp"
+gr = geo_path + city + state + "_1930_geocode_renumberedED.shp"
 # "sg_vm" is the filename of the intersection of the street grid and the verified map
-sg_vm = geo_path + city_name + state_abbr + "_grid_poly_intersect.shp"
+sg_vm = geo_path + city + state + "_grid_poly_intersect.shp"
 #"spatjoin" is joining the geocode to the verified map (e.g., ED or block map)
-spatjoin = geo_path + city_name + state_abbr + "_1930_geo_map_spatjoin.shp"
+spatjoin = geo_path + city + state + "_1930_geo_map_spatjoin.shp"
 # Not correct geocode
-notcor = geo_path + city_name + state_abbr + "_1930_NotGeocodedCorrect.shp"
+notcor = geo_path + city + state + "_1930_NotGeocodedCorrect.shp"
 # Correct geocode
-cor = geo_path + city_name + state_abbr + "_1930_GeocodedCorrect.shp"
+cor = geo_path + city + state + "_1930_GeocodedCorrect.shp"
 
 geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr)
 
@@ -174,23 +177,23 @@ validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, c
 #
 
 # "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
-add = geo_path + city_name + state_abbr + "_NotGeocoded.dbf"
+add = geo_path + city + state + "_NotGeocoded.dbf"
 # "sg" is the name of the street grid on which the previous list of addresses will be geocoded
-sg = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+sg = geo_path + city + state + "_1930_stgrid_edit_Uns2.shp"
 # Amory's formatted EDs dbf
-fe_file = city_name + state_abbr + "_1930_Contemp.dbf"
+fe_file = city + state + "_1930_Contemp.dbf"
 # "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
-al = geo_path + city_name + "_addloc_ED_Contemp"
+al = geo_path + city + "_addloc_ED_Contemp"
 # "gr" is the filename of the geocoding results
-gr = geo_path + city_name + state_abbr + "_1930_geocode_renumberedED_Contemp.shp"
+gr = geo_path + city + state + "_1930_geocode_renumberedED_Contemp.shp"
 # "sg_vm" is the filename of the intersection of the street grid and the verified map
-sg_vm = geo_path + city_name + state_abbr + "_grid_poly_intersect_Contemp.shp"
+sg_vm = geo_path + city + state + "_grid_poly_intersect_Contemp.shp"
 #"spatjoin" is joining the geocode to the verified map (e.g., ED or block map)
-spatjoin = geo_path + city_name + state_abbr + "_1930_geo_map_spatjoin_Contemp.shp"
+spatjoin = geo_path + city + state + "_1930_geo_map_spatjoin_Contemp.shp"
 # Not correct geocode
-notcor = geo_path + city_name + state_abbr + "_1930_NotGeocodedCorrect_Contemp.shp"
+notcor = geo_path + city + state + "_1930_NotGeocodedCorrect_Contemp.shp"
 # Correct geocode
-cor = geo_path + city_name + state_abbr + "_1930_GeocodedCorrect_Contemp.shp"
+cor = geo_path + city + state + "_1930_GeocodedCorrect_Contemp.shp"
 
 geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr)
 
@@ -200,5 +203,5 @@ validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, c
 # Combine both geocodes to get the best geocode
 #
 
-combine_geocodes(geo_path, city_name, state_abbr)
+combine_geocodes(geo_path, city, state)
 

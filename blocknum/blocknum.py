@@ -13,6 +13,7 @@ import pandas as pd
 import pysal as ps
 import numpy as np
 import subprocess
+import fuzzyset
 from microclean.STstandardize import *
 
 #
@@ -52,266 +53,6 @@ def dbf2DF(dbfile, upper=False):
 		pandasDF.columns = map(str.upper, db.header) 
 	db.close() 
 	return pandasDF
-
-'''
-# Function to standardize street name
-def standardize_street(st):
-	runAgain = False
-	st = st.rstrip('\n')
-	orig_st = st
-	
-	st = st.lower()
-
-	###Remove Punctuation, extraneous words at end of stname###
-	st = re.sub(r'[\.,]',' ',st)
-	st = re.sub(' +',' ',st)
-	st = st.strip()
-	st = re.sub('\\\\','',st)
-	st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
-	#consider extended a diff stname#
-	#st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
-
-	#Check if st is empty or blank and return empty to [st,DIR,NAME,TYPE]
-	if st == '' or st == ' ':
-		return ['','','','']
-	
-	###stname part analysis###
-	DIR = ''
-	NAME = ''
-	TYPE = ''
- 
-	# Combinations of directions at end of stname (has to be run first)
-	if re.search(r'[ \-]+([Nn][\.\-]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)$',st):
-		st = "NE "+re.sub(r'[ \-]+([Nn][\.\-]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth[\s]+?[Ee]ast)$','',st)
-		DIR = 'NE'
-	if re.search(r'[ \-]+([Nn][\.\-]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)$',st):
-		st = "NW "+re.sub(r'[ \-]+([Nn][\.\-]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)$','',st)
-		DIR = 'NW'
-	if re.search(r'[ \-]+([Ss][\.\-]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)$',st):
-		st = "SE "+re.sub(r'[ \-]+([Ss][\.\-]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)$','',st)
-		DIR = 'SE'
-	if re.search(r'[ \-]+([Ss][\.\-]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)$',st):
-		st = "SW "+re.sub(r'[ \-]+([Ss][\.\-]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)$','',st)
-		DIR = 'SW'
-   
-	#First check if DIR is at end of stname. make sure that it's the DIR and not actually the NAME (e.g. "North Ave" or "Avenue E")#
-	if re.search(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$',st) and not re.match('^[Nn][Oo][Rr][Tt][Hh]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Nn]$',st) :
-		st = "N "+re.sub(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$','',st)
-		DIR = 'N'
-	if re.search(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$',st) and not re.search('^[Ss][Oo][Uu][Tt][Hh]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ss]$',st) :
-		st = "S "+re.sub(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$','',st)
-		DIR = 'S'
-	if re.search(r'[ \-]+([Ww][Ee][Ss][Tt]|[Ww])$',st) and not re.search('^[Ww][Ee][Ss][Tt]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ww]$',st) :
-		st = "W "+re.sub(r'[ \-]+([Ww][Ee][Ss][Tt]|[Ww])$','',st)
-		DIR = 'W'
-	if re.search(r'[ \-]+([Ee][Aa][Ss][Tt]|[Ee])$',st) and not re.search('^[Ee][Aa][Ss][Tt]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ee]$',st) :
-		st = "E "+re.sub(r'[ \-]+([Ee][Aa][Ss][Tt]|[Ee])$','',st)
-		DIR = 'E'
-
-	#See if a st TYPE can be identified#
-	st = re.sub(r'[ \-]+([Ss][Tt][Rr]?[Ee]?[Ee]?[Tt]?[SsEe]?|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
-	#st = re.sub(r'[ \-]+[Ss]tr?e?e?t?[ \-]',' St ',st) # Fix things like "4th Street Place"
-	st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|[aA]veenue|[Aa]vn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
-	match = re.search("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+([a-zA-Z])$",st)
-	if match :
-		 st = re.sub("([a-zA-Z])$","",st)
-		 st = re.sub("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+",match.group(2)+" Ave",st)
-	st = re.sub(r'[ \-]+([Bb]\'?[Ll][Vv]\'?[Dd]|Bl\'?v\'?d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb][Oo][Uu][Ll][EeAa]?[Vv]?[Aa]?[Rr]?[Dd]?)$',' Blvd',st)
-	st = re.sub(r'[ \-]+([Rr][Dd]|[Rr][Oo][Aa][Dd])$',' Road',st)
-	st = re.sub(r'[ \-]+[Dd][Rr][Ii]?[Vv]?[Ee]?$',' Drive',st)
-	st = re.sub(r'[ \-]+([Cc][Oo][Uu]?[Rr][Tt]|[Cc][Tt])$',' Ct',st)
-	st = re.sub(r'[ \-]+([Pp][Ll][Aa]?[Cc]?[Ee]?)$',' Pl',st)
-	st = re.sub(r'[ \-]+([Ss][Qq][Uu]?[Aa]?[Rr]?[Ee]?)$',' Sq',st)
-	st = re.sub(r'[ \-]+[Cc]ircle$',' Cir',st)
-	st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kway|[Pp]ky|[Pp]arkwy|[Pp]rakway|[Pp]rkwy|[Pp]wy)$',' Pkwy',st)
-	st = re.sub(r'[ \-]+[Ww][Aa][Yy]$',' Way',st)
-	st = re.sub(r'[ \-]+[Aa][Ll][Ll]?[Ee]?[Yy]?$',' Aly',st)
-	st = re.sub(r'[ \-]+[Tt][Ee][Rr]+[EeAa]?[Cc]?[Ee]?$',' Ter',st)
-	st = re.sub(r'[ \-]+([Ll][Aa][Nn][Ee]|[Ll][Nn])$',' Ln',st)
-	st = re.sub(r'[ \-]+([Pp]lzaz|[Pp][Ll][Aa][Zz][Aa])$',' Plaza',st)
-	st = re.sub(r'[ \-]+([Hh]ighway)$',' Hwy',st)
-	st = re.sub(r'[ \-]+([Hh]eights?)$',' Heights',st)
-
-	# "Park" is not considered a valid TYPE because it should probably actually be part of NAME #
-	match = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Heights|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
-	if match :
-		TYPE = match.group(1)
-
-	#Combinations of directions
-	
-	match = re.search(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Northeast'
-		else :
-			st = "NE "+re.sub(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+','',st)
-			DIR = 'NE'
-	match = re.search(r'^([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Northwest'
-		else :
-			st = "NW "+re.sub(r'^([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+','',st)
-			DIR = 'NW'
-	match = re.search(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Southeast'
-		else :
-			st = "SE "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+','',st)
-			DIR = 'SE'
-	match = re.search(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Southwest'
-		else :
-			st = "SW "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+','',st)
-			DIR = 'SW'
-		
-	#See if there is a st DIR. again, make sure that it's the DIR and not actually the NAME (e.g. North Ave, E St [not East St])
-	if(DIR=='') :
-		match =  re.search(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1 :
-					NAME = 'North'
-				else : NAME = 'N'
-			else :
-				st = "N "+re.sub(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+','',st)
-				DIR = 'N'
-		match =  re.search(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1:
-					NAME = 'South'
-				else : NAME = 'S'
-			else :
-				st = "S "+re.sub(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+','',st)
-				DIR = 'S'
-		match =  re.search(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1 :
-					NAME = 'West'
-				else : NAME = 'W'
-			else :
-				st = "W "+re.sub(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+','',st)
-				DIR = 'W'
-		match =  re.search(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1 :
-					NAME = 'East'
-				else : NAME = 'E'
-			else :
-				st = "E "+re.sub(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+','',st)
-				DIR = 'E'
-				
-	#get the st NAME and standardize it
-			
-	match = re.search('^'+DIR+'(.+)'+TYPE+'$',st)
-	if NAME=='' :
-		#If NAME is not 'North', 'West', etc...
-		if match :
-			NAME = match.group(1).strip()
-			
-			#convert written-out numbers to digits
-			#TODO: Make these work for all exceptions (go thru text file with find)
-			#if re.search("[Tt]enth|Eleven(th)?|[Tt]wel[f]?th|[Tt]hirteen(th)?|Fourt[h]?een(th)?|[Ff]ift[h]?een(th)?|[Ss]event[h]?een(th)?|[Ss]event[h]?een(th)?|[eE]ighteen(th)?|[Nn]inet[h]?een(th)?|[Tt]wentieth|[Tt]hirtieth|[Ff]o[u]?rtieth|[Ff]iftieth|[Ss]ixtieth|[Ss]eventieth|[Ee]ightieth|[Nn]inetieth|Twenty[ \-]?|Thirty[ \-]?|Forty[ \-]?|Fifty[ \-]?|Sixty[ \-]?|Seventy[ \-]?|Eighty[ \-]?|Ninety[ \-]?|[Ff]irst|[Ss]econd|[Tt]hird|[Ff]ourth|[Ff]ifth|[Ss]ixth|[Ss]eventh|[Ee]ighth|[Nn]inth",st) :
-			NAME = re.sub("^[Tt]enth","10th",NAME)
-			NAME = re.sub("^[Ee]leven(th)?","11th",NAME)
-			NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
-			NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
-			NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
-			NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
-			NAME = re.sub("^[Ss]ixt[h]?een(th)?","16th",NAME)
-			NAME = re.sub("^[Ss]event[h]?een(th)?","17th",NAME)
-			NAME = re.sub("^[eE]ighteen(th)?","18th",NAME)
-			NAME = re.sub("^[Nn]inet[h]?e+n(th)?","19th",NAME)
-			NAME = re.sub("^[Tt]went[iy]eth","20th",NAME)
-			NAME = re.sub("^[Tt]hirt[iy]eth","30th",NAME)
-			NAME = re.sub("^[Ff]o[u]?rt[iy]eth","40th",NAME)
-			NAME = re.sub("^[Ff]ift[iy]eth", "50th",NAME)
-			NAME = re.sub("^[Ss]ixt[iy]eth", "60th",NAME)
-			NAME = re.sub("^[Ss]event[iy]eth", "70th",NAME)
-			NAME = re.sub("^[Ee]ight[iy]eth", "80th",NAME)
-			NAME = re.sub("^[Nn]inet[iy]eth", "90th",NAME)
-
-			NAME = re.sub("[Tt]wenty[ \-]*","2",NAME)
-			NAME = re.sub("[Tt]hirty[ \-]*","3",NAME)
-			NAME = re.sub("[Ff]orty[ \-]*","4",NAME)
-			NAME = re.sub("[Ff]ifty[ \-]*","5",NAME)
-			NAME = re.sub("[Ss]ixty[ \-]*","6",NAME)
-			NAME = re.sub("[Ss]eventy[ \-]*","7",NAME)
-			NAME = re.sub("[Ee]ighty[ \-]*","8",NAME)
-			NAME = re.sub("[Nn]inety[ \-]*","9",NAME)
-			
-			if re.search("(^|[0-9]+.*)([Ff]irst|[Oo]ne)$",NAME) : NAME = re.sub("([Ff]irst|[Oo]ne)$","1st",NAME)
-			if re.search("(^|[0-9]+.*)([Ss]econd|[Tt]wo)$",NAME) : NAME = re.sub("([Ss]econd|[Tt]wo)$","2nd",NAME)
-			if re.search("(^|[0-9]+.*)([Tt]hird|[Tt]hree)$",NAME) : NAME = re.sub("([Tt]hird|[Tt]hree)$","3rd",NAME)
-			if re.search("(^|[0-9]+.*)[Ff]our(th)?$",NAME) : NAME = re.sub("[Ff]our(th)?$","4th",NAME)
-			if re.search("(^|[0-9]+.*)([Ff]ifth|[Ff]ive)$",NAME) : NAME = re.sub("([Ff]ifth|[Ff]ive)$","5th",NAME)
-			if re.search("(^|[0-9]+.*)[Ss]ix(th)?$",NAME) : NAME = re.sub("[Ss]ix(th)?$","6th",NAME)
-			if re.search("(^|[0-9]+.*)[Ss]even(th)?$",NAME) : NAME = re.sub("[Ss]even(th)?$","7th",NAME)
-			if re.search("(^|[0-9]+.*)[Ee]igh?th?$",NAME) : NAME = re.sub("[Ee]igh?th?$","8th",NAME)
-			if re.search("(^|[0-9]+.*)[Nn]in(th|e)+$",NAME) : NAME = re.sub("[Nn]in(th|e)+$","9th",NAME)
-			
-			if re.search("[0-9]+",NAME) :
-				if re.search("^[0-9]+$",NAME) : #if NAME is only numbers (no suffix), add the correct suffix
-					foo = True
-					suffixes = {'11':'11th','12':'12th','13':'13th','1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th','8':'8th','9':'9th','0':'0th'}
-					num = re.search("[0-9]+$",NAME).group(0)
-					suff = ''
-					# if num is not found in suffixes dict, remove leftmost digit until it is found... 113 -> 13 -> 13th;    24 -> 4 -> 4th
-					while(suff=='') :
-						try :
-							suff = suffixes[num]
-						except KeyError :
-							num = num[1:]
-							if len(num) == 0 :
-								break
-					if not suff == '' :
-						NAME = re.sub(num+'$',suff,NAME)
-				else :
-					# Fix incorrect suffixes e.g. "73d St" -> "73rd St"
-					if re.search("[23]d$",NAME) :
-						NAME = re.sub("3d","3rd",NAME)
-						NAME = re.sub("2d","2nd",NAME)
-					if re.search("1 [Ss]t|2 nd|3 rd|1[1-3] th|[04-9] th",NAME) :
-						try :
-							suff = re.search("[0-9] ([Sa-z][a-z])",NAME).group(1)
-						except :
-							print("NAME: "+NAME+", suff: "+suff+", st: "+st)
-						NAME = re.sub(" "+suff,suff,NAME)
-					# TODO: identify corner cases with numbers e.g. "51 and S- Hermit"
-				
-				# This \/ is a bit overzealous...! #
-				hnum = re.search("^([0-9]+[ \-]+).+",NAME) #housenum in stname?
-				if hnum : 
-					#False
-					NAME = re.sub(hnum.group(1),"",NAME) #remove housenum. May want to update housenum field, maybe not though.
-					runAgain = True
-			else :
-				NAME = NAME.title()
-			
-		else :
-			assert(False)
-		# Standardize "St ____ Ave" -> "Saint ____ Ave" #
-		NAME = re.sub("^([Ss][Tt]\.?|[Ss][Aa][Ii][Nn][Tt])[ \-]","Saint ",NAME)
-	st = re.sub(re.escape(match.group(1).strip()),NAME,st).strip()
-	try :
-		assert st == (DIR+' '+NAME+' '+TYPE).strip()
-	except AssertionError :
- #		print("Something went a bit wrong while trying to pre-standardize stnames.")
- #		print("orig was: "+orig_st)
- #		print("st is: \""+st+"\"")
- #		print("components: ["+(DIR+','+NAME+','+TYPE).strip()+"]")
-		pass
-	if runAgain :
-		return standardize_street(st)
-	else :
-		return st, DIR, NAME, TYPE
-'''
 
 # Function to save Pandas DF as DBF file 
 def save_dbf(df, shapefile, dir_path):
@@ -419,7 +160,7 @@ def set_blocknum_confidence(city_name, paths):
 def create_1930_addresses(city_name, state_abbr, paths, df=None):
 	r_path, script_path, dir_path = paths
 	# Load microdata file if not passed to function
-	if df == None:
+	if type(df) == 'NoneType':
 		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
 		df = load_large_dta(microdata_file)
 	# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
@@ -472,7 +213,7 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 	physical_blocks(geo_path, city_name)
 	print("The script has finished executing the 'physical_blocks' function and has now started executing 'geocode' function")
 
-	geocode(geo_path, city_name, state_abbr)
+	initial_geocode(geo_path, city_name, state_abbr)
 	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
 
 	if different_geocode:
@@ -499,29 +240,39 @@ def street(geo_path, city_name, state_abbr):
 	#Create copy of "diradd" file to use as grid
 	arcpy.CopyFeatures_management(grid_1940, grid)
 
-	# Add a specific field mapping for a special case
-	if field_map:
-		file = csv_file
-		field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-		CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
-		STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
-		MIN_LFROMA "MIN_LFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
-		MAX_LTOADD "MAX_LTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
-		MIN_RFROMA "MIN_RFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
-		MAX_RTOADD "MAX_RTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
-		grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, file, file, file, file, file)
-	else:
-		field_map = None
+	# Function to save Pandas DF as DBF file 
+	def save_dbf_st(df, shapefile_name, field_map = False):
+		file_temp = shapefile_name.split('/')[-1]
+		csv_file = geo_path + "/temp_for_dbf.csv"
+		df.to_csv(csv_file,index=False)
+		try:
+			os.remove(geo_path + "/schema.ini")
+		except:
+			pass
 
-	arcpy.TableToTable_conversion(in_rows=csv_file, 
-		out_path=geo_path, 
-		out_name="temp_for_shp.dbf",
-		field_mapping=field_map)
-	os.remove(shapefile_name.replace('.shp','.dbf'))
-	os.remove(csv_file)
-	os.rename(geo_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-	os.remove(geo_path+"/temp_for_shp.dbf.xml")
-	os.remove(geo_path+"/temp_for_shp.cpg")
+		# Add a specific field mapping for a special case
+		if field_map:
+			file = csv_file
+			field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+			CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
+			STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
+			MIN_LFROMA "MIN_LFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
+			MAX_LTOADD "MAX_LTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
+			MIN_RFROMA "MIN_RFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
+			MAX_RTOADD "MAX_RTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
+			grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, file, file, file, file, file)
+		else:
+			field_map = None
+
+		arcpy.TableToTable_conversion(in_rows=csv_file, 
+			out_path=geo_path, 
+			out_name="temp_for_shp.dbf",
+			field_mapping=field_map)
+		os.remove(shapefile_name.replace('.shp','.dbf'))
+		os.remove(csv_file)
+		os.rename(geo_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(geo_path+"/temp_for_shp.dbf.xml")
+		os.remove(geo_path+"/temp_for_shp.cpg")
 
 	#Can't <null> blank values, so when Dissolve Unsplit lines aggregates MIN replace with big number
 	codeblock_min = """def replace(x):
@@ -589,8 +340,8 @@ def street(geo_path, city_name, state_abbr):
 
 	#Assign longest street name by grid_id (also add city and state for geolocator)
 	df_grid_uns = dbf2DF(grid_uns)
-	df_grid_uns['CITY'] = name
-	df_grid_uns['STATE'] = state
+	df_grid_uns['CITY'] = city_name
+	df_grid_uns['STATE'] = state_abbr
 	df_grid_uns['FULLNAME'] = df_grid_uns.apply(lambda x: longest_name_dict[x['grid_id']], axis=1)
 
 	#Blank out the big/small numbers now that aggregation is done
@@ -607,7 +358,7 @@ def street(geo_path, city_name, state_abbr):
 		df_grid_uns[field] = df_grid_uns[field].astype(str)
 		df_grid_uns[field] = df_grid_uns.apply(lambda x: replace_nums(x[field]), axis=1)
 
-	save_dbf(df_grid_uns, grid_uns, field_map=True)
+	save_dbf_st(df_grid_uns, grid_uns, field_map=True)
 
 	#Add a unique, static identifier (so ranges can be changed later)
 	arcpy.DeleteField_management(grid_uns, "grid_id")
@@ -883,7 +634,7 @@ def physical_blocks(geo_path, city_name):
 	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
 
 # Performs initial geocode on contemporary grid
-def geocode(geo_path, city_name, state_abbr):
+def initial_geocode(geo_path, city_name, state_abbr):
 
 	# Files
 	add_locator = geo_path + city_name + "_addloc"
@@ -971,7 +722,7 @@ def renumber_grid(city_name, state_abbr, df=None):
 	# Load
 	df_grid = dbf2DF(stgrid_file.replace(".shp",".dbf"),upper=False)
 	df_block = dbf2DF(block_dbf_file,upper=False)
-	if df == None:
+	if type(df) == 'NoneType':
 		df_micro = load_large_dta(microdata_file)
 	else:
 		df_micro = df
@@ -1640,7 +1391,9 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 # FixDirAndBlockNumsUsingMap.py
 #
 
-def fix_micro_dir_using_ed_map(city_name, state_abbr, street_var, df_micro):
+def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_street_var, paths, df_micro):
+
+	r_path, script_path, dir_path = paths
 
 	# Files
 	grid = dir_path + "/GIS_edited/" + city + state + "_1930_stgrid_edit_Uns2.shp"
@@ -1649,14 +1402,13 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, street_var, df_micro):
 
 	# Load files
 	df_grid = dbf2DF(grid.replace('.shp','.dbf'))
-	#df_micro = df_micro[['ed','block','hn',street_var,'dir','name','type','checked_st']]
-	df_micro[street_var+'_old'] = df_micro[street_var]
+	df_micro[micro_street_var+'_old'] = df_micro[micro_street_var]
 
 	def get_dir(st):
 		_, DIR, _, _ = standardize_street(st)
 		return DIR
 
-	df_grid['DIR'] = df_grid.apply(lambda x: get_dir(x['FULLNAME']), axis=1)
+	df_grid['DIR'] = df_grid.apply(lambda x: get_dir(x[grid_street_var]), axis=1)
 	grid_path = "/".join(grid.split("/")[:-1]) + "/"
 	grid_filename = grid.split("/")[-1]
 	save_dbf(df_grid, grid_filename, grid_path)
@@ -1684,8 +1436,8 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, street_var, df_micro):
 	## I feel like this could be simplified significantly
 
 	# Create dictionary of {street_var:list(DIRs)} and delete any that have combination of N/S and E/W
-	df_name_dir = df_micro[[street_var,'dir']]
-	df_name_dir.loc[:,('st')], df_name_dir.loc[:,('dir')], df_name_dir.loc[:,('name')], df_name_dir.loc[:,('type')] = zip(*df_name_dir.apply(lambda x: standardize_street(x[street_var]), axis=1))
+	df_name_dir = df_micro[[micro_street_var,'dir']]
+	df_name_dir.loc[:,('st')], df_name_dir.loc[:,('dir')], df_name_dir.loc[:,('name')], df_name_dir.loc[:,('type')] = zip(*df_name_dir.apply(lambda x: standardize_street(x[micro_street_var]), axis=1))
 	df_name_dir.loc[:,('st')] = (df_name_dir['name'] + ' ' + df_name_dir['type']).str.strip()
 	df_name_dir = df_name_dir.drop_duplicates(['dir','st'])
 	df_name_dir = df_name_dir.loc[df_name_dir['dir']!='']
@@ -1738,10 +1490,10 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, street_var, df_micro):
 			except:
 				return DIR, street_var
 
-	df_micro.loc[:,('dir')], df_micro.loc[:,(street_var)] = zip(*df_micro.apply(lambda x: prepend_dir(x['ed'], x[street_var+'_old']), axis=1))	
+	df_micro.loc[:,('dir')], df_micro.loc[:,(micro_street_var)] = zip(*df_micro.apply(lambda x: prepend_dir(x['ed'], x[micro_street_var+'_old']), axis=1))	
 
 	# Check how many streets had DIRs pre-pended
-	df_micro['changed_Dir'] = df_micro[street_var] != df_micro[street_var+'_old']
+	df_micro['changed_Dir'] = df_micro[micro_street_var] != df_micro[micro_street_var+'_old']
 	print("Number of cases with DIR prepended: "+str(df_micro['changed_Dir'].sum())+" of "+str(len(df_micro))+" ("+'{:.1%}'.format(float(df_micro['changed_Dir'].sum())/len(df_micro))+") of cases")
 
 	return df_micro
@@ -1826,20 +1578,20 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 # FixStGridNames.py
 #
 
-def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=None):
+def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, df_micro=None):
 
-	city = city_name.replace(' ','')
+	city_name = city_spaces.replace(' ','')
 
 	# Paths
-	r_path, script_path, file_path = paths
+	r_path, script_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 
 	# Files
-	grid_uns2 =  geo_path + city + state + "_1930_stgrid_edit_Uns2.shp"
+	grid_uns2 =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
 	grid_uns2_backup = grid_uns2.replace('.shp','prefix.shp')
-	if city == "StLouis":
-		ed_shp = geo_path + city + "_1930_ED.shp"
-	st_grid_ed_shp = geo_path + city + state + '_1930_stgrid_ED_intersect.shp'
+	if city_name == "StLouis":
+		ed_shp = geo_path + city_name + "_1930_ED.shp"
+	st_grid_ed_shp = geo_path + city_name + state_abbr + '_1930_stgrid_ED_intersect.shp'
 
 	arcpy.CopyFeatures_management(grid_uns2, grid_uns2_backup)
 
@@ -1878,15 +1630,15 @@ def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=No
 	#
 
 	# Load microdata
-	if df_micro == None:
-		microdata_file = dir_path "/StataFiles_Other/1930/" + city + state + "_StudAuto.dta"
+	if type(df_micro) == 'NoneType':
+		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
 		df_micro = load_large_dta(microdata_file)
 
 	# Get list of all streets
-	micro_all_streets = df_micro['autostud_street'].drop_duplicates().tolist()
+	micro_all_streets = df_micro[micro_street_var].drop_duplicates().tolist()
 
 	# Create ED-street dictionary for fuzzy matching
-	micro_ed_st_dict = {str(ed):group['autostud_street'].drop_duplicates().tolist() for ed, group in df_micro.groupby(['ed'])}
+	micro_ed_st_dict = {str(ed):group[micro_street_var].drop_duplicates().tolist() for ed, group in df_micro.groupby(['ed'])}
 
 	#
 	# Step 3: Load Steve Morse data 
@@ -1896,7 +1648,7 @@ def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=No
 	def load_steve_morse(city, state, year):
 
 		#NOTE: This dictionary must be built independently of this script
-		sm_st_ed_dict_file = pickle.load(open(file_path + 'sm_st_ed_dict%s.pickle' % (str(year)), 'rb'))
+		sm_st_ed_dict_file = pickle.load(open('/'.join(dir_path.split('/')[:-1])+'/sm_st_ed_dict%s.pickle' % (str(year)), 'rb'))
 		sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
 
 		#Flatten dictionary
@@ -1927,7 +1679,7 @@ def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=No
 
 		return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
 
-	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_name, state, year)
+	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state, year)
 
 	#
 	# Step 4: Perform exact matching
@@ -1971,7 +1723,7 @@ def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=No
 		return df, exact_info
 
 	num_records = len(df_grid_ed)
-	num_streets = len(df_grid_ed.groupby([street]))
+	num_streets = len(df_grid_ed.groupby([grid_street_var]))
 	basic_info = [num_records, num_streets]
 
 	df_grid_ed, exact_info_micro = find_exact_matches(df=df_grid_ed, 
@@ -2107,7 +1859,7 @@ def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=No
 	# Step 6: Create dictionary for fixing street names
 	#
 
-	df_grouped = df.groupby([street, 'ed'])
+	df_grouped = df_grid_ed.groupby([grid_street_var, 'ed'])
 	fullname_ed_st_dict = {}
 	more_than_one = 0
 	for fullname_ed, group in df_grouped:
@@ -2136,7 +1888,7 @@ def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=No
 	#
 
 	df_uns2 = dbf2DF(grid_uns2)
-	df_uns2[grid_street_var+'_old'] = [grid_street_var]
+	df_uns2[grid_street_var+'_old'] = df_uns2[grid_street_var]
 
 	# Need to do this because missing grid_id numbers in grid_id_st_dict (which is bad)
 	def fix_fullname(grid_id, FULLNAME):
@@ -2151,5 +1903,7 @@ def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=No
 
 	df_uns2[grid_street_var], df_uns2['NoMatch'], df_uns2['NameChng'] = zip(*df_uns2.apply(lambda x: fix_fullname(x['grid_id'],x['FULLNAME']), axis=1))
 
-	save_dbf(df_uns2, grid_uns2)
+	dir_save = '/'.join(grid_uns2.split('/')[:-1])
+	shp_save = grid_uns2.split('/')[-1]
+	save_dbf(df_uns2, shp_save, dir_save)
 
