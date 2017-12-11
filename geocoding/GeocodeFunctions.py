@@ -1,5 +1,5 @@
 """
-Title: geocodefunction
+Title: GeocodeFunctions.py
 Objective: automate our current (circa Nov. 2017) geocoding process
 Notes:  Specifically intersects a user-specified street grid with a verified map (e.g., ED or block) to
 		determine which street segments fall in which regions of the verified map (e.g., ED or block),
@@ -8,6 +8,7 @@ Notes:  Specifically intersects a user-specified street grid with a verified map
 		full list of addresses for a specific city or a list of residual addresses from a previous geocode)
 Author: Joseph Danko
 Created: 11/3/2017
+Updated: Chris Graziul, 12/11/2017 (stripped down to functions only)
 """
 
 # Import the ESRI library of tools into Python
@@ -16,48 +17,8 @@ import os
 import pysal as ps
 import pandas as pd
 
-name = "StLouis"
-state = "MO"
-
-### USER-SPECIFIED INPUTS ###
-# Specify the work place in which all the data is stored (e.g., a geodatabase is recommended)
-#arcpy.env.workspace="S:/Users/_Exchange/To Joey/FromDaniel/Cincy.gdb"
-dir_path = "S:/Projects/1940Census/StLouis/GIS_edited/"
-
 # All Python to overwrite any ESRI output files (e.g., shapefiles)
 arcpy.env.overwriteOutput=True
-
-# "vm" is the verified map (e.g., ED or block map)
-vm = dir_path + "StLouis_1930_ED.shp"
-# Feature Class to Feature Class file
-fc = "StLouisMO_1930_ED_Feature.shp"
-# Spatial weights files:
-swm_file = dir_path + "StLouisMO_1930_spatweight.swm"
-swm_table = dir_path + "StLouisMO_1930_swmTab.dbf"
-# "cal_street" is the name of the street as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (hence "cal_"; REQUIRED)
-cal_street = "FULLNAME" 
-# "cal_city" is the name of the city as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (e.g., city or ED; NOT REQUIRED)
-cal_city = "CITY"
-# "cal_state" is the name of the state as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (NOT REQUIRED)
-cal_state = "STATE"
-# "addfield" is the name of the additional field as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (e.g., ED or city; NOT REQUIRED)
-addfield = "<None>"
-# "g_address" is the name of the column that stores the address of the property from the "add" list of address file
-g_address = "ADDRESS"
-# "g_city" is the name of the column that stores the city field from the "add" list of address file (e.g., city, ED or block), which should match the city field used in the address locator
-g_city = "CITY"
-# "g_state" is the name of the column that stores the state field from the "add" list of address file
-g_state = "STATE"
-# "fl" is the smallest house number on the left side of the street as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used when creating the address locator (REQUIRED)
-# "tl" is the largest house number on the left side of the street as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used when creating the address locator (REQUIRED)
-# "fr" is the smallest house number on the right side of the street as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used when creating the address locator (REQUIRED)
-# "tr" is the largest house number on the right side of the street as noted in the output of  the output of the intersect of the "sg" street grid and "vm" verified map, which is used when creating the address locator (REQUIRED)
-fl = "MIN_LFROMA"
-tl = "MAX_LTOADD"
-fr = "MIN_RFROMA"
-tr = "MAX_RTOADD"
-
-# Helper functions
 
 # Version of Dict_append that only accepts unique v(alues) for each k(ey)
 def Dict_append_unique(Dict, k, v) :
@@ -66,36 +27,6 @@ def Dict_append_unique(Dict, k, v) :
 	else :
 		if not v in Dict[k] :
 			Dict[k].append(v)
-
-# Function to reads in DBF files and return Pandas DF
-def dbf2DF(dbfile, upper=False): 
-	if dbfile.split('.')[1] == 'shp':
-		dbfile = dbfile.replace('.shp','.dbf')
-	db = ps.open(dbfile) #Pysal to open DBF
-	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-	#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-	if upper == True: #Make columns uppercase if wanted 
-		pandasDF.columns = map(str.upper, db.header) 
-	db.close() 
-	return pandasDF
-
-# Function to save Pandas DF as DBF file 
-def save_dbf(df, shapefile_name):
-	dir_temp = '/'.join(shapefile_name.split('/')[:-1])
-	file_temp = shapefile_name.split('/')[-1]
-	csv_file = dir_temp + "/temp_for_dbf.csv"
-	df.to_csv(csv_file,index=False)
-	try:
-		os.remove(dir_temp + "/schema.ini")
-	except:
-		pass
-	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=dir_temp, out_name="temp_for_shp.dbf")
-	os.remove(shapefile_name.replace('.shp','.dbf'))
-	os.remove(csv_file)
-	os.rename(dir_temp+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-	os.remove(dir_temp+"/temp_for_shp.dbf.xml")
-	os.remove(dir_temp+"/temp_for_shp.cpg")
 
 # Add and calculate check field, save the result
 def is_touch(ED, neighbor):
@@ -312,116 +243,58 @@ def validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notco
 	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=dir_path, out_name=residual_file)
 	os.remove(csv_file)
 
-#
-# Renumbered grid
-#
+# Combine geocodes
+def combine_geocodes(geo_path, city_name, state_abbr):
 
-# "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
-add = dir_path + "StLouis_1930_Addresses.csv"
-# "sg" is the name of the street grid on which the previous list of addresses will be geocoded
-sg = dir_path + "StLouisMO_1930_stgrid_renumbered.shp"
-# Amory's formatted EDs dbf
-fe = dir_path + "StLouisMO_1930_formattedEDs.dbf"
-fe_file = "StLouisMO_1930_formattedEDs.dbf"
-# "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
-al = dir_path + name + "_addloc_ED"
-# "gr" is the filename of the geocoding results
-gr = dir_path + "StLouisMO_1930_geocode_renumberedED.shp"
-# "sg_vm" is the filename of the intersection of the street grid and the verified map
-sg_vm = dir_path + "StLouisMO_grid_poly_intersect.shp"
-#"spatjoin" is joining the geocode to the verified map (e.g., ED or block map)
-spatjoin = dir_path + "StLouisMO_1930_geo_map_spatjoin.shp"
-# Not correct geocode
-notcor = dir_path + "StLouisMO_1930_NotGeocodedCorrect.shp"
-# Correct geocode
-cor = dir_path + "StLouisMO_1930_GeocodedCorrect.shp"
+	def merge(list_of_shp):
+		for shp in list_of_shp:
+			arcpy.AddField_management(in_table=shp, 
+				field_name="geocoded", 
+				field_type="TEXT")			
+			if "_GeocodedCorrect" in shp:
+				arcpy.CalculateField_management(in_table=shp, 
+					field="geocoded", 
+					expression="'Yes'",
+					expression_type="PYTHON_9.3")
+			else:
+				arcpy.CalculateField_management(in_table=shp, 
+					field="geocoded", 
+					expression="'No'",
+					expression_type="PYTHON_9.3")
+		outfile = dir_path + "StLouisMO_GeocodeFinal.shp"
+		arcpy.Merge_management(list_of_shp, outfile)
+		df_merge = dbf2DF(outfile)
+		df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','contig_ed','geocoded']).size().reset_index(name='count')
+		outfile_excel = dir_path + "StLouisMO_GeocodeFinal.xlsx"
+		writer = pd.ExcelWriter(outfile_excel, engine='xlsxwriter')
+		df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
+		writer.save()
 
-geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr)
+	correct_1930 = geo_path + city_name + state_abbr + "_1930_GeocodedCorrect.shp"
+	correct_contemp = geo_path + city_name + state_abbr + "_1930_GeocodedCorrect_Contemp.shp"
+	not_correct_contemp = geo_path + city_name + state_abbr + "_1930_NotGeocodedCorrect_Contemp.shp"
 
-validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file="NotGeocoded.dbf")
+	list_of_shp = [correct_1930, correct_contemp, not_correct_contemp]
 
-#
-# Contemporary grid
-#
+	merge(list_of_shp)
 
-# "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
-add = dir_path + "NotGeocoded.dbf"
-# "sg" is the name of the street grid on which the previous list of addresses will be geocoded
-sg = dir_path + "StLouisMO_1930_stgrid_edit_Uns2.shp"
-# Amory's formatted EDs dbf
-fe_file = "StLouisMO_1930_Contemp.dbf"
-# "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
-al = dir_path + name + "_addloc_ED_Contemp"
-# "gr" is the filename of the geocoding results
-gr = dir_path + "StLouisMO_1930_geocode_renumberedED_Contemp.shp"
-# "sg_vm" is the filename of the intersection of the street grid and the verified map
-sg_vm = dir_path + "StLouisMO_grid_poly_intersect_Contemp.shp"
-#"spatjoin" is joining the geocode to the verified map (e.g., ED or block map)
-spatjoin = dir_path + "StLouisMO_1930_geo_map_spatjoin_Contemp.shp"
-# Not correct geocode
-notcor = dir_path + "StLouisMO_1930_NotGeocodedCorrect_Contemp.shp"
-# Correct geocode
-cor = dir_path + "StLouisMO_1930_GeocodedCorrect_Contemp.shp"
+	# Create list of streets from ungeocoded points that are not in the grid
+	df_ungeocoded = dbf2DF(not_correct_contemp)
+	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
+	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
 
-geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr)
+	grid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	df_grid = dbf2DF(grid_file)
+	grid_streets_list = df_grid['FULLNAME'].drop_duplicates().tolist()
 
-validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file="NotGeocoded_Contemp.dbf")
+	df_ungeocoded_st_ed_tocheck = df_ungeocoded_st_ed[~df_ungeocoded_st_ed['fullname'].isin(grid_streets_list)].sort_values(['ed'])
 
-#
-# Combine both geocodes to get the best geocode
-#
+	# Create a Pandas Excel writer using XlsxWriter as the engine.
+	file_name = geo_path + '/' + name + state + '_ungeocoded_not_in_grid.xlsx'
+	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 
-def merge(list_of_shp):
-	for shp in list_of_shp:
-		arcpy.AddField_management(in_table=shp, 
-			field_name="geocoded", 
-			field_type="TEXT")			
-		if "_GeocodedCorrect" in shp:
-			arcpy.CalculateField_management(in_table=shp, 
-				field="geocoded", 
-				expression="'Yes'",
-				expression_type="PYTHON_9.3")
-		else:
-			arcpy.CalculateField_management(in_table=shp, 
-				field="geocoded", 
-				expression="'No'",
-				expression_type="PYTHON_9.3")
-	outfile = dir_path + "StLouisMO_GeocodeFinal.shp"
-	arcpy.Merge_management(list_of_shp, outfile)
-	df_merge = dbf2DF(outfile)
-	df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','contig_ed','geocoded']).size().reset_index(name='count')
-	outfile_excel = dir_path + "StLouisMO_GeocodeFinal.xlsx"
-	writer = pd.ExcelWriter(outfile_excel, engine='xlsxwriter')
-	df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
+	# Convert the dataframe to an XlsxWriter Excel object.
+	df_ungeocoded_st_ed_tocheck.to_excel(writer, sheet_name='Sheet1', index=False)
+
+	# Close the Pandas Excel writer and output the Excel file.
 	writer.save()
-
-first = dir_path + "StLouisMO_1930_GeocodedCorrect.shp"
-second = dir_path + "StLouisMO_1930_NotGeocodedCorrect_Contemp.shp"
-third = dir_path + "StLouisMO_1930_GeocodedCorrect_Contemp.shp"
-
-list_of_shp = [first, second, third]
-
-merge(list_of_shp)
-
-# Create list of streets from ungeocoded points that are not in the grid
-ungeocoded_shp = dir_path + "StLouisMO_1930_NotGeocodedCorrect_Contemp.shp"
-df_ungeocoded = dbf2DF(ungeocoded_shp)
-df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
-df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
-
-grid_file = dir_path + "StLouisMO_1930_stgrid_edit_Uns2.shp"
-df_grid = dbf2DF(grid_file)
-grid_streets_list = df_grid['FULLNAME'].drop_duplicates().tolist()
-
-df_ungeocoded_st_ed_tocheck = df_ungeocoded_st_ed[~df_ungeocoded_st_ed['fullname'].isin(grid_streets_list)].sort_values(['ed'])
-
-# Create a Pandas Excel writer using XlsxWriter as the engine.
-file_name = dir_path + '/' + name + state + '_ungeocoded_not_in_grid.xlsx'
-writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-
-# Convert the dataframe to an XlsxWriter Excel object.
-df_ungeocoded_st_ed_tocheck.to_excel(writer, sheet_name='Sheet1', index=False)
-
-# Close the Pandas Excel writer and output the Excel file.
-writer.save()
-

@@ -4,11 +4,14 @@
 
 import arcpy
 import os
+import copy
 import sys
 import re
+import pickle
 from operator import itemgetter
 import pandas as pd
 import pysal as ps
+import numpy as np
 import subprocess
 from microclean.STstandardize import *
 
@@ -331,15 +334,6 @@ def save_dbf(df, shapefile, dir_path):
 # Functions for calling R scripts 
 #
 
-def create_1930_addresses(city_name, state_abbr, file_name, paths):
-	r_path, script_path, file_path = paths
-	print("Creating 1930 addresses\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Create 1930 Address.R',file_path,city_name,file_name,state_abbr])
-	if t != 0:
-		print("Error generating 1930 addresses for "+city_name+"\n")
-	else:
-		print("OK!\n")
-
 def identify_1930_eds(city_name, paths):
 	r_path, script_path, file_path = paths
 	print("Identifying 1930 EDs\n")
@@ -418,14 +412,50 @@ def set_blocknum_confidence(city_name, paths):
 
 
 #
+# Create 1930 Address.R (ported to Python)
+#
+
+# This function replaces Matt's R script but produces exactly the same file
+def create_1930_addresses(city_name, state_abbr, paths, df=None):
+	r_path, script_path, dir_path = paths
+	# Load microdata file if not passed to function
+	if df == None:
+		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
+		df = load_large_dta(microdata_file)
+	# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
+	df['Mblk'] = df['block']
+	# Choose the best available street name variable (st_best_guess includes student cleaning)
+	# NOTE: When student cleaning is unavailable we should probably fill in overall_match_bool==FALSE
+	#	    with street_precleanedHN, but this has not been done yet to my knowledge.
+	if 'st_best_guess' in df.columns.values:
+		street_var = 'st_best_guess'
+	if 'overall_match' in df.columns.values:
+		street_var = 'overall_match'
+	df['fullname'] = df[street_var]
+	# Make sure we found a street name variable
+	if 'fullname' not in df.columns.values:
+		print("No street name variable selected")
+		raise
+	# Select variables for file
+	vars_of_interest = ['fullname', 'ed','type','Mblk','hn']
+	df_add = df[vars_of_interest]
+	df_add.loc[:,('hn')] = df_add['hn'].astype(str).str.replace('.0','')
+	df_add.loc[:,('city')] = city_name
+	df_add.loc[:,('state')] = state_abbr
+	df_add.loc[:,('address')] = (df_add['hn'] + " " + df_add['fullname']).str.strip()
+	# Save address file	
+	addresses = dir_path + "/GIS_edited/" + city_name + "_1930_Addresses.csv"
+	df_add.to_csv(addresses)
+
+#
 # Create Blocks and Block Points.py
 #
 
 # Head script calling individual functions
-def create_blocks_and_block_points(name, state, paths, geocode_file=None):
+def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=None):
 	
 	_, _, dir_path = paths
-	dir_path = dir_path + "/GIS_edited/"
+	geo_path = dir_path + "/GIS_edited/"
 
 	different_geocode = False
 	if geocode_file != None:
@@ -436,86 +466,62 @@ def create_blocks_and_block_points(name, state, paths, geocode_file=None):
 
 	print("The script has started to work and is running the 'street' function")
 
-	problem_segments = street(dir_path, name, state)
+	problem_segments = street(geo_path, city_name, state_abbr)
 	print("The script has finished executing the 'street' function and has now started executing 'physical_blocks' function")
 
-	physical_blocks(dir_path, name)
+	physical_blocks(geo_path, city_name)
 	print("The script has finished executing the 'physical_blocks' function and has now started executing 'geocode' function")
 
-	geocode(dir_path, name, state)
+	geocode(geo_path, city_name, state_abbr)
 	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
 
 	if different_geocode:
 		points30 = geocode_file
 		print("Different geocode")
 	else:
-		points30 = dir_path + name + "_1930_Points.shp"
+		points30 = geo_path + city_name + "_1930_Points.shp"
 
-	attach_pblk_id(dir_path, name, points30)
+	attach_pblk_id(geo_path, city_name, points30)
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
-def street(dir_path, name, state):
+def street(geo_path, city_name, state_abbr):
 
 	#Create Paths to be used throughout Process
-	grid = dir_path + name + state + "_1940_stgrid_edit.shp"
-	grid_1940 = "S:/Projects/1940Census/DirAdd/" + name + state + "_1940_stgrid_diradd.shp"
-	dissolve_grid = dir_path + name + "_1930_stgrid_Dissolve.shp"
-	temp = dir_path + name + "_temp.shp"
-	split_grid = dir_path + name + "_1930_stgrid_Split.shp"
-	grid_uns =  dir_path + name + state + "_1930_stgrid_edit_Uns.shp"
-	grid_uns2 =  dir_path + name + state + "_1930_stgrid_edit_Uns2.shp"
-
-	# Function to reads in DBF files and return Pandas DF
-	def dbf2DF(dbfile, upper=False): 
-		if dbfile.split('.')[1] == 'shp':
-			dbfile = dbfile.replace('.shp','.dbf')
-		db = ps.open(dbfile) #Pysal to open DBF
-		d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-		#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-		pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-		if upper == True: #Make columns uppercase if wanted 
-			pandasDF.columns = map(str.upper, db.header) 
-		db.close() 
-		return pandasDF
-
-	# Function to save Pandas DF as DBF file 
-	def save_dbf(df, shapefile_name, field_map = False):
-		dir_temp = '/'.join(shapefile_name.split('/')[:-1])
-		file_temp = shapefile_name.split('/')[-1]
-		csv_file = dir_temp + "/temp_for_dbf.csv"
-		df.to_csv(csv_file,index=False)
-		try:
-			os.remove(dir_temp + "/schema.ini")
-		except:
-			pass
-
-		# Add a specific field mapping for a special case
-		if field_map:
-			file = csv_file
-			field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-			CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
-			STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
-			MIN_LFROMA "MIN_LFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
-			MAX_LTOADD "MAX_LTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
-			MIN_RFROMA "MIN_RFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
-			MAX_RTOADD "MAX_RTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
-			grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, file, file, file, file, file)
-		else:
-			field_map = None
-
-		arcpy.TableToTable_conversion(in_rows=csv_file, 
-			out_path=dir_temp, 
-			out_name="temp_for_shp.dbf",
-			field_mapping=field_map)
-		os.remove(shapefile_name.replace('.shp','.dbf'))
-		os.remove(csv_file)
-		os.rename(dir_temp+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-		os.remove(dir_temp+"/temp_for_shp.dbf.xml")
-		os.remove(dir_temp+"/temp_for_shp.cpg")
+	grid_1940 = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
+	grid = geo_path + city_name + state_abbr + "_1940_stgrid_edit.shp"
+	dissolve_grid = geo_path + city_name + "_1930_stgrid_Dissolve.shp"
+	temp = geo_path + city_name + "_temp.shp"
+	split_grid = geo_path + city_name + "_1930_stgrid_Split.shp"
+	grid_uns =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns.shp"
+	grid_uns2 =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
 
 	#Create copy of "diradd" file to use as grid
 	arcpy.CopyFeatures_management(grid_1940, grid)
+
+	# Add a specific field mapping for a special case
+	if field_map:
+		file = csv_file
+		field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+		CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
+		STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
+		MIN_LFROMA "MIN_LFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
+		MAX_LTOADD "MAX_LTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
+		MIN_RFROMA "MIN_RFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
+		MAX_RTOADD "MAX_RTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
+		grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, file, file, file, file, file)
+	else:
+		field_map = None
+
+	arcpy.TableToTable_conversion(in_rows=csv_file, 
+		out_path=geo_path, 
+		out_name="temp_for_shp.dbf",
+		field_mapping=field_map)
+	os.remove(shapefile_name.replace('.shp','.dbf'))
+	os.remove(csv_file)
+	os.rename(geo_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
+	os.remove(geo_path+"/temp_for_shp.dbf.xml")
+	os.remove(geo_path+"/temp_for_shp.cpg")
 
 	#Can't <null> blank values, so when Dissolve Unsplit lines aggregates MIN replace with big number
 	codeblock_min = """def replace(x):
@@ -861,9 +867,9 @@ def fix_dup_address_ranges(grid_uns):
 	return "\nFixed duplicate address ranges"
 
 # Creates physical blocks shapefile 
-def physical_blocks(dir_path, name):
-	pblocks = dir_path + name + "_1930_Pblk.shp"
-	split_grid = dir_path + name + "_1930_stgrid_Split.shp"
+def physical_blocks(geo_path, city_name):
+	pblocks = geo_path + city_name + "_1930_Pblk.shp"
+	split_grid = geo_path + city_name + "_1930_stgrid_Split.shp"
 
 	#if int(start_from) = 1930:
 	#arcpy.AddField_management(grid, 'FULLNAME', 'TEXT')
@@ -877,13 +883,14 @@ def physical_blocks(dir_path, name):
 	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
 
 # Performs initial geocode on contemporary grid
-def geocode(dir_path, name, state):
-	add_locator = dir_path + name + "_addloc"
-	#'_1930_Addresses.csv' originates from 'Create 1930 and 1940 Address Files.R' code
-	addresses = dir_path + name + "_1930_Addresses.csv"
+def geocode(geo_path, city_name, state_abbr):
+
+	# Files
+	add_locator = geo_path + city_name + "_addloc"
+	addresses = geo_path + city_name + "_1930_Addresses.csv"
 	address_fields="Street address; City city; State state"
-	points30 = dir_path + name + "_1930_Points.shp"
-	reference_data = dir_path + name + state + "_1930_stgrid_edit_Uns2.shp 'Primary Table'"
+	points30 = geo_path + city_name + "_1930_Points.shp"
+	reference_data = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp 'Primary Table'"
 
 	field_map="'Feature ID' FID VISIBLE NONE; \
 	'*From Left' MIN_LFROMA VISIBLE NONE; \
@@ -916,7 +923,7 @@ def geocode(dir_path, name, state):
 	'Altname JoinID' <None> VISIBLE NONE"
 
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addloc")]
+	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addloc")]
 	for f in add_loc_files:
 			 if os.path.isfile(f):
 				 os.remove(f)
@@ -930,14 +937,1219 @@ def geocode(dir_path, name, state):
 	print("The script has finished executing the 'GeocodeAddress' tool and has begun executing the 'SpatialJoin' tool")
 
 # Attach physical block IDs to geocoded points 
-def attach_pblk_id(dir_path, name, points30):
-	#Define paths
-	pblk_points = dir_path + name + "_1930_Pblk_Points.shp"
-	pblocks = dir_path + name + "_1930_Pblk.shp"
+def attach_pblk_id(geo_path, city_name, points30):
+	# Files
+	pblk_points = geo_path + city_name + "_1930_Pblk_Points.shp"
+	pblocks = geo_path + city_name + "_1930_Pblk.shp"
 	#Attach Pblk ids to points
 	arcpy.SpatialJoin_analysis(points30, pblocks, pblk_points, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
 	print("The script has finished executing the 'SpatialJoin' tool")
 
 #
-# 
+# RenumberGrid.py
 #
+
+# Renumber grid using microdata
+def renumber_grid(city_name, state_abbr, df=None):
+
+	#Paths
+	file_path = "S:\\Projects\\1940Census\\" + city_name 
+	dir_path = file_path + "\\GIS_edited\\"
+
+	#Files
+	microdata_file = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
+	stgrid_file = dir_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	out_file = dir_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
+	block_shp_file = dir_path + city_name + "_1930_block_ED_checked.shp"
+	block_dbf_file = block_shp_file.replace(".shp",".dbf")
+	addresses = dir_path + city_name + "_1930_Addresses.csv"
+	points30 = dir_path + city_name + "_1930_Points_updated.shp"
+	pblk_file = block_shp_file #Note: This is the manually edited block file
+	pblk_grid_file2 = dir_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ2.shp"
+	add_locator = dir_path + city_name + "_addlocOld" 
+
+	# Load
+	df_grid = dbf2DF(stgrid_file.replace(".shp",".dbf"),upper=False)
+	df_block = dbf2DF(block_dbf_file,upper=False)
+	if df == None:
+		df_micro = load_large_dta(microdata_file)
+	else:
+		df_micro = df
+
+	try:
+		block = 'block_old'
+		vars_of_interest = ['ed','hn','autostud_street',block]
+		df_micro = df_micro[vars_of_interest]
+	except:
+		block = 'block'
+		vars_of_interest = ['ed','hn','autostud_street',block]
+		df_micro = df_micro[vars_of_interest]
+	df_micro = df_micro.dropna(how='any')
+	df_micro['hn'] = df_micro['hn'].astype(int)
+
+	#Create ED-block variable (standardized against block map)
+	#Turn ED=0 into blank 
+	df_micro['ed1'] = df_micro['ed'].astype(str).replace('0','')
+
+	df_micro['block1'] = df_micro[block].str.replace(' ','-')
+	df_micro['block1'] = df_micro['block1'].str.replace('and','-')
+	df_micro['block1'] = df_micro['block1'].str.replace('.','-')
+	df_micro['block1'] = df_micro['block1'].replace('-+','-',regex=True)
+
+	df_micro['edblock'] = df_micro['ed1'] + '-' + df_micro['block1']
+	df_micro['edblock'] = df_micro['edblock'].replace('^-|-$','',regex=True)
+	df_micro.loc[df_micro[block]=='','edblock'] = ''
+	df_micro.loc[df_micro['ed']==0,'edblock'] = ''
+
+	def get_cray_z_scores(arr) :
+		debug = False
+		if not None in arr :
+			inc_arr = np.unique(arr) #returns sorted array of unique values
+			if(len(inc_arr)>=2) :
+				if debug : print("uniques: "+str(inc_arr))
+				median = np.median(inc_arr,axis=0)
+				diff = np.abs(inc_arr - median)
+				med_abs_deviation = np.median(diff)
+				mean_abs_deviation = np.mean(diff)
+				meanified_z_score = diff / (1.253314 * mean_abs_deviation)
+
+				if med_abs_deviation == 0 :
+						modified_z_score = diff / (1.253314 * mean_abs_deviation)
+				else :
+						modified_z_score = diff / (1.4826 * med_abs_deviation)
+				if debug : print ("MedAD Zs: "+str(modified_z_score))
+				if debug : print("MeanAD Zs: "+str(meanified_z_score))
+				if debug : print ("Results: "+str(meanified_z_score * modified_z_score > 16))
+
+				return dict(zip(inc_arr, meanified_z_score * modified_z_score > 16))    
+		try:
+			return {inc_arr[0]:False}
+		except:
+			pass
+
+	# Get house number ranges for block-street combinations from microdata
+	df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
+	blkst_hn_dict = {}
+	bad_blkst = []
+	for group, group_data in df_micro_byblkst:
+		try:
+			cray_dict = get_cray_z_scores(group_data['hn'])
+			hn_range = [k for k,v in cray_dict.items() if not v]
+			blkst_hn_dict[group] = {'min_hn':min(hn_range), 'max_hn':max(hn_range)}
+		except:
+			bad_blkst.append(group)
+
+
+	# Get dictionary linking edblock to pblk_id
+	bn_var = 'am_bn'
+	temp = df_block.loc[df_block[bn_var]!='',[bn_var,'ed','pblk_id']]
+	pblk_edblock_dict = temp.set_index('pblk_id')[bn_var].to_dict()
+	pblk_ed_dict = temp.set_index('pblk_id')['ed'].to_dict()
+
+	# Join pblk to stgrid
+	field_mapSJ = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+	ed "ed" true true false 10 Long 0 10 ,First,#,%s,ed,-1,-1;
+	FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+	grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (pblk_file, pblk_file, stgrid_file, stgrid_file)
+	arcpy.SpatialJoin_analysis(target_features=pblk_file, join_features=stgrid_file, out_feature_class=pblk_grid_file2, 
+		join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
+		match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
+	df_pblk_grid = dbf2DF(pblk_grid_file2.replace(".shp",".dbf"),upper=False)
+
+	# Create dictionary linking grid_id to pblk_id
+	grid_pblk_dict = {}
+	grouped_grid = df_pblk_grid.groupby(['grid_id'])
+	for grid_id, pblk_df in grouped_grid:
+		grid_pblk_dict[grid_id] = pblk_df['pblk_id'].tolist()
+
+	# Create dictionary linking grid_id to fullname
+	grid_fullname_dict = df_pblk_grid.set_index('grid_id').to_dict()['FULLNAME']
+
+	# Create dictionary linking grid_id to list of edblocks it intersects
+	grid_edblock_dict = {grid_id:[pblk_edblock_dict[int(pblk_id)] for pblk_id in pblk_id_list] for grid_id, pblk_id_list in grid_pblk_dict.items()}
+
+	# Create dictionary linking grid_id to min/max HN and ED
+	grid_hn_dict = {}
+	for grid_id, edblock_list in grid_edblock_dict.items():
+		try:
+			min_hn = max([blkst_hn_dict[i,grid_fullname_dict[grid_id]]['min_hn'] for i in edblock_list])
+			max_hn = min([blkst_hn_dict[i,grid_fullname_dict[grid_id]]['max_hn'] for i in edblock_list])
+			eds = [i.split("-")[0] for i in edblock_list] 
+			grid_hn_dict[grid_id] = {'min_hn':min_hn, 'max_hn':max_hn, 'ed':max(set(eds), key=eds.count)}
+		except:
+			pass
+
+	#Create copy of st_grid to work on 
+	arcpy.CopyFeatures_management(stgrid_file,out_file)
+
+	#Add ED field
+	arcpy.AddField_management(out_file, "ed", "TEXT", 5, "", "","", "", "")
+
+	#Delete contemporary ranges and recreate HN range attributes
+	arcpy.DeleteField_management(out_file, ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD'])
+	arcpy.AddField_management(out_file, "MIN_LFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_LTOADD", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MIN_RFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_RTOADD", "TEXT", 5, "", "","", "", "")
+
+	#Add HN ranges and ED based on grid_id
+	cursor = arcpy.UpdateCursor(out_file)
+	for row in cursor:
+		grid_id = row.getValue('grid_id')
+		st_name = row.getValue('FULLNAME')
+		try:
+			hn_range = range(grid_hn_dict[grid_id]['min_hn'],grid_hn_dict[grid_id]['max_hn']+1)
+			evensList = [x for x in hn_range if x % 2 == 0]
+			oddsList = [x for x in hn_range if x % 2 != 0]
+			row.setValue('MIN_LFROMA', min(evensList))
+			row.setValue('MAX_LTOADD', max(evensList))
+			row.setValue('MIN_RFROMA', min(oddsList))
+			row.setValue('MAX_RTOADD', max(oddsList))
+			row.setValue('ed', int(grid_hn_dict[grid_id]['ed']))
+		except:
+			pass
+		cursor.updateRow(row)
+	del(cursor)
+
+	#Make sure address locator doesn't already exist - if it does, delete it
+	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addlocOld")]
+	for f in add_loc_files:
+		if os.path.isfile(f):
+			os.remove(f)
+
+	#Recreate Address Locator
+	field_map="'Feature ID' FID VISIBLE NONE; \
+	'*From Left' MIN_LFROMA VISIBLE NONE; \
+	'*To Left' MAX_LTOADD VISIBLE NONE; \
+	'*From Right' MIN_RFROMA VISIBLE NONE; \
+	'*To Right' MAX_RTOADD VISIBLE NONE; \
+	'Prefix Direction' <None> VISIBLE NONE; \
+	'Prefix Type' <None> VISIBLE NONE; \
+	'*Street Name' FULLNAME VISIBLE NONE; \
+	'Suffix Type' '' VISIBLE NONE; \
+	'Suffix Direction' <None> VISIBLE NONE; \
+	'Left City or Place' ed VISIBLE NONE; \
+	'Right City or Place' ed VISIBLE NONE; \
+	'Left ZIP Code' <None> VISIBLE NONE; \
+	'Right ZIP Code' <None> VISIBLE NONE; \
+	'Left State' STATE VISIBLE NONE; \
+	'Right State' STATE VISIBLE NONE; \
+	'Left Street ID' <None> VISIBLE NONE; \
+	'Right Street ID' <None> VISIBLE NONE; \
+	'Display X' <None> VISIBLE NONE; \
+	'Display Y' <None> VISIBLE NONE; \
+	'Min X value for extent' <None> VISIBLE NONE; \
+	'Max X value for extent' <None> VISIBLE NONE; \
+	'Min Y value for extent' <None> VISIBLE NONE; \
+	'Max Y value for extent' <None> VISIBLE NONE; \
+	'Left parity' <None> VISIBLE NONE; \
+	'Right parity' <None> VISIBLE NONE; \
+	'Left Additional Field' <None> VISIBLE NONE; \
+	'Right Additional Field' <None> VISIBLE NONE; \
+	'Altname JoinID' <None> VISIBLE NONE"
+	address_fields= "Street address; City city; State state"
+	arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", 
+		in_reference_data=out_file, 
+		in_field_map=field_map, 
+		out_address_locator=add_locator, 
+		config_keyword="")
+
+	#Geocode Points
+	arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
+
+#
+# consecutive_segments.py
+#
+
+def find_consecutive_segments(grid_shp, street_var, debug=False):
+
+	fields = arcpy.ListFields(grid_shp)
+
+	for f in fields :
+		if f.type == "OID" :
+			fid_var = f.name
+
+	#This should be the new standard for segment IDs:
+	fid_var = "grid_id"
+
+	field_names = [x.name for x in fields]
+
+	# Version of Dict_append that only accepts unique v(alues) for each k(ey)
+	def Dict_append_unique(Dict, k, v) :
+		if not k in Dict :
+			Dict[k] = [v]
+		else :
+			if not v in Dict[k] :
+				Dict[k].append(v)
+
+	#Return all unique values of field found in table
+	def unique_values(table, field):
+		with arcpy.da.SearchCursor(table, [field]) as search_cursor:
+			return sorted({row[0] for row in search_cursor})
+
+	#Returns just the NAME and TYPE components of the street phrase, if any#
+	def remove_st_dir(st) :
+		if (st == None or st == '' or st == ' ' or st == -1) or not (isinstance(st, str) or isinstance(st, unicode)) :
+			return "" #.shp files do not support NULL !!!
+		else :
+			DIR = re.search("^[NSEW]+ ",st)
+			if(DIR) :
+				DIR = DIR.group(0)
+				st = re.sub("^"+DIR, "",st)
+				DIR = DIR.strip()
+			st = st.strip()
+			return st
+
+	#function to make sure fids aren't accidentally looping through nexts
+	#returns True if there is no loop. fnd = fid_next_dict
+	def test_fid_loop(fnd,fid) :
+		n = fid
+		for i in range(0,len(fnd.keys())+1) :
+			
+			try :
+				n = fnd[n]
+			except KeyError :
+				return True
+			except TypeError :
+				pass #BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD
+			if n == fid :
+				return False
+		if debug: print("ran out of fids?")
+		return False
+
+	#returns a tuple of lists comprising all discrete runs of consequent FIDs. fnd = fid_next_dict
+	def find_fid_runs(fnd) :
+		run_starts = [x for x in fnd.keys() if not x in fnd.values()]
+		runs = ()
+		if len(run_starts) == 0 :
+			if debug: print("FIDS ARE A LOOP AND WE CAN TELL FROM TRYING TO FIND RUNS!")
+		for f in run_starts :
+			runs += (fid_run_recurse(fnd, f),)
+		return runs
+	#recursion function called by find_fid_runs
+	def fid_run_recurse(fnd, fid) :
+		#if fid == None :
+		#    return []
+		try :
+			next_fid = fnd[fid]
+		except KeyError :
+			return [fid]
+		except TypeError :
+			return [fid]
+		else :
+			return [fid]+fid_run_recurse(fnd,next_fid)
+
+	#given a graph in the form of a dict: node -> [child_nodes]
+	#return a list containing the nodes of the longest possible path
+	#from a start node to an end 
+	def longest_path(G) :
+		keys = G.keys()
+		values = []
+		for v in G.values() :
+			if isinstance(v,list) :
+				values += v
+			else :
+				values.append(v)
+		starts = set([x for x in keys if not x in values])
+		ends = set([x for x in values if not x in keys])
+		Gd = dict(G)
+		#create new dict structure with entries for child vertices (v) and whether
+		#current node is "discovered" (d)
+		for k in Gd.keys() :
+			if not isinstance(Gd[k],list) :
+				Gd[k] = [Gd[k]]
+			Gd[k] = {'v':Gd[k],'d':False}
+		for e in ends :
+			Gd[e] = {'v':[],'d':False}
+		paths = []
+		for s in starts :
+			paths.append(depth_first_search(dict(Gd),s))
+		return max(paths,key=len)
+	#recursive search function called by longest_path
+	def depth_first_search(G,v) :
+		Gd = copy.deepcopy(G)
+		#create an entirely new data structure in memory so that nodes' "discovered" 
+		#values do not propagate backward to parent nodes!
+		Gd[v]['d'] = True
+		longest_subpath = []
+		subpaths = []
+		for n in Gd[v]['v'] :
+			if not Gd[n]['d'] :
+				subpaths.append(depth_first_search(Gd,n))
+		if not subpaths == [] :
+			longest_subpath = max(subpaths,key=len)
+		return [v]+longest_subpath
+
+	def fill_addr_gaps(grid_shp) :
+		pass
+		#Chris is working on this...
+
+	# converts a stname -> [fid_sequence] dict into a fid -> [prev_fid, next_fid] dict
+	def flatten_seq_dict(name_sequence_dict) :
+		fid_prevnext_dict = {}
+		for name, seq in name_sequence_dict.items() :
+			for ind, fid in enumerate(seq) :
+				if ind == 0 :
+					prev_fid = None
+				else :
+					prev_fid = seq[ind-1]
+				if ind == len(seq) - 1 :
+					next_fid = None
+				else :
+					next_fid = seq[ind+1]
+				fid_prevnext_dict[fid] = [prev_fid,next_fid]
+		return fid_prevnext_dict
+
+	#assumes that name_sequence_dict was created with ignore_dir = True
+	def consec_to_arc(grid_shp,name_sequence_dict,exact_next_dict) :
+		fid_prevnext_dict = flatten_seq_dict(name_sequence_dict)
+		#try : arcpy.AddField_management (grid_shp, "flipLine", "SHORT"); except : pass
+		with arcpy.da.UpdateCursor(grid_shp, [fid_var,"consecPrev","consecNext","exact_Prev",
+										  "exact_Next"]) as up_cursor:
+			for row in up_cursor :
+				fid = row[0]
+				try :
+					prev_next = fid_prevnext_dict[fid]
+				except KeyError :
+					continue
+				if debug: print("row: "+str(row))
+				row[1] = prev_next[0]
+				row[2] = prev_next[1]
+				try :
+					if debug: print("prev_next: "+str(prev_next))
+					row[3] = exact_next_dict[prev_next[0]] == fid
+				except KeyError :
+					row[3] = False
+				try :
+					row[4] = exact_next_dict[fid] == prev_next[1]
+				except KeyError :
+					row[4] = False
+				up_cursor.updateRow(row)
+
+	#have to pass in a .shp
+	#include_non_exact: True or False
+	#logic: organize streets one stname at a time
+	#       first find exactly consequent segments
+	#       then, separately, decide about inexact consequent segments
+
+	#ignore_dir determines whether streets with only differing directions are considered
+	#the same street for purposes of determining consecutive-ness:
+	def get_consecutive(grid_shp,include_non_exact = True,ignore_dir = True) :
+
+		debug = True
+		
+		arcpy.AddGeometryAttributes_management(grid_shp, "LINE_START_MID_END")
+		try :
+			arcpy.AddField_management (grid_shp, "consecPrev", "TEXT")
+			arcpy.AddField_management (grid_shp, "consecNext", "TEXT")
+			arcpy.AddField_management (grid_shp, "exact_Prev", "SHORT")
+			arcpy.AddField_management (grid_shp, "exact_Next", "SHORT")
+		except :
+			pass #just for debugging, as any .shp having this done will not have these fields
+		fields = arcpy.ListFields(grid_shp)
+		field_names = [x.name for x in fields]
+		name_sequence_dict = {} #dict: st_name -> sequential list of FIDs for all segments with st_name
+		name_sequence_spur_dict = {} #same format as name_sequence_dict, but comprising spurs and other segments that connect to main sequence
+		#how do we account for two different groups of segs with same name when include_non_exact is False?
+		exact_next_dict = {}
+		if debug: print("field_names"+str(field_names))
+		if ignore_dir :
+			arcpy.AddField_management (grid_shp, "name_type", "TEXT")
+			with arcpy.da.UpdateCursor(grid_shp, [street_var,"name_type"]) as up_cursor:
+				for row in up_cursor :
+					row[1] = remove_st_dir(row[0])
+					up_cursor.updateRow(row)
+			unique_names = unique_values(grid_shp,"name_type")
+			name_var = "name_type"
+		else :
+			unique_names = unique_values(grid_shp,street_var)
+			name_var = street_var
+		
+		for name in unique_names :
+			fid_coord_dict = {}
+			if name != " " and name != "City Limits" :
+				name_grid_shp = name+"_lyr"
+				name = name.replace("'","''") #replace apostrophe in name with two apostrophes (SQL-specific syntax)
+				arcpy.MakeFeatureLayer_management(grid_shp,name_grid_shp,name_var+" = '"+name+"'")
+				num_name_segments = int(arcpy.GetCount_management(name_grid_shp).getOutput(0))
+				if debug: print("examining "+str(num_name_segments)+" segments named "+name)
+				if num_name_segments > 1 : #if more than 1 st segment with name
+					next_fid_list = []#fids that should be considered for next of another segment
+					all_fid_list = []
+					with arcpy.da.SearchCursor(name_grid_shp, [fid_var,'START_X', 'START_Y', 'END_X', 'END_Y']) as s_cursor :
+						for row in s_cursor :
+							#populate dict of fid -> coordinates_dict
+							all_fid_list.append(row[0])
+							next_fid_list.append(row[0])
+							fid_coord_dict[row[0]] = {}
+							fid_coord_dict[row[0]]['START_X'] = row[1]
+							fid_coord_dict[row[0]]['START_Y'] = row[2]
+							fid_coord_dict[row[0]]['END_X'] = row[3]
+							fid_coord_dict[row[0]]['END_Y'] = row[4]
+					with arcpy.da.UpdateCursor(name_grid_shp, [fid_var,"consecPrev","consecNext",
+														   "exact_Prev","exact_Next"]) as up_cursor:
+						next_fid_linked_list = {} #dict: fid -> fid of next segment(s)
+						prev_fid_linked_list = {} #dict: fid -> fid of prev segment
+						coord_diff_start = {} #keeps track of the segment that is spatially closest to cur_seg
+						coord_diff_end = {}#for purposes of tracking down inexact next and prev segments
+						singleton_segments = ()
+						found_cyclic_loop = False
+						fork_segs = [] #not used
+						merge_segs = []#not used
+						for row in up_cursor :
+							cur_fid = row[0]
+							cur_seg = fid_coord_dict[cur_fid]
+							startx = round(cur_seg['START_X'],6) # Assuming units=decimal degrees,
+							starty = round(cur_seg['START_Y'],6) #this rounds to roughly the
+							endx = round(cur_seg['END_X'],6) # nearest inch.
+							endy = round(cur_seg['END_Y'],6) # i.e. negligible (but necessary. Because Arc.)
+							coord_diff_start[cur_fid] = []
+							coord_diff_end[cur_fid] = []
+							found_exact_prev = False
+							found_exact_next = False
+							next_fid_candidates = []
+							prev_fid_candidates = []
+							for fid, seg in fid_coord_dict.items() :
+								if not cur_fid == fid :#no segment can be the next or prev of itself...
+									if round(seg['END_X'],6) == startx and round(seg['END_Y'],6) == starty : #found exact prev
+										found_exact_prev = True
+										prev_fid_candidates.append(fid)
+									#print("cur_fid - endx: "+str(endx)+" endy:   "+str(endy)+" ("+str(fid)+")")
+									#print("fid -  START_X: "+str(seg['START_X'])+" START_Y: "+str(seg['START_Y']))
+									if round(seg['START_X'],6) == endx and round(seg['START_Y'],6) == endy : #found exact next
+										if found_exact_next :
+											### cur_fid is the last segment before a fork:
+											###            \ /
+											###             |  <- cur_fid
+											###             ^
+											if debug:print(str(cur_fid)+" has multiple exact nexts!")
+											fork_segs.append(cur_fid)#not used
+										found_exact_next = True
+										try :
+											next_fid_list.remove(fid)
+										except ValueError :
+											### cur_fid is the last segment before a merge:
+											###             ^
+											###             |
+											###            / \  <- cur_fid
+											if debug:print("an exact next is already the exact next of something else")
+											merge_segs.append(fid)#not used
+											
+										next_fid_candidates.append(fid)
+									#record distance of start and end coordinates relative to start and end of cur_seg:
+									end_end_diff = math.sqrt((seg['END_X'] - endx)**2 + (seg['END_Y'] - endy)**2)
+									end_start_diff = math.sqrt((seg['START_X'] - endx)**2 + (seg['START_Y'] - endy)**2)
+									coord_diff_end[cur_fid].append((min(end_end_diff,end_start_diff), fid))
+									start_end_diff = math.sqrt((seg['END_X'] - startx)**2 + (seg['END_Y'] - starty)**2)
+									start_start_diff = math.sqrt((seg['START_X'] - startx)**2 + (seg['START_Y'] - starty)**2)
+									coord_diff_start[cur_fid].append((min(start_end_diff,start_start_diff), fid))
+							if not found_exact_prev and not found_exact_next :
+								singleton_segments += ([cur_fid],)
+							else :
+								if len(prev_fid_candidates) == 1 :
+									prev_fid_linked_list[cur_fid] = prev_fid_candidates[0]
+								if len(prev_fid_candidates) > 1 :
+									prev_fid_linked_list[cur_fid] = prev_fid_candidates
+								if len(next_fid_candidates) == 1 :
+									next_fid_linked_list[cur_fid] = next_fid_candidates[0]
+								if len(next_fid_candidates) > 1 :
+									next_fid_linked_list[cur_fid] = next_fid_candidates
+							
+							
+						if test_fid_loop(next_fid_linked_list,fid) :
+							pass
+						else :
+							if debug: 
+								print("Cyclic Loop detected.")
+								print("Name of segments: "+name)
+								print("FIDs of segments: "+str(all_fid_list))
+							found_cyclic_loop = True
+							#TODO: store this info somewhere?
+
+						cur_longest_path = []
+						
+						if not found_cyclic_loop :
+							if not next_fid_linked_list == {} :
+								#PROBLEM:#PROBLEM:#PROBLEM: 
+								#PROBLEM:#PROBLEM:#PROBLEM: test_fid_loop does not support lists in next_fid_linked_list
+								#PROBLEM:#PROBLEM:#PROBLEM:
+								#PROBLEM:#PROBLEM:#PROBLEM: CURRENTLY THIS IS BEING SILENCED WITH AN except TypeError!!!!
+								#PROBLEM:#PROBLEM:#PROBLEM: instead, should change longest_path to detect cycles
+								#PROBLEM:#PROBLEM:#PROBLEM:
+								cur_longest_path = longest_path(next_fid_linked_list)
+								if debug:
+									print("next_fid_linked_list is: "+str(next_fid_linked_list))
+									print("longest path is: "+str(cur_longest_path))
+									print("FIDs not in longest path: "+str([x for x in all_fid_list if not x in cur_longest_path]))
+
+								#modify next_fid_linked_list to conform to longest_path
+								for k,v in dict(next_fid_linked_list).items() :
+									if k in cur_longest_path :
+										if isinstance(v,list) :
+											next_fid_linked_list[k] = cur_longest_path[cur_longest_path.index(k)+1]
+
+							else :
+								if debug: print("no exact consecutive segments exist for "+name)
+
+							street_is_too_messed_up = False
+							for k, v in next_fid_linked_list.items() :
+								if isinstance(v, list) :
+									if debug:
+										print("There is a fork on a non-central path for the street "+name)
+										print("This is not currently supported. Goodbye.")
+									street_is_too_messed_up = True
+									break
+							if street_is_too_messed_up :
+								continue
+
+							exact_next_dict = dict(copy.deepcopy(next_fid_linked_list), **exact_next_dict)
+							
+							#determine if segments that do not have an exact next/prev should have an inexact next/prev:
+							#start segment is somewhere in next_fid_list
+							#first, break down entire sequence of street segments into contiguous runs:
+							#then create a dict of possible connections (which will include end segment->start segment. we do not want this.)
+
+							runs = find_fid_runs(next_fid_linked_list)
+							runs += singleton_segments
+
+							if debug: print("runs: "+str(runs))
+
+							#set aside runs that are spurs/forks of cur_longest_path
+							#they will not be considered as candidates for inexact next/prev
+							for run in tuple(runs) :
+								if not run == cur_longest_path :
+									longest_path_overlap = [x for x in run if x in cur_longest_path]
+									if not longest_path_overlap == [] :
+										temp = list(runs)
+										temp.remove(run)
+										runs = tuple(temp)
+										for x in longest_path_overlap :
+											run.remove(x)
+										Dict_append_unique(name_sequence_spur_dict,name,run)
+										for x in run :
+											del next_fid_linked_list[x]
+										if debug: print("added the spur "+str(run)+" to aux dict")       
+
+							possible_connexions = {}
+							for s_run in runs :
+								for e_run in runs :
+									if s_run != e_run :
+										Dict_append_unique(possible_connexions,e_run[-1],s_run[0])
+							if debug: print("possible_connexions: "+str(possible_connexions))
+							#cumbersome magic to organize and sort the distances of each gap for which we want to (maybe)
+							#make a connexion based on the dicts created prior:
+							dist_fid_list = []
+							for k in possible_connexions.keys() :
+								coord_diff_start_list = []
+								coord_diff_end_list = []
+								for v in possible_connexions[k] :
+									coord_diff_start_list.append(list(filter(lambda x: x[1]==v, coord_diff_start[k])))
+									coord_diff_end_list.append(list(filter(lambda x: x[1]==v, coord_diff_end[k])))
+								shortest_gap = min(sorted(coord_diff_start_list)[0],sorted(coord_diff_end_list)[0])
+								if isinstance(shortest_gap,list) and len(shortest_gap) > 0:
+									if debug:print("shortest_gap is a list (yes, this is still happening)")
+									shortest_gap = shortest_gap[0]
+								elif debug:print("shortest_gap is NOT a list (not happening all the time)")
+
+								shortest_gap += (k,)
+								dist_fid_list.append(shortest_gap)
+							
+							#deal with cycles in inexact next gaps (this only applies to two-fid cycles)
+							### have to find when there is a cycle in dist_fid_list 
+							### when we have a cycle, we should remove the cyclic connexion that interferes with another connexion
+							
+							def deal_with_dist_fid_cycles() :
+								dist_fid_cycles = []
+								#identify cyclic gaps in dist_fid_list
+								for i in range(0,len(dist_fid_list)-1) :
+									for j in range(i+1,len(dist_fid_list)) :
+										if dist_fid_list[i][1]==dist_fid_list[j][2] and dist_fid_list[i][2]==dist_fid_list[j][1] :
+											dist_fid_cycles.append(dist_fid_list[i])
+											dist_fid_cycles.append(dist_fid_list[j])
+											break
+								#isolate cyclic gaps from the rest of dist_fid_list
+								for i in dist_fid_cycles :
+									dist_fid_list.remove(i)
+								if debug: print("dist_fid_cycles: "+str(dist_fid_cycles))
+								for i in dist_fid_list :
+									#iterate over a copy of dist_fid_cycles so we can modify the original
+									for j in list(dist_fid_cycles) :
+										if i[1] == j[1] and i[2] != j[2] :
+											#set distance to impossibly high value for the bad gap in the cycle
+											dist_fid_cycles.remove(j)
+											dist_fid_cycles.append((99999,)+j[1:])
+											if debug: print(str(j)+" was a bad egg cuz of "+str(i))
+								for j in dist_fid_cycles :
+									#add values back to list
+									dist_fid_list.append(j)
+									
+							deal_with_dist_fid_cycles()
+
+							dist_fid_list = sorted(dist_fid_list)
+												
+							if debug: print("now, dist_fid_list is: "+str(dist_fid_list))
+							while len(dist_fid_list) > 1 :
+								connexion = dist_fid_list.pop(0)
+								if debug:print("checking connexion "+str(connexion))
+								check_for_cycles_linked_list = dict(next_fid_linked_list)
+								check_for_cycles_linked_list[connexion[2]] = connexion[1]
+								if test_fid_loop(check_for_cycles_linked_list,connexion[2]) :
+									#only create the connection if it does not create a cyclical loop
+									next_fid_linked_list[connexion[2]] = connexion[1]
+							if debug:
+								if len(dist_fid_list) :     
+									print(name +": the last connexion (which was not made) was "+str(dist_fid_list[0]))
+								else :
+									print(name+" had no inexact connexions")
+								
+							#reconstruct order of segments and store in name_sequence_dict
+							start_fid = [x for x in next_fid_linked_list.keys() if not x in next_fid_linked_list.values()]
+							if debug:
+								wtf = [x for x in next_fid_linked_list.values() if not x in next_fid_linked_list.keys()]
+								print(name+": "+str(start_fid)+ " -> "+str(wtf))
+							if not len(start_fid) == 1 :
+								if debug:
+									print("There is a spur (or sum'n') on the street "+name)
+									print("Have to deal with this manually!!!!!!!")
+							start_fid = start_fid[0]
+							fid_list = [start_fid]
+							if debug: print("There should be %s FIDs" %(len(next_fid_linked_list.keys())+1))
+								
+							while len(fid_list) <= len(next_fid_linked_list.keys()) :
+								try :
+									fid_list.append(next_fid_linked_list[fid_list[-1]])
+								except KeyError :
+									if debug: print("THIS SHOULD NOT HAPPEN CAUSE OF THE LEN AND STUFF")
+									break
+							if debug:print("adding fid_list: "+str(fid_list))
+							name_sequence_dict[name] = fid_list
+		print("Finished.")
+		return name_sequence_dict,exact_next_dict
+
+	### Unresolved Issues ###
+
+	# Broadway :
+	# --<--|--<--|--<--|-->--|-->--|-->--
+	#   6     5     4     1     2     3
+
+	name_sequence_dict, exact_next_dict = get_consecutive(grid_shp)
+
+	return name_sequence_dict, exact_next_dict
+
+#
+# FixDirAndBlockNumsUsingMap.py
+#
+
+def fix_micro_dir_using_ed_map(city_name, state_abbr, street_var, df_micro):
+
+	# Files
+	grid = dir_path + "/GIS_edited/" + city + state + "_1930_stgrid_edit_Uns2.shp"
+	ed_1930 = dir_path + "/GIS_edited/" + city + "_1930_block_ED_checked.shp"
+	grid_ed_SJ = dir_path + "/GIS_edited/" + city + state + "_1930_grid_edSJ.shp"
+
+	# Load files
+	df_grid = dbf2DF(grid.replace('.shp','.dbf'))
+	#df_micro = df_micro[['ed','block','hn',street_var,'dir','name','type','checked_st']]
+	df_micro[street_var+'_old'] = df_micro[street_var]
+
+	def get_dir(st):
+		_, DIR, _, _ = standardize_street(st)
+		return DIR
+
+	df_grid['DIR'] = df_grid.apply(lambda x: get_dir(x['FULLNAME']), axis=1)
+	grid_path = "/".join(grid.split("/")[:-1]) + "/"
+	grid_filename = grid.split("/")[-1]
+	save_dbf(df_grid, grid_filename, grid_path)
+
+	arcpy.SpatialJoin_analysis(target_features=grid, 
+		join_features=ed_1930, 
+		out_feature_class=grid_ed_SJ, 
+		join_operation="JOIN_ONE_TO_MANY", 
+		join_type="KEEP_ALL", 
+		match_option="SHARE_A_LINE_SEGMENT_WITH")
+
+	# Get the spatial join dbf and extract some info
+	df_sj = dbf2DF(grid_ed_SJ.replace('.shp','.dbf'))
+	df_dir_ed = df_sj[['DIR','ed']].drop_duplicates()
+	df_dir_ed = df_dir_ed[df_dir_ed['DIR']!='']
+	df_dir_ed = df_dir_ed[df_dir_ed['ed']!=0]
+	eds = df_dir_ed['ed'].drop_duplicates().tolist()
+
+	# Create dictionary of {ED:list(DIRs)}
+	ed_dir_dict = {}
+	ed_grouped = df_dir_ed.groupby(['ed'])
+	for ed, group in ed_grouped:
+		ed_dir_dict[ed] = group['DIR'].tolist()
+
+	## I feel like this could be simplified significantly
+
+	# Create dictionary of {street_var:list(DIRs)} and delete any that have combination of N/S and E/W
+	df_name_dir = df_micro[[street_var,'dir']]
+	df_name_dir.loc[:,('st')], df_name_dir.loc[:,('dir')], df_name_dir.loc[:,('name')], df_name_dir.loc[:,('type')] = zip(*df_name_dir.apply(lambda x: standardize_street(x[street_var]), axis=1))
+	df_name_dir.loc[:,('st')] = (df_name_dir['name'] + ' ' + df_name_dir['type']).str.strip()
+	df_name_dir = df_name_dir.drop_duplicates(['dir','st'])
+	df_name_dir = df_name_dir.loc[df_name_dir['dir']!='']
+
+	# Create dictionary of microdata streets and DIRs
+	micro_st_dir_dict = {}
+	st_grouped = df_name_dir.groupby(['st'])
+	for st, group in st_grouped:
+		micro_st_dir_dict[st] = group['dir'].tolist()
+	def check_st_dirs(dirs):
+		if type(dirs) is not list:
+			return True
+		if ('N' in dirs or 'S' in dirs) and 'W' not in dirs and 'E' not in dirs:
+			return True
+		if ('E' in dirs or 'W' in dirs) and 'N' not in dirs and 'S' not in dirs:
+			return True
+		else:
+			return False
+	micro_st_dir_dict = {k:v for k,v in micro_st_dir_dict.items() if check_st_dirs(v)}
+
+	# Pre-pend DIR to select streets
+	def prepend_dir(ED, street_var):
+		_, DIR, NAME, TYPE = standardize_street(street_var)
+		#If DIR exists, return current values
+		if DIR != '':
+			return DIR, street_var
+		else:
+			try:
+				st = (NAME + ' ' + TYPE).strip()
+				micro_st_dirs = micro_st_dir_dict[st]
+				ed_dirs = ed_dir_dict[ED]
+			#	print([st, micro_st_dirs, ed_dirs])
+				#If ED has single DIR, see if street has same DIR
+				if len(ed_dirs) == 1 and ed_dirs == micro_st_dirs:
+					new_DIR = ed_dirs[0]
+					new_street = (new_DIR + ' ' + NAME + ' ' + TYPE).strip()
+			#		print(new_street)
+					return new_DIR, new_street
+				#If street has single DIR, see if it's in the ED
+				if len(micro_st_dirs) == 1 and micro_st_dirs in ed_dirs:
+					new_DIR = micro_st_dirs[0]
+					new_street = (new_DIR + ' ' + NAME + ' ' + TYPE).strip()
+			#		print(new_street)
+					return new_DIR, new_street
+				#If ED has multiple DIRs, see if 
+		#		if len(ed_dirs) > 1 and micro_st_dirs:
+		#		if len(micro_st_dirs) > 1 and set(micro):
+				else:
+					return DIR, street_var
+			except:
+				return DIR, street_var
+
+	df_micro.loc[:,('dir')], df_micro.loc[:,(street_var)] = zip(*df_micro.apply(lambda x: prepend_dir(x['ed'], x[street_var+'_old']), axis=1))	
+
+	# Check how many streets had DIRs pre-pended
+	df_micro['changed_Dir'] = df_micro[street_var] != df_micro[street_var+'_old']
+	print("Number of cases with DIR prepended: "+str(df_micro['changed_Dir'].sum())+" of "+str(len(df_micro))+" ("+'{:.1%}'.format(float(df_micro['changed_Dir'].sum())/len(df_micro))+") of cases")
+
+	return df_micro
+
+def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
+
+	# Paths
+
+	_, _, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/" 
+
+	# File names
+
+	ed_map = geo_path + city_name + "_1930_ED.shp"
+	temp = geo_path + "temp.shp"
+	add_locator_contemp = geo_path + city_name + "_addloc"
+	resid_add_dbf = geo_path + city_name + "_1930_Addresses_residual.dbf"
+	resid_add_csv = geo_path + city_name + "_1930_Addresses_residual.csv"
+	address_fields_contemp="Street address; City city; State state"
+	points30 = geo_path + city_name + "_1930_Points.shp"
+	points30_resid = geo_path + city_name + "_1930_ResidPoints.shp"
+	intersect_resid_ed = geo_path + city_name + "_1930_intersect_resid_ed.shp"
+	inrighted = geo_path + "_1930_ResidPoints_inRightED.shp"
+	intersect_correct_ed = geo_path + city_name + "_1930_intersect_correct_ed.shp"
+	block_shp_file = geo_path + city_name + "_1930_block_ED_checked.shp"
+
+	# Obtain residuals
+	arcpy.MakeFeatureLayer_management(points30, "geocodelyr")
+	arcpy.SelectLayerByAttribute_management("geocodelyr", "NEW_SELECTION", """ "Status" <> 'M' """)
+	arcpy.CopyFeatures_management("geocodelyr",temp)
+	df = dbf2DF(temp.replace('.shp','.dbf'))
+	resid_vars = ['index','ed','fullname','state','city','address']
+	df_resid = df[resid_vars]
+	if os.path.isfile(resid_add_csv):
+		os.remove(resid_add_csv)
+	df_resid.to_csv(resid_add_csv)
+	if os.path.isfile(resid_add_csv.replace('.csv','.dbf')):
+		os.remove(resid_add_csv.replace('.csv','.dbf'))
+	arcpy.TableToTable_conversion(resid_add_csv, '/'.join(resid_add_dbf.split('/')[:-1]), resid_add_dbf.split('/')[-1])
+	temp_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith("temp")]
+	for f in temp_files:
+	    if os.path.isfile(f):
+	        os.remove(f)
+
+	# Geocode residuals using street grid with contemporary HN ranges
+	arcpy.GeocodeAddresses_geocoding(resid_add_dbf, add_locator_contemp, address_fields_contemp, points30_resid)
+
+	# Intersect geocoded points with ED map
+	arcpy.Intersect_analysis([ed_map, points30_resid], intersect_resid_ed)
+
+	# Identify points in the correct ED
+	arcpy.MakeFeatureLayer_management(intersect_resid_ed, "geocodelyr1")
+	arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", """ "ed" = "ed_1" """)
+	arcpy.CopyFeatures_management("geocodelyr1",inrighted)
+
+	# Intersect points in the correct ED with block map
+	arcpy.Intersect_analysis([block_shp_file, inrighted], intersect_correct_ed)
+
+	# Get correct block number based on block map and geocoded in correct ED
+	df_correct_ed = dbf2DF(intersect_correct_ed.replace('.shp','.dbf'))
+	df_correct_ed['block'] = df_correct_ed['am_bn'].str.split('-').str[1:].str.join('-')
+	fix_block_dict = df_correct_ed[['index','block']].set_index('index')['block'].to_dict()
+
+	# Replace microdata block number with block map block number
+	df_micro['block_old'] = df_micro['block']
+
+	def fix_block(index, block):
+		try:
+			fix_block = fix_block_dict[index]
+			return fix_block
+		except:
+			return block
+
+	df_micro['block'] = df_micro[['index','block_old']].apply(lambda x: fix_block(x['index'], x['block_old']), axis=1)
+	df_micro['changed_Block'] = df_micro['block'] != df_micro['block_old']
+
+	print("Number of blocks changed: "+str(df_micro['changed_Block'].sum())+" of "+str(len(df_micro))+" ("+'{:.1%}'.format(float(df_micro['changed_Block'].sum())/len(df_micro))+") of cases")
+
+	return df_micro
+
+#
+# FixStGridNames.py
+#
+
+def fix_st_grid_names(city_name, state_abbr, grid_street_var, paths, df_micro=None):
+
+	city = city_name.replace(' ','')
+
+	# Paths
+	r_path, script_path, file_path = paths
+	geo_path = dir_path + '/GIS_edited/'
+
+	# Files
+	grid_uns2 =  geo_path + city + state + "_1930_stgrid_edit_Uns2.shp"
+	grid_uns2_backup = grid_uns2.replace('.shp','prefix.shp')
+	if city == "StLouis":
+		ed_shp = geo_path + city + "_1930_ED.shp"
+	st_grid_ed_shp = geo_path + city + state + '_1930_stgrid_ED_intersect.shp'
+
+	arcpy.CopyFeatures_management(grid_uns2, grid_uns2_backup)
+
+	#
+	# Step 1: Intersect street grid and ED map, return a Pandas dataframe of attribute data
+	#
+
+	#Load dataframe based on intersection of st_grid and ED map (attaches EDs to segments)
+
+	def get_grid_ed_df(grid_shp, ed_shp, st_grid_ed_shp):
+
+		arcpy.Intersect_analysis (in_features=[grid_shp, ed_shp], 
+			out_feature_class=st_grid_ed_shp, 
+			join_attributes="ALL")
+
+		df = dbf2DF(st_grid_ed_shp.replace('.shp','.dbf'))
+
+		return df
+
+	df_grid_ed = get_grid_ed_df(grid_uns2, ed_shp, st_grid_ed_shp)
+	df_grid_ed[grid_street_var] = df_grid_ed[grid_street_var].astype(str)
+
+	#Initialize the current match variable
+	df_grid_ed['current_match'] = ''
+	df_grid_ed['current_match_bool'] = False
+
+	#Function to update current best match (starts with either exact_match or '')
+	def update_current_match(current_match, current_match_bool, new_match, new_match_bool):
+		if ~current_match_bool and new_match_bool:
+			return new_match, new_match_bool
+		else:
+			return current_match, current_match_bool
+
+	#
+	# Step 2: Load microdata
+	#
+
+	# Load microdata
+	if df_micro == None:
+		microdata_file = dir_path "/StataFiles_Other/1930/" + city + state + "_StudAuto.dta"
+		df_micro = load_large_dta(microdata_file)
+
+	# Get list of all streets
+	micro_all_streets = df_micro['autostud_street'].drop_duplicates().tolist()
+
+	# Create ED-street dictionary for fuzzy matching
+	micro_ed_st_dict = {str(ed):group['autostud_street'].drop_duplicates().tolist() for ed, group in df_micro.groupby(['ed'])}
+
+	#
+	# Step 3: Load Steve Morse data 
+	#
+
+	# Function to load Steve Morse dictionary (same as STclean.py)
+	def load_steve_morse(city, state, year):
+
+		#NOTE: This dictionary must be built independently of this script
+		sm_st_ed_dict_file = pickle.load(open(file_path + 'sm_st_ed_dict%s.pickle' % (str(year)), 'rb'))
+		sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
+
+		#Flatten dictionary
+		temp = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
+
+		#Capture all Steve Morse streets in one list
+		sm_all_streets = temp.keys()
+
+		#
+		# Build a Steve Morse (sm) ED-to-Street (ed_st) dictionary (dict)
+		#
+
+		sm_ed_st_dict = {}
+		#Initialize a list of street names without an ED in Steve Morse
+		sm_ed_st_dict[''] = []
+		for st, eds in temp.items():
+			#If street name has no associated EDs (i.e. street name not found in Steve Morse) 
+			#then add to dictionary entry for no ED
+			if eds is None:
+				sm_ed_st_dict[''].append(st)
+			else:
+				#For every ED associated with a street name...
+				for ed in eds:
+					#Initalize an empty list if ED has no list of street names yet
+					sm_ed_st_dict[ed] = sm_ed_st_dict.setdefault(ed, [])
+					#Add street name to the list of streets
+					sm_ed_st_dict[ed].append(st)
+
+		return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
+
+	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_name, state, year)
+
+	#
+	# Step 4: Perform exact matching
+	#
+
+	#Function to do exact matching against Steve Morse street-ED lists (altered from STclean.py)
+	def find_exact_matches(df, street, all_streets, basic_info, source):
+
+		num_records, num_streets = basic_info
+
+		exact_match = 'exact_match_' + source
+		exact_bool = 'exact_match_bool_' + source
+
+		# Check for exact matches, return True if exact match
+		df[exact_match] = ''
+		df[exact_bool] = df[street].apply(lambda s: s in all_streets)
+		df.loc[df[exact_bool], exact_match] = df[street]
+		# Update current match variables
+		df['current_match'], df['current_match_bool'] = zip(*df.apply(lambda x: update_current_match(x['current_match'], x['current_match_bool'], x[exact_match], x[exact_bool]),axis=1))
+
+		num_exact_matches = np.sum(df['current_match_bool'])
+		num_noexact_matches =  num_records - num_exact_matches
+		prop_exact_matches = float(num_exact_matches)/float(num_records)
+		print("Cases with exact matches ("+source+"): "+str(num_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches, 1))+"%)")
+
+		# Keep track of unique streets that do and do not have exact matches 
+		df_exact_matches = df[df['current_match_bool']]
+		df_noexact_matches = df[~df['current_match_bool']]
+
+		num_streets_exact = len(df_exact_matches.groupby([street]).count())
+		num_streets_noexact = len(df_noexact_matches.groupby([street]).count())
+		while num_streets_exact + num_streets_noexact != num_streets:
+			print("Error in number of streets")
+			break
+		prop_exact_streets = float(num_streets_exact)/float(num_streets)
+		print("Streets with exact matches ("+source+"): "+str(num_streets_exact)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets, 1))+"%)\n")
+
+		# Compile info for later use
+		exact_info = [num_exact_matches, num_noexact_matches, num_streets_exact, num_streets_noexact]
+
+		return df, exact_info
+
+	num_records = len(df_grid_ed)
+	num_streets = len(df_grid_ed.groupby([street]))
+	basic_info = [num_records, num_streets]
+
+	df_grid_ed, exact_info_micro = find_exact_matches(df=df_grid_ed, 
+		street=grid_street_var, 
+		all_streets=micro_all_streets, 
+		basic_info=basic_info, 
+		source="micro")
+
+	#
+	# Step 5: Perform fuzzy matching
+	#
+
+	#Function to do fuzzy matching using multiple sources
+	def find_fuzzy_matches(df, city, street, all_streets, ed_st_dict, source):
+
+		#Fuzzy matching algorithm
+		def fuzzy_match_function(street, ed, ed_st_dict, all_streets_fuzzyset, check_too_similar=False):
+
+			nomatch = ['', '', False]
+			ed = str(ed)
+
+			#Return null if street is blank
+			if street == '':
+				return nomatch
+			#Microdata ED may not be in Steve Morse, if so then add it to problem ED list and return null
+			try:
+				ed_streets = ed_st_dict[ed]
+				ed_streets_fuzzyset = fuzzyset.FuzzySet(ed_streets)
+			except:
+			#	print("Problem ED:" + str(ed))
+				return nomatch
+
+			#Step 1: Find best match among streets associated with microdata ED
+			try:
+				best_match_ed = ed_streets_fuzzyset[street][0]
+			except:
+				return nomatch
+
+			#Step 2: Find best match among all streets
+			try:
+				best_match_all = all_streets_fuzzyset[street][0]
+			except:
+				return nomatch    
+			#Step 3: If both best matches are the same, return as best match
+
+			if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.5):
+				#Check how many other streets in ED differ by one character
+				if check_too_similar:
+					too_similar = sum([diff_by_one_char(st, best_match_ed[1]) for st in sm_ed_streets])
+					if too_similar == 0:
+						return [best_match_ed[1], best_match_ed[0], True]
+					else:
+						return nomatch
+				else: 
+					return [best_match_ed[1], best_match_ed[0], True]
+			#Step 4: If both are not the same, return one with the higher score (to help manual cleaning)
+			else:
+				if best_match_all[0] < best_match_ed[0]:
+					return [best_match_ed[1], best_match_ed[0], False]
+				else:
+					return [best_match_all[1], best_match_all[0], False]
+
+		#Helper function (necessary since dictionary built only for cases without validated exact matches)
+		def get_fuzzy_match(exact_match, fuzzy_match_dict, street, ed):
+			#Only look at cases without validated exact match
+			if not (exact_match):
+				#Need to make sure "Unnamed" street doesn't get fuzzy matched
+				if 'Unnamed' in street:
+					return ['', '', False]
+				#Get fuzzy match    
+				else:
+					return fuzzy_match_dict[street, ed]
+			#Return null if exact validated match
+			else:
+				return ['', '', False]
+
+		start = time.time()
+
+		#Set var names
+		fuzzy_match = 'fuzzy_match_'+source 
+		fuzzy_bool = 'fuzzy_match_bool_'+source
+		fuzzy_score = 'fuzzy_match_score_'+source
+
+		#Create all street fuzzyset only once
+		all_streets_fuzzyset = fuzzyset.FuzzySet(all_streets)
+
+		#Create dictionary based on Street-ED pairs for faster lookup using helper function
+		df_no_exact_match = df[~(df['current_match_bool'])]
+		df_grouped = df_no_exact_match.groupby([street, 'ed'])
+		fuzzy_match_dict = {}
+		for st_ed, _ in df_grouped:
+			fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], ed_st_dict, all_streets_fuzzyset)
+
+		#Compute current number of residuals
+		num_records = len(df)
+		num_current_residual_cases = num_records - len(df[df['current_match_bool']])
+		#Get fuzzy matches 
+		df[fuzzy_match], df[fuzzy_score], df[fuzzy_bool] = zip(*df.apply(lambda x: get_fuzzy_match(x['current_match_bool'], fuzzy_match_dict, x[street], x['ed']), axis=1))
+		#Update current match 
+		df['current_match'], df['current_match_bool'] = zip(*df.apply(lambda x: update_current_match(x['current_match'], x['current_match_bool'], x[fuzzy_match], x[fuzzy_bool]),axis=1))
+
+		#Generate dashboard information
+		num_fuzzy_matches = np.sum(df[fuzzy_bool])
+		prop_fuzzy_matches = float(num_fuzzy_matches)/num_records
+		end = time.time()
+		fuzzy_matching_time = round(float(end-start)/60, 1)
+		fuzzy_info = [num_fuzzy_matches, fuzzy_matching_time]
+
+		print("Fuzzy matches (using "+source+"): "+str(num_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(num_current_residual_cases), 1))+"%)\n")
+
+		return df, fuzzy_info
+
+	df_grid_ed, fuzzy_info_micro = find_fuzzy_matches(df=df_grid_ed, 
+		city=city, 
+		street=grid_street_var, 
+		all_streets=micro_all_streets, 
+		ed_st_dict=micro_ed_st_dict, 
+		source="micro")
+
+	df_grid_ed, fuzzy_info_sm = find_fuzzy_matches(df=df_grid_ed, 
+		city=city, 
+		street=grid_street_var, 
+		all_streets=sm_all_streets, 
+		ed_st_dict=sm_ed_st_dict, 
+		source="sm")
+
+	total_fuzzy_matches = len(df_grid_ed[df_grid_ed['fuzzy_match_bool_sm'] | df_grid_ed['fuzzy_match_bool_micro']])	
+	print("Total fuzzy matched: " + str(total_fuzzy_matches) + " of " + str(len(df_grid_ed[~df_grid_ed['exact_match_bool_micro']])) + " (" + '{:.1%}'.format(float(total_fuzzy_matches)/len(df_grid_ed[~df_grid_ed['exact_match_bool_micro']])) + ") ED-segment combinations without an exact match")
+
+	print("Total matched: " + str(df_grid_ed['current_match_bool'].sum()) + " of " + str(num_records) + " (" + '{:.1%}'.format(float(df_grid_ed['current_match_bool'].sum())/len(df_grid_ed)) + ") ED-segment combinations")
+
+	#
+	# Step 6: Create dictionary for fixing street names
+	#
+
+	df_grouped = df.groupby([street, 'ed'])
+	fullname_ed_st_dict = {}
+	more_than_one = 0
+	for fullname_ed, group in df_grouped:
+		# Keep track of whether it was a name match
+		if group['current_match_bool'].all():
+			matched = True
+		else:
+			matched = False
+		# Get list of streets associated with FULLNAME-ED (could be multiple in theory)
+		list_of_streets = group['current_match'].drop_duplicates().tolist()
+		# If more than one street, keep track
+		if len(list_of_streets) > 1:
+			more_than_one += 1
+		# If only one street, add it to the dictionary {street:list(grid_ids)}
+		if matched:
+			fullname_ed_st_dict[fullname_ed] = {list_of_streets[0]:zip(group['grid_id'].tolist(),[matched]*len(group))}
+		else:
+			fullname_ed_st_dict[fullname_ed] = {group[grid_street_var].drop_duplicates().tolist()[0]:zip(group['grid_id'].tolist(),[matched]*len(group))}
+	if more_than_one > 0:
+		print("Some entries have more than one street")
+	grid_id_st_dict = {grid_id:v.keys()[0] for k,v in fullname_ed_st_dict.items() for grid_id in v.values()[0]}
+	grid_id_st_dict = {k[0]:[v,k[1]] for k,v in grid_id_st_dict.items()}
+
+	#
+	# Step 7: Fix street names and save
+	#
+
+	df_uns2 = dbf2DF(grid_uns2)
+	df_uns2[grid_street_var+'_old'] = [grid_street_var]
+
+	# Need to do this because missing grid_id numbers in grid_id_st_dict (which is bad)
+	def fix_fullname(grid_id, FULLNAME):
+		try:
+			new_FULLNAME, nomatch = grid_id_st_dict[grid_id]
+			if FULLNAME == new_FULLNAME:
+				return [new_FULLNAME, nomatch, False]
+			else:
+				return [new_FULLNAME, nomatch, True]	
+		except:
+			return [FULLNAME, True, False]
+
+	df_uns2[grid_street_var], df_uns2['NoMatch'], df_uns2['NameChng'] = zip(*df_uns2.apply(lambda x: fix_fullname(x['grid_id'],x['FULLNAME']), axis=1))
+
+	save_dbf(df_uns2, grid_uns2)
+
