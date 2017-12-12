@@ -178,7 +178,7 @@ def create_1930_addresses(city_name, state_abbr, paths, df=None):
 		print("No street name variable selected")
 		raise
 	# Select variables for file
-	vars_of_interest = ['fullname', 'ed','type','Mblk','hn']
+	vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn']
 	df_add = df[vars_of_interest]
 	df_add.loc[:,('hn')] = df_add['hn'].astype(str).str.replace('.0','')
 	df_add.loc[:,('city')] = city_name
@@ -313,7 +313,7 @@ def street(geo_path, city_name, state_abbr):
 	arcpy.CalculateField_management(split_grid, "grid_id", expression, "PYTHON_9.3")
 
 	#Intersect with grid
-	temp = dir_path + 'temp_step.shp'
+	temp = geo_path + 'temp_step.shp'
 	arcpy.CopyFeatures_management(grid, temp)
 	arcpy.Intersect_analysis([temp, split_grid], grid)
 	arcpy.DeleteFeatures_management(temp)
@@ -1396,9 +1396,9 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 	r_path, script_path, dir_path = paths
 
 	# Files
-	grid = dir_path + "/GIS_edited/" + city + state + "_1930_stgrid_edit_Uns2.shp"
-	ed_1930 = dir_path + "/GIS_edited/" + city + "_1930_block_ED_checked.shp"
-	grid_ed_SJ = dir_path + "/GIS_edited/" + city + state + "_1930_grid_edSJ.shp"
+	grid = dir_path + "/GIS_edited/" + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	ed_1930 = dir_path + "/GIS_edited/" + city_name + "_1930_block_ED_checked.shp"
+	grid_ed_SJ = dir_path + "/GIS_edited/" + city_name + state_abbr + "_1930_grid_edSJ.shp"
 
 	# Load files
 	df_grid = dbf2DF(grid.replace('.shp','.dbf'))
@@ -1525,6 +1525,7 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 	arcpy.SelectLayerByAttribute_management("geocodelyr", "NEW_SELECTION", """ "Status" <> 'M' """)
 	arcpy.CopyFeatures_management("geocodelyr",temp)
 	df = dbf2DF(temp.replace('.shp','.dbf'))
+	# ERROR: LOST INDEX SOMEWHERE ALONG THE WAY
 	resid_vars = ['index','ed','fullname','state','city','address']
 	df_resid = df[resid_vars]
 	if os.path.isfile(resid_add_csv):
@@ -1679,7 +1680,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 
 		return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
 
-	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state, year)
+	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state_abbr, year)
 
 	#
 	# Step 4: Perform exact matching

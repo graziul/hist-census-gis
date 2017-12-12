@@ -2,6 +2,7 @@
 # Geocode.py
 #
 
+import time
 from blocknum.blocknum import *
 from geocoding.GeocodeFunctions import *
 # overwrite output
@@ -25,18 +26,22 @@ r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
 script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
 paths = [r_path, script_path, dir_path]
 
+start = time.time()
+
 #
 # Step 1: Get a good ED map, good street grid, and initial geocode on contemporary ranges
 #
 
 microdata_file = dir_path + "/StataFiles_Other/1930/" + city + state + "_StudAuto.dta"
 df = load_large_dta(microdata_file)
+df['index'] = df.index
+df1 = df[['index','hn','dir','name','type',micro_street_var,'ed','block']]
 
 # Create 1930 addresses
 create_1930_addresses(city_name=city, 
 	state_abbr=state, 
 	paths=paths, 
-	df=df)
+	df=df1)
 
 # Create blocks and block points (gets Uns2 and points30)
 create_blocks_and_block_points(city_name=city, 
@@ -94,6 +99,10 @@ df_micro = fix_micro_blocks_using_ed_map(city_name=city,
 	paths=paths, 
 	df_micro=df_micro)
 
+end = time.time()
+
+print(str(float(end-start)/60)+" minutes")
+
 #
 # Step 5: Renumber grid based on updated 1930 microdata and street grid
 #
@@ -103,7 +112,13 @@ renumber_grid(name=city,
 	df=df_micro)
 
 #
-# Step 6: Perform geocode
+# Step 6: Fill in blanks
+#
+
+#fill_blanks()
+
+#
+# Step 7: Perform geocode
 #
 
 # Path
