@@ -932,6 +932,13 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 		else :
 			if not v in Dict[k] :
 				Dict[k].append(v)
+				
+	def Dict_append_flexible(Dict, k, v) :
+		if not k in Dict :
+			Dict[k] = v
+		else :
+			Dict[k] = [Dict[k]]
+			Dict[k].append(v)
 
 	#Return all unique values of field found in table
 	def unique_values(table, field):
@@ -1138,7 +1145,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 							fid_coord_dict[row[0]]['END_X'] = row[3]
 							fid_coord_dict[row[0]]['END_Y'] = row[4]
 					with arcpy.da.UpdateCursor(name_grid_shp, [fid_var,"consecPrev","consecNext",
-														   "exact_Prev","exact_Next"]) as up_cursor:
+														   "exact_Prev","exact_Next",fullname_var]) as up_cursor:
 						next_fid_linked_list = {} #dict: fid -> fid of next segment(s)
 						prev_fid_linked_list = {} #dict: fid -> fid of prev segment
 						coord_diff_start = {} #keeps track of the segment that is spatially closest to cur_seg
@@ -1147,6 +1154,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 						found_cyclic_loop = False
 						fork_segs = [] #not used
 						merge_segs = []#not used
+						fid_fullname_dict = {}
 						for row in up_cursor :
 							cur_fid = row[0]
 							cur_seg = fid_coord_dict[cur_fid]
@@ -1156,6 +1164,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 							endy = round(cur_seg['END_Y'],6) # i.e. negligible (but necessary. Because Arc.)
 							coord_diff_start[cur_fid] = []
 							coord_diff_end[cur_fid] = []
+							fid_fullname_dict[cur_fid] = row[5]
 							found_exact_prev = False
 							found_exact_next = False
 							next_fid_candidates = []
@@ -1358,22 +1367,24 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 							if debug:
 								wtf = [x for x in next_fid_linked_list.values() if not x in next_fid_linked_list.keys()]
 								print(name+": "+str(start_fid)+ " -> "+str(wtf))
-							if not len(start_fid) == 1 :
-								if debug:
-									print("There is a spur (or sum'n') on the street "+name)
-									print("Have to deal with this manually!!!!!!!")
-							start_fid = start_fid[0]
-							fid_list = [start_fid]
-							if debug: print("There should be %s FIDs" %(len(next_fid_linked_list.keys())+1))
-								
-							while len(fid_list) <= len(next_fid_linked_list.keys()) :
-								try :
-									fid_list.append(next_fid_linked_list[fid_list[-1]])
-								except KeyError :
-									if debug: print("THIS SHOULD NOT HAPPEN CAUSE OF THE LEN AND STUFF")
-									break
-							if debug:print("adding fid_list: "+str(fid_list))
-							name_sequence_dict[name] = fid_list
+								print("fid_fullname_dict: "+str(fid_fullname_dict))
+							runs = find_fid_runs(next_fid_linked_list)
+							if debug:print("runs: "+str(runs))
+							run_namefreq_dict={}
+							for run in runs :
+								run_namefreq_dict[tuple(run)] = {}
+								for fid in run :
+									fullname = fid_fullname_dict[fid]
+									if not fullname in run_namefreq_dict[tuple(run)].keys() :
+										run_namefreq_dict[tuple(run)][fullname] = 1
+									else :
+										run_namefreq_dict[tuple(run)][fullname] += 1
+
+							for run in run_namefreq_dict.keys() :
+								if debug:print(str(run)+": "+str(run_namefreq_dict[run]))
+								most_common_name = max(run_namefreq_dict[run],key=run_namefreq_dict[run].get)
+
+								Dict_append_flexible(name_sequence_dict, most_common_name, list(run))
 		print("Finished.")
 		return name_sequence_dict,exact_next_dict
 
