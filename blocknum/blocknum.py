@@ -164,7 +164,7 @@ def create_1930_addresses(city_name, state_abbr, paths, df=None):
 		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
 		df = load_large_dta(microdata_file)
 	# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
-	df['Mblk'] = df['block']
+	df.loc[:,('Mblk')] = df['block']
 	# Choose the best available street name variable (st_best_guess includes student cleaning)
 	# NOTE: When student cleaning is unavailable we should probably fill in overall_match_bool==FALSE
 	#	    with street_precleanedHN, but this has not been done yet to my knowledge.
@@ -172,7 +172,7 @@ def create_1930_addresses(city_name, state_abbr, paths, df=None):
 		street_var = 'st_best_guess'
 	if 'overall_match' in df.columns.values:
 		street_var = 'overall_match'
-	df['fullname'] = df[street_var]
+	df.loc[:,('fullname')] = df[street_var]
 	# Make sure we found a street name variable
 	if 'fullname' not in df.columns.values:
 		print("No street name variable selected")
@@ -340,9 +340,9 @@ def street(geo_path, city_name, state_abbr):
 
 	#Assign longest street name by grid_id (also add city and state for geolocator)
 	df_grid_uns = dbf2DF(grid_uns)
-	df_grid_uns['CITY'] = city_name
-	df_grid_uns['STATE'] = state_abbr
-	df_grid_uns['FULLNAME'] = df_grid_uns.apply(lambda x: longest_name_dict[x['grid_id']], axis=1)
+	df_grid_uns.loc[:,('CITY')] = city_name
+	df_grid_uns.loc[:,('STATE')] = state_abbr
+	df_grid_uns.loc[:,('FULLNAME')] = df_grid_uns.apply(lambda x: longest_name_dict[x['grid_id']], axis=1)
 
 	#Blank out the big/small numbers now that aggregation is done
 
@@ -1579,7 +1579,7 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 # FixStGridNames.py
 #
 
-def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, df_micro=None):
+def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, df_micro=None, year=1930):
 
 	city_name = city_spaces.replace(' ','')
 
