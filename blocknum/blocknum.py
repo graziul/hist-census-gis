@@ -7,6 +7,7 @@ import os
 import copy
 import sys
 import re
+import time
 import pickle
 from operator import itemgetter
 import pandas as pd
@@ -57,19 +58,18 @@ def dbf2DF(dbfile, upper=False):
 # Function to save Pandas DF as DBF file 
 def save_dbf(df, shapefile, dir_path):
 	shapefile_name = dir_path + shapefile
-	csv_file = dir_path + "\\temp_for_dbf.csv"
+	csv_file = dir_path + "/temp_for_dbf.csv"
 	df.to_csv(csv_file,index=False)
 	try:
-		os.remove(dir_path + "\\schema.ini")
+		os.remove(dir_path + "/schema.ini")
 	except:
 		pass
 	arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp.dbf")
 	os.remove(shapefile_name.replace('.shp','.dbf'))
 	os.remove(csv_file)
-	os.rename(dir_path+"\\temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-	os.remove(dir_path+"\\temp_for_shp.dbf.xml")
-	os.remove(dir_path+"\\temp_for_shp.cpg")
-
+	os.rename(dir_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
+	os.remove(dir_path+"/temp_for_shp.dbf.xml")
+	os.remove(dir_path+"/temp_for_shp.cpg")
 
 #
 # Functions for calling R scripts 
@@ -222,26 +222,14 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 	else:
 		points30 = geo_path + city_name + "_1930_Points.shp"
 
-	attach_pblk_id(geo_path, city_name, points30)
+ #	attach_pblk_id(geo_path, city_name, points30)
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
 def street(geo_path, city_name, state_abbr):
 
-	#Create Paths to be used throughout Process
-	grid_1940 = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
-	grid = geo_path + city_name + state_abbr + "_1940_stgrid_edit.shp"
-	dissolve_grid = geo_path + city_name + "_1930_stgrid_Dissolve.shp"
-	temp = geo_path + city_name + "_temp.shp"
-	split_grid = geo_path + city_name + "_1930_stgrid_Split.shp"
-	grid_uns =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns.shp"
-	grid_uns2 =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
-
-	#Create copy of "diradd" file to use as grid
-	arcpy.CopyFeatures_management(grid_1940, grid)
-
 	# Function to save Pandas DF as DBF file 
-	def save_dbf_st(df, shapefile_name, field_map = False):
+	def save_dbf_st(df, shapefile_name, field_map = None):
 		file_temp = shapefile_name.split('/')[-1]
 		csv_file = geo_path + "/temp_for_dbf.csv"
 		df.to_csv(csv_file,index=False)
@@ -273,6 +261,18 @@ def street(geo_path, city_name, state_abbr):
 		os.rename(geo_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
 		os.remove(geo_path+"/temp_for_shp.dbf.xml")
 		os.remove(geo_path+"/temp_for_shp.cpg")
+
+	#Create Paths to be used throughout Process
+	grid_1940 = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
+	grid = geo_path + city_name + state_abbr + "_1940_stgrid_edit.shp"
+	dissolve_grid = geo_path + city_name + "_1930_stgrid_Dissolve.shp"
+	temp = geo_path + city_name + "_temp.shp"
+	split_grid = geo_path + city_name + "_1930_stgrid_Split.shp"
+	grid_uns =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns.shp"
+	grid_uns2 =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+
+	#Create copy of "diradd" file to use as grid
+	arcpy.CopyFeatures_management(grid_1940, grid)
 
 	#Can't <null> blank values, so when Dissolve Unsplit lines aggregates MIN replace with big number
 	codeblock_min = """def replace(x):
@@ -373,7 +373,7 @@ def street(geo_path, city_name, state_abbr):
 	return problem_segments
 
 # Amory's code for fixing duplicate address ranges
-def fix_dup_address_ranges(grid_uns):
+def fix_dup_address_ranges(grid_uns,debug_flag=False):
 	shp = grid_uns
 	## ENTER ALTERNATE FIELD NAMES ## ENTER ALTERNATE FIELD NAMES ## ENTER ALTERNATE FIELD NAMES ##
 	LFROMADD = "MIN_LFROMA"  
@@ -494,8 +494,7 @@ def fix_dup_address_ranges(grid_uns):
 					RTAdd = int(o_feat_list[0][4])
 				except ValueError:
 					RTAdd = 0
-				debug = False
-				if debug==True:
+				if debug_flag:
 					addresses.write("feat_seq: "+str(feat_seq)+", name: "+o_feat_list[0][5]+", num segments: "+str(feat_num)+", add range: "+str(LFAdd)+"-"+str(LTAdd)+" "+str(RFAdd)+"-"+str(RTAdd)+"\n")
 
 				RRange = (RTAdd - RFAdd)
@@ -512,7 +511,7 @@ def fix_dup_address_ranges(grid_uns):
 						feat_num = feat_num - 1
 						feat_length = feat_length - float(feat[6])
 						addresses.write(str(feat[0])+","+str(feat[1])+","+str(feat[2])+","+str(feat[3])+","+str(feat[4])+",1")
-						if debug==True:
+						if debug_flag:
 							addresses.write(" length is "+feat[6]+"/"+str(feat_length)+" which WAS too short\n")
 						else:
 							addresses.write("\n")
@@ -530,13 +529,13 @@ def fix_dup_address_ranges(grid_uns):
 					RRange -= 2*(feat_num-1)*RDir #account for the hidden extra 2 address range each time we change segments
 				else:
 					ShortRange = True
-					if debug==True:
+					if debug_flag:
 						addresses.write("WOAH SUPER SHORT ADDRESS RANGE / LOTS OF SEGMENTS!!!\n")
 				if abs(LRange)>2*feat_num:
 					LRange -= 2*(feat_num-1)*LDir
 				else:
 					ShortRange = True
-					if debug==True:
+					if debug_flag:
 						addresses.write("WOAH SUPER SHORT ADDRESS RANGE / LOTS OF SEGMENTS!!!\n")
 				assignedLength = 0
 
@@ -544,7 +543,7 @@ def fix_dup_address_ranges(grid_uns):
 					segmentLength = float(feat[6])
 					assignedLength+=segmentLength
 					tooShort = False
-					if debug==True:
+					if debug_flag:
 						addresses.write(str(int(round(((segmentLength/feat_length)*LRange)/2)*2))+" is more than 2. RRange is "+str(RRange)+"\n")
 					if j == 0:
 						feat[1] = LFAdd
@@ -561,10 +560,10 @@ def fix_dup_address_ranges(grid_uns):
 						feat[4] = feat[3] + int(round(((segmentLength/feat_length)*RRange)/2)*2)
 						if feat[2] > LFAdd + int(round(((assignedLength/feat_length)*OLange)/2)*2) and LDir>0 or LDir<0 and feat[2] < LFAdd + int(round(((assignedLength/feat_length)*OLange)/2)*2):
 							feat[2] = LFAdd + int(round(((assignedLength/feat_length)*OLange)/2)*2)
-							if debug==True:
+							if debug_flag:
 								addresses.write("HAD TO ADJUST on LEFT\n")
 						if feat[4] > RFAdd + int(round(((assignedLength/feat_length)*ORange)/2)*2) and RDir>0 or RDir<0 and feat[4] < RFAdd + int(round(((assignedLength/feat_length)*ORange)/2)*2):
-							if debug==True:
+							if debug_flag:
 								addresses.write("HAD TO ADJUST on RIGHT\n")
 							feat[4] = RFAdd + int(round(((assignedLength/feat_length)*ORange)/2)*2)
 					if RRange == 0:
@@ -572,7 +571,7 @@ def fix_dup_address_ranges(grid_uns):
 					if LRange == 0:
 						feat[1] = feat[2] = LFAdd
 
-					if debug == True:
+					if debug_flag:
 						if LDir > 0 and (feat[1] > LTAdd or feat[2] > LTAdd) or LDir < 0 and (feat[1] < LTAdd or feat[2] < LTAdd) or RDir > 0 and (feat[3] > RTAdd or feat[4] > RTAdd) or RDir < 0 and (feat[3] < RTAdd or feat[4] < RTAdd):
 							addresses.write("THIS SHOULD NOT HAPPEN!\n")
 						addresses.write(str(feat[0])+","+str(feat[1])+","+str(feat[2])+","+str(feat[3])+","+str(feat[4])+" length is "+feat[6]+"/"+str(feat_length)+" which was NOT too short\n")
@@ -863,7 +862,7 @@ def renumber_grid(city_name, state_abbr, df=None):
 	del(cursor)
 
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addlocOld")]
+	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addlocOld.")]
 	for f in add_loc_files:
 		if os.path.isfile(f):
 			os.remove(f)
@@ -912,7 +911,7 @@ def renumber_grid(city_name, state_abbr, df=None):
 # consecutive_segments.py
 #
 
-def find_consecutive_segments(grid_shp, street_var, debug=False):
+def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 
 	fields = arcpy.ListFields(grid_shp)
 
@@ -972,7 +971,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 				pass #BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD#BAD
 			if n == fid :
 				return False
-		if debug: print("ran out of fids?")
+		if debug_flag: print("ran out of fids?")
 		return False
 
 	#returns a tuple of lists comprising all discrete runs of consequent FIDs. fnd = fid_next_dict
@@ -980,7 +979,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 		run_starts = [x for x in fnd.keys() if not x in fnd.values()]
 		runs = ()
 		if len(run_starts) == 0 :
-			if debug: print("FIDS ARE A LOOP AND WE CAN TELL FROM TRYING TO FIND RUNS!")
+			if debug_flag: print("FIDS ARE A LOOP AND WE CAN TELL FROM TRYING TO FIND RUNS!")
 		for f in run_starts :
 			runs += (fid_run_recurse(fnd, f),)
 		return runs
@@ -1070,11 +1069,11 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 					prev_next = fid_prevnext_dict[fid]
 				except KeyError :
 					continue
-				if debug: print("row: "+str(row))
+				if debug_flag: print("row: "+str(row))
 				row[1] = prev_next[0]
 				row[2] = prev_next[1]
 				try :
-					if debug: print("prev_next: "+str(prev_next))
+					if debug_flag: print("prev_next: "+str(prev_next))
 					row[3] = exact_next_dict[prev_next[0]] == fid
 				except KeyError :
 					row[3] = False
@@ -1110,18 +1109,18 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 		name_sequence_spur_dict = {} #same format as name_sequence_dict, but comprising spurs and other segments that connect to main sequence
 		#how do we account for two different groups of segs with same name when include_non_exact is False?
 		exact_next_dict = {}
-		if debug: print("field_names"+str(field_names))
+		if debug_flag: print("field_names"+str(field_names))
 		if ignore_dir :
 			arcpy.AddField_management (grid_shp, "name_type", "TEXT")
-			with arcpy.da.UpdateCursor(grid_shp, [street_var,"name_type"]) as up_cursor:
+			with arcpy.da.UpdateCursor(grid_shp, [grid_street_var,"name_type"]) as up_cursor:
 				for row in up_cursor :
 					row[1] = remove_st_dir(row[0])
 					up_cursor.updateRow(row)
 			unique_names = unique_values(grid_shp,"name_type")
 			name_var = "name_type"
 		else :
-			unique_names = unique_values(grid_shp,street_var)
-			name_var = street_var
+			unique_names = unique_values(grid_shp,grid_street_var)
+			name_var = grid_street_var
 		
 		for name in unique_names :
 			fid_coord_dict = {}
@@ -1130,7 +1129,8 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 				name = name.replace("'","''") #replace apostrophe in name with two apostrophes (SQL-specific syntax)
 				arcpy.MakeFeatureLayer_management(grid_shp,name_grid_shp,name_var+" = '"+name+"'")
 				num_name_segments = int(arcpy.GetCount_management(name_grid_shp).getOutput(0))
-				if debug: print("examining "+str(num_name_segments)+" segments named "+name)
+				if debug_flag: 
+					print("examining "+str(num_name_segments)+" segments named "+name)
 				if num_name_segments > 1 : #if more than 1 st segment with name
 					next_fid_list = []#fids that should be considered for next of another segment
 					all_fid_list = []
@@ -1145,7 +1145,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 							fid_coord_dict[row[0]]['END_X'] = row[3]
 							fid_coord_dict[row[0]]['END_Y'] = row[4]
 					with arcpy.da.UpdateCursor(name_grid_shp, [fid_var,"consecPrev","consecNext",
-														   "exact_Prev","exact_Next",fullname_var]) as up_cursor:
+														   "exact_Prev","exact_Next",grid_street_var]) as up_cursor:
 						next_fid_linked_list = {} #dict: fid -> fid of next segment(s)
 						prev_fid_linked_list = {} #dict: fid -> fid of prev segment
 						coord_diff_start = {} #keeps track of the segment that is spatially closest to cur_seg
@@ -1182,7 +1182,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 											###            \ /
 											###             |  <- cur_fid
 											###             ^
-											if debug:print(str(cur_fid)+" has multiple exact nexts!")
+											if debug_flag:print(str(cur_fid)+" has multiple exact nexts!")
 											fork_segs.append(cur_fid)#not used
 										found_exact_next = True
 										try :
@@ -1192,7 +1192,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 											###             ^
 											###             |
 											###            / \  <- cur_fid
-											if debug:print("an exact next is already the exact next of something else")
+											if debug_flag:print("an exact next is already the exact next of something else")
 											merge_segs.append(fid)#not used
 											
 										next_fid_candidates.append(fid)
@@ -1219,7 +1219,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 						if test_fid_loop(next_fid_linked_list,fid) :
 							pass
 						else :
-							if debug: 
+							if debug_flag: 
 								print("Cyclic Loop detected.")
 								print("Name of segments: "+name)
 								print("FIDs of segments: "+str(all_fid_list))
@@ -1237,7 +1237,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 								#PROBLEM:#PROBLEM:#PROBLEM: instead, should change longest_path to detect cycles
 								#PROBLEM:#PROBLEM:#PROBLEM:
 								cur_longest_path = longest_path(next_fid_linked_list)
-								if debug:
+								if debug_flag:
 									print("next_fid_linked_list is: "+str(next_fid_linked_list))
 									print("longest path is: "+str(cur_longest_path))
 									print("FIDs not in longest path: "+str([x for x in all_fid_list if not x in cur_longest_path]))
@@ -1249,12 +1249,12 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 											next_fid_linked_list[k] = cur_longest_path[cur_longest_path.index(k)+1]
 
 							else :
-								if debug: print("no exact consecutive segments exist for "+name)
+								if debug_flag: print("no exact consecutive segments exist for "+name)
 
 							street_is_too_messed_up = False
 							for k, v in next_fid_linked_list.items() :
 								if isinstance(v, list) :
-									if debug:
+									if debug_flag:
 										print("There is a fork on a non-central path for the street "+name)
 										print("This is not currently supported. Goodbye.")
 									street_is_too_messed_up = True
@@ -1272,7 +1272,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 							runs = find_fid_runs(next_fid_linked_list)
 							runs += singleton_segments
 
-							if debug: print("runs: "+str(runs))
+							if debug_flag: print("runs: "+str(runs))
 
 							#set aside runs that are spurs/forks of cur_longest_path
 							#they will not be considered as candidates for inexact next/prev
@@ -1288,14 +1288,14 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 										Dict_append_unique(name_sequence_spur_dict,name,run)
 										for x in run :
 											del next_fid_linked_list[x]
-										if debug: print("added the spur "+str(run)+" to aux dict")       
+										if debug_flag: print("added the spur "+str(run)+" to aux dict")       
 
 							possible_connexions = {}
 							for s_run in runs :
 								for e_run in runs :
 									if s_run != e_run :
 										Dict_append_unique(possible_connexions,e_run[-1],s_run[0])
-							if debug: print("possible_connexions: "+str(possible_connexions))
+							if debug_flag: print("possible_connexions: "+str(possible_connexions))
 							#cumbersome magic to organize and sort the distances of each gap for which we want to (maybe)
 							#make a connexion based on the dicts created prior:
 							dist_fid_list = []
@@ -1307,9 +1307,9 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 									coord_diff_end_list.append(list(filter(lambda x: x[1]==v, coord_diff_end[k])))
 								shortest_gap = min(sorted(coord_diff_start_list)[0],sorted(coord_diff_end_list)[0])
 								if isinstance(shortest_gap,list) and len(shortest_gap) > 0:
-									if debug:print("shortest_gap is a list (yes, this is still happening)")
+									if debug_flag:print("shortest_gap is a list (yes, this is still happening)")
 									shortest_gap = shortest_gap[0]
-								elif debug:print("shortest_gap is NOT a list (not happening all the time)")
+								elif debug_flag:print("shortest_gap is NOT a list (not happening all the time)")
 
 								shortest_gap += (k,)
 								dist_fid_list.append(shortest_gap)
@@ -1330,7 +1330,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 								#isolate cyclic gaps from the rest of dist_fid_list
 								for i in dist_fid_cycles :
 									dist_fid_list.remove(i)
-								if debug: print("dist_fid_cycles: "+str(dist_fid_cycles))
+								if debug_flag: print("dist_fid_cycles: "+str(dist_fid_cycles))
 								for i in dist_fid_list :
 									#iterate over a copy of dist_fid_cycles so we can modify the original
 									for j in list(dist_fid_cycles) :
@@ -1338,7 +1338,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 											#set distance to impossibly high value for the bad gap in the cycle
 											dist_fid_cycles.remove(j)
 											dist_fid_cycles.append((99999,)+j[1:])
-											if debug: print(str(j)+" was a bad egg cuz of "+str(i))
+											if debug_flag: print(str(j)+" was a bad egg cuz of "+str(i))
 								for j in dist_fid_cycles :
 									#add values back to list
 									dist_fid_list.append(j)
@@ -1347,16 +1347,16 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 
 							dist_fid_list = sorted(dist_fid_list)
 												
-							if debug: print("now, dist_fid_list is: "+str(dist_fid_list))
+							if debug_flag: print("now, dist_fid_list is: "+str(dist_fid_list))
 							while len(dist_fid_list) > 1 :
 								connexion = dist_fid_list.pop(0)
-								if debug:print("checking connexion "+str(connexion))
+								if debug_flag:print("checking connexion "+str(connexion))
 								check_for_cycles_linked_list = dict(next_fid_linked_list)
 								check_for_cycles_linked_list[connexion[2]] = connexion[1]
 								if test_fid_loop(check_for_cycles_linked_list,connexion[2]) :
 									#only create the connection if it does not create a cyclical loop
 									next_fid_linked_list[connexion[2]] = connexion[1]
-							if debug:
+							if debug_flag:
 								if len(dist_fid_list) :     
 									print(name +": the last connexion (which was not made) was "+str(dist_fid_list[0]))
 								else :
@@ -1364,12 +1364,12 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 								
 							#reconstruct order of segments and store in name_sequence_dict
 							start_fid = [x for x in next_fid_linked_list.keys() if not x in next_fid_linked_list.values()]
-							if debug:
+							if debug_flag:
 								wtf = [x for x in next_fid_linked_list.values() if not x in next_fid_linked_list.keys()]
 								print(name+": "+str(start_fid)+ " -> "+str(wtf))
 								print("fid_fullname_dict: "+str(fid_fullname_dict))
 							runs = find_fid_runs(next_fid_linked_list)
-							if debug:print("runs: "+str(runs))
+							if debug_flag:print("runs: "+str(runs))
 							run_namefreq_dict={}
 							for run in runs :
 								run_namefreq_dict[tuple(run)] = {}
@@ -1381,7 +1381,7 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 										run_namefreq_dict[tuple(run)][fullname] += 1
 
 							for run in run_namefreq_dict.keys() :
-								if debug:print(str(run)+": "+str(run_namefreq_dict[run]))
+								if debug_flag:print(str(run)+": "+str(run_namefreq_dict[run]))
 								most_common_name = max(run_namefreq_dict[run],key=run_namefreq_dict[run].get)
 
 								Dict_append_flexible(name_sequence_dict, most_common_name, list(run))
@@ -1405,11 +1405,12 @@ def find_consecutive_segments(grid_shp, street_var, debug=False):
 def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_street_var, paths, df_micro):
 
 	r_path, script_path, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/"
 
 	# Files
-	grid = dir_path + "/GIS_edited/" + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
-	ed_1930 = dir_path + "/GIS_edited/" + city_name + "_1930_block_ED_checked.shp"
-	grid_ed_SJ = dir_path + "/GIS_edited/" + city_name + state_abbr + "_1930_grid_edSJ.shp"
+	grid = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	ed_1930 = geo_path + city_name + "_1930_ED.shp"
+	grid_ed_intersect = geo_path + city_name + state_abbr + "_1930_stgrid_ED_intersect.shp"
 
 	# Load files
 	df_grid = dbf2DF(grid.replace('.shp','.dbf'))
@@ -1424,16 +1425,13 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 	grid_filename = grid.split("/")[-1]
 	save_dbf(df_grid, grid_filename, grid_path)
 
-	arcpy.SpatialJoin_analysis(target_features=grid, 
-		join_features=ed_1930, 
-		out_feature_class=grid_ed_SJ, 
-		join_operation="JOIN_ONE_TO_MANY", 
-		join_type="KEEP_ALL", 
-		match_option="SHARE_A_LINE_SEGMENT_WITH")
+	arcpy.Intersect_analysis (in_features=[grid, ed_1930], 
+		out_feature_class=grid_ed_intersect, 
+		join_attributes="ALL")
 
 	# Get the spatial join dbf and extract some info
-	df_sj = dbf2DF(grid_ed_SJ.replace('.shp','.dbf'))
-	df_dir_ed = df_sj[['DIR','ed']].drop_duplicates()
+	df_intersect = dbf2DF(grid_ed_intersect.replace('.shp','.dbf'))
+	df_dir_ed = df_intersect[['DIR','ed']].drop_duplicates()
 	df_dir_ed = df_dir_ed[df_dir_ed['DIR']!='']
 	df_dir_ed = df_dir_ed[df_dir_ed['ed']!=0]
 	eds = df_dir_ed['ed'].drop_duplicates().tolist()
@@ -1527,7 +1525,7 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 	points30 = geo_path + city_name + "_1930_Points.shp"
 	points30_resid = geo_path + city_name + "_1930_ResidPoints.shp"
 	intersect_resid_ed = geo_path + city_name + "_1930_intersect_resid_ed.shp"
-	inrighted = geo_path + "_1930_ResidPoints_inRightED.shp"
+	inrighted = geo_path + city_name + "_1930_ResidPoints_inRightED.shp"
 	intersect_correct_ed = geo_path + city_name + "_1930_intersect_correct_ed.shp"
 	block_shp_file = geo_path + city_name + "_1930_block_ED_checked.shp"
 
@@ -1606,6 +1604,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	st_grid_ed_shp = geo_path + city_name + state_abbr + '_1930_stgrid_ED_intersect.shp'
 
 	arcpy.CopyFeatures_management(grid_uns2, grid_uns2_backup)
+	#arcpy.CopyFeatures_management(grid_uns2_backup, grid_uns2)
 
 	#
 	# Step 1: Intersect street grid and ED map, return a Pandas dataframe of attribute data
@@ -1626,17 +1625,6 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	df_grid_ed = get_grid_ed_df(grid_uns2, ed_shp, st_grid_ed_shp)
 	df_grid_ed[grid_street_var] = df_grid_ed[grid_street_var].astype(str)
 
-	#Initialize the current match variable
-	df_grid_ed['current_match'] = ''
-	df_grid_ed['current_match_bool'] = False
-
-	#Function to update current best match (starts with either exact_match or '')
-	def update_current_match(current_match, current_match_bool, new_match, new_match_bool):
-		if ~current_match_bool and new_match_bool:
-			return new_match, new_match_bool
-		else:
-			return current_match, current_match_bool
-
 	#
 	# Step 2: Load microdata
 	#
@@ -1645,6 +1633,9 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	if type(df_micro) == 'NoneType':
 		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
 		df_micro = load_large_dta(microdata_file)
+
+	# Convert to string
+	df_micro[micro_street_var] = df_micro[micro_street_var].astype(str)
 
 	# Get list of all streets
 	micro_all_streets = df_micro[micro_street_var].drop_duplicates().tolist()
@@ -1696,6 +1687,45 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	#
 	# Step 4: Perform exact matching
 	#
+
+	#Initialize the current match variable
+	df_grid_ed['current_match'] = ''
+	df_grid_ed['current_match_bool'] = False
+
+	#Function to update current best match (starts with either exact_match or '')
+	def update_current_match(current_match, current_match_bool, new_match, new_match_bool, fullname=None):
+		if ~current_match_bool and new_match_bool:
+			if fullname == None:
+				return new_match, True
+			# Check if it's just an issue of missing DIR in either case
+			else:
+				_, DIR_old, NAME_old, TYPE_old = standardize_street(fullname)
+				_, DIR_new, NAME_new, TYPE_new = standardize_street(new_match)
+				if NAME_old == NAME_new:
+					# Same NAME, different TYPE, same DIR
+					if (TYPE_old != TYPE_new) & (DIR_old == DIR_new):
+						new_match = (DIR_old + ' ' + NAME_old + ' ' + TYPE_new).strip()
+					# Same NAME, same TYPE, different DIR
+					if (TYPE_old == TYPE_new) & (DIR_old != DIR_new):
+						if DIR_old == '':
+							new_match = (DIR_new + ' ' + NAME_old + ' ' + TYPE_old).strip()
+						if DIR_new == '':
+							new_match = (DIR_old + ' ' + NAME_old + ' ' + TYPE_old).strip()
+						else:
+							new_match = (DIR_new + ' ' + NAME_old + ' ' + TYPE_old).strip()
+					# Same NAME, different TYPE, different DIR
+					if (TYPE_old != TYPE_new) & (DIR_old != DIR_new):
+						if DIR_old == '':
+							new_match = (DIR_new + ' ' + NAME_old + ' ' + TYPE_new).strip()
+						if DIR_new == '':
+							new_match = (DIR_old + ' ' + NAME_old + ' ' + TYPE_new).strip()
+						else:
+							new_match = (DIR_new + ' ' + NAME_old + ' ' + TYPE_old).strip()
+				# No conditional for different NAME, assume new_match is correct
+				return new_match, True
+			return new_match, True
+		else:
+			return current_match, current_match_bool
 
 	#Function to do exact matching against Steve Morse street-ED lists (altered from STclean.py)
 	def find_exact_matches(df, street, all_streets, basic_info, source):
@@ -1812,8 +1842,6 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 			else:
 				return ['', '', False]
 
-		start = time.time()
-
 		#Set var names
 		fuzzy_match = 'fuzzy_match_'+source 
 		fuzzy_bool = 'fuzzy_match_bool_'+source
@@ -1823,7 +1851,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 		all_streets_fuzzyset = fuzzyset.FuzzySet(all_streets)
 
 		#Create dictionary based on Street-ED pairs for faster lookup using helper function
-		df_no_exact_match = df[~(df['current_match_bool'])]
+		df_no_exact_match = df[~df['current_match_bool']]
 		df_grouped = df_no_exact_match.groupby([street, 'ed'])
 		fuzzy_match_dict = {}
 		for st_ed, _ in df_grouped:
@@ -1835,37 +1863,37 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 		#Get fuzzy matches 
 		df[fuzzy_match], df[fuzzy_score], df[fuzzy_bool] = zip(*df.apply(lambda x: get_fuzzy_match(x['current_match_bool'], fuzzy_match_dict, x[street], x['ed']), axis=1))
 		#Update current match 
-		df['current_match'], df['current_match_bool'] = zip(*df.apply(lambda x: update_current_match(x['current_match'], x['current_match_bool'], x[fuzzy_match], x[fuzzy_bool]),axis=1))
+		df['current_match'], df['current_match_bool'] = zip(*df.apply(lambda x: update_current_match(x['current_match'], x['current_match_bool'], x[fuzzy_match], x[fuzzy_bool], x[street]),axis=1))
 
 		#Generate dashboard information
 		num_fuzzy_matches = np.sum(df[fuzzy_bool])
 		prop_fuzzy_matches = float(num_fuzzy_matches)/num_records
-		end = time.time()
-		fuzzy_matching_time = round(float(end-start)/60, 1)
-		fuzzy_info = [num_fuzzy_matches, fuzzy_matching_time]
+		fuzzy_info = [num_fuzzy_matches]
 
-		print("Fuzzy matches (using "+source+"): "+str(num_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(num_current_residual_cases), 1))+"%)\n")
+		print("Fuzzy matches (using "+source+"): "+str(num_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(num_current_residual_cases), 1))+"%)")
 
 		return df, fuzzy_info
 
 	df_grid_ed, fuzzy_info_micro = find_fuzzy_matches(df=df_grid_ed, 
-		city=city, 
+		city=city_name, 
 		street=grid_street_var, 
 		all_streets=micro_all_streets, 
 		ed_st_dict=micro_ed_st_dict, 
 		source="micro")
 
 	df_grid_ed, fuzzy_info_sm = find_fuzzy_matches(df=df_grid_ed, 
-		city=city, 
+		city=city_name, 
 		street=grid_street_var, 
 		all_streets=sm_all_streets, 
 		ed_st_dict=sm_ed_st_dict, 
 		source="sm")
 
-	total_fuzzy_matches = len(df_grid_ed[df_grid_ed['fuzzy_match_bool_sm'] | df_grid_ed['fuzzy_match_bool_micro']])	
-	print("Total fuzzy matched: " + str(total_fuzzy_matches) + " of " + str(len(df_grid_ed[~df_grid_ed['exact_match_bool_micro']])) + " (" + '{:.1%}'.format(float(total_fuzzy_matches)/len(df_grid_ed[~df_grid_ed['exact_match_bool_micro']])) + ") ED-segment combinations without an exact match")
+	df_grid_ed.loc[:,('fuzzy_match_bool')] = df_grid_ed['fuzzy_match_bool_sm'] | df_grid_ed['fuzzy_match_bool_micro']
+	total_fuzzy_matches = df_grid_ed['fuzzy_match_bool'].sum()
+	print("Total fuzzy matched: " + str(total_fuzzy_matches) + " of " + str(len(df_grid_ed[~df_grid_ed['exact_match_bool_micro']])) + " (" + '{:.1%}'.format(float(total_fuzzy_matches)/len(df_grid_ed[~df_grid_ed['exact_match_bool_micro']])) + ") ED-segment combinations without an exact match\n")
 
-	print("Total matched: " + str(df_grid_ed['current_match_bool'].sum()) + " of " + str(num_records) + " (" + '{:.1%}'.format(float(df_grid_ed['current_match_bool'].sum())/len(df_grid_ed)) + ") ED-segment combinations")
+	total_matches = df_grid_ed['current_match_bool'].sum()
+	print("Total matched: " + str(total_matches) + " of " + str(num_records) + " (" + '{:.1%}'.format(float(total_matches)/len(df_grid_ed)) + ") ED-segment combinations")
 
 	#
 	# Step 6: Create dictionary for fixing street names
@@ -1875,23 +1903,13 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	fullname_ed_st_dict = {}
 	more_than_one = 0
 	for fullname_ed, group in df_grouped:
-		# Keep track of whether it was a name match
-		if group['current_match_bool'].all():
-			matched = True
+		if group['current_match_bool'].any():
+			no_match = False
+			st = group['current_match'].drop_duplicates().tolist()[0]
 		else:
-			matched = False
-		# Get list of streets associated with FULLNAME-ED (could be multiple in theory)
-		list_of_streets = group['current_match'].drop_duplicates().tolist()
-		# If more than one street, keep track
-		if len(list_of_streets) > 1:
-			more_than_one += 1
-		# If only one street, add it to the dictionary {street:list(grid_ids)}
-		if matched:
-			fullname_ed_st_dict[fullname_ed] = {list_of_streets[0]:zip(group['grid_id'].tolist(),[matched]*len(group))}
-		else:
-			fullname_ed_st_dict[fullname_ed] = {group[grid_street_var].drop_duplicates().tolist()[0]:zip(group['grid_id'].tolist(),[matched]*len(group))}
-	if more_than_one > 0:
-		print("Some entries have more than one street")
+			no_match = True
+			st = group[grid_street_var].drop_duplicates().tolist()[0]
+		fullname_ed_st_dict[fullname_ed] = {st:zip(group['grid_id'].tolist(),[no_match]*len(group))}
 	grid_id_st_dict = {grid_id:v.keys()[0] for k,v in fullname_ed_st_dict.items() for grid_id in v.values()[0]}
 	grid_id_st_dict = {k[0]:[v,k[1]] for k,v in grid_id_st_dict.items()}
 
@@ -1907,15 +1925,56 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 		try:
 			new_FULLNAME, nomatch = grid_id_st_dict[grid_id]
 			if FULLNAME == new_FULLNAME:
-				return [new_FULLNAME, nomatch, False]
+				return [new_FULLNAME, nomatch]
 			else:
-				return [new_FULLNAME, nomatch, True]	
+				return [new_FULLNAME, nomatch]	
 		except:
-			return [FULLNAME, True, False]
+			return [FULLNAME, True]
 
-	df_uns2[grid_street_var], df_uns2['NoMatch'], df_uns2['NameChng'] = zip(*df_uns2.apply(lambda x: fix_fullname(x['grid_id'],x['FULLNAME']), axis=1))
+	df_uns2[grid_street_var], df_uns2['NoMatch'] = zip(*df_uns2.apply(lambda x: fix_fullname(x['grid_id'],x['FULLNAME']), axis=1))
 
-	dir_save = '/'.join(grid_uns2.split('/')[:-1])
-	shp_save = grid_uns2.split('/')[-1]
-	save_dbf(df_uns2, shp_save, dir_save)
+	# Fill in with old name if no match and switch name change to reflect
+	df_uns2.loc[df_uns2['NoMatch'], grid_street_var] = df_uns2[grid_street_var+'_old']
+	# Count number of changes
+	df_uns2.loc[:,('NameChng')] = df_uns2[grid_street_var+'_old'] != df_uns2[grid_street_var]
 
+	print("Number of street names changed: "+str(df_uns2['NameChng'].sum())+" of "+str(len(df_uns2))+" ("+'{:.1%}'.format(float(df_uns2['NameChng'].sum())/len(df_uns2))+") of cases")
+
+	# Function to save Pandas DF as DBF file 
+	def save_dbf_st(df, shapefile_name, field_map = False):
+		file_temp = shapefile_name.split('/')[-1]
+		csv_file = geo_path + "/temp_for_dbf.csv"
+		df.to_csv(csv_file,index=False)
+		try:
+			os.remove(geo_path + "/schema.ini")
+		except:
+			pass
+
+		# Add a specific field mapping for a special case
+		if field_map:
+			file = csv_file
+			field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+			FULLNAME_old "FULLNAME_old" true true false 80 Text 0 0 ,First,#,%s,FULLNAME_old,-1,-1;
+			CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
+			STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
+			MIN_LFROMA "MIN_LFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
+			MAX_LTOADD "MAX_LTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
+			MIN_RFROMA "MIN_RFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
+			MAX_RTOADD "MAX_RTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
+			grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1;
+			NoMatch "NoMatch" true true false 5 Text 0 0 ,First,#,%s,NoMatch,-1,-1;
+			NameChng "NameChng" true true false 5 Text 0 0 ,First,#,%s,NameChng,-1,-1""" % (file, file, file, file, file, file, file, file, file, file, file)
+		else:
+			field_map = None
+
+		arcpy.TableToTable_conversion(in_rows=csv_file, 
+			out_path=geo_path, 
+			out_name="temp_for_shp.dbf",
+			field_mapping=field_map)
+		os.remove(shapefile_name.replace('.shp','.dbf'))
+		os.remove(csv_file)
+		os.rename(geo_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(geo_path+"/temp_for_shp.dbf.xml")
+		os.remove(geo_path+"/temp_for_shp.cpg")
+
+	save_dbf_st(df_uns2, grid_uns2, field_map=True)
