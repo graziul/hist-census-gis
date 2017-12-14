@@ -700,28 +700,28 @@ def attach_pblk_id(geo_path, city_name, points30):
 #
 
 # Renumber grid using microdata
-def renumber_grid(city_name, state_abbr, df=None):
+def renumber_grid(city_name, state_abbr, paths, df=None):
 
 	#Paths
-	file_path = "S:\\Projects\\1940Census\\" + city_name 
-	dir_path = file_path + "\\GIS_edited\\"
+	_, _, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/"
 
 	#Files
-	microdata_file = file_path + "\\StataFiles_Other\\1930\\" + city_name + state_abbr + "_StudAuto.dta"
-	stgrid_file = dir_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
-	out_file = dir_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
-	block_shp_file = dir_path + city_name + "_1930_block_ED_checked.shp"
+	microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAutoDirBlockFixed.dta"
+	stgrid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	out_file = geo_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
+	block_shp_file = geo_path + city_name + "_1930_block_ED_checked.shp"
 	block_dbf_file = block_shp_file.replace(".shp",".dbf")
-	addresses = dir_path + city_name + "_1930_Addresses.csv"
-	points30 = dir_path + city_name + "_1930_Points_updated.shp"
+	addresses = geo_path + city_name + "_1930_Addresses.csv"
+	points30 = geo_path + city_name + "_1930_Points_updated.shp"
 	pblk_file = block_shp_file #Note: This is the manually edited block file
-	pblk_grid_file2 = dir_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ2.shp"
-	add_locator = dir_path + city_name + "_addlocOld" 
+	pblk_grid_file2 = geo_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ2.shp"
+	add_locator = geo_path + city_name + "_addlocOld" 
 
 	# Load
 	df_grid = dbf2DF(stgrid_file.replace(".shp",".dbf"),upper=False)
 	df_block = dbf2DF(block_dbf_file,upper=False)
-	if type(df) == 'NoneType':
+	if df == None:
 		df_micro = load_large_dta(microdata_file)
 	else:
 		df_micro = df
@@ -862,7 +862,7 @@ def renumber_grid(city_name, state_abbr, df=None):
 	del(cursor)
 
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addlocOld.")]
+	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addlocOld.")]
 	for f in add_loc_files:
 		if os.path.isfile(f):
 			os.remove(f)

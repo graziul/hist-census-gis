@@ -45,15 +45,116 @@ def is_touch(ED, neighbor):
 		else:
 			return 0
 
+# Get adjacent EDs
+def get_adjacent_eds(geo_path, city_name, state_abbr):
+	
+	# Files
+
+	# "vm" is the verified map (e.g., ED or block map)
+	vm = geo_path + city_name + "_1930_ED.shp"
+	# Feature Class to Feature Class file
+	fc = city_name + state_abbr + "_1930_ED_Feature.shp"
+	# Spatial weights files:
+	swm_file = geo_path + city_name + state_abbr + "_1930_spatweight.swm"
+	swm_table = geo_path + city_name + state_abbr + "_1930_swmTab.dbf"
+	# Amory's formatted EDs dbf
+	fe = geo_path + city_name + state_abbr + "_1930_formattedEDs.dbf"
+	fe_file = city_name + state_abbr + "_1930_formattedEDs.dbf"
+
+	print "creating the swm"
+	# Process: Feature Class to Feature Class
+	ftc_mapping = """OBJECTID \"OBJECTID\" true true false 10 Long 0 10 ,First,#,%s,OBJECTID,-1,-1;
+		ed \"ed\" true true false 19 Double 0 0 ,First,#,%s,ed,-1,-1;
+		Shape_Leng \"Shape_Leng\" true true false 19 Double 0 0 ,First,#,%s,Shape_Leng,-1,-1;
+		Shape_Area \"Shape_Area\" true true false 19 Double 0 0 ,First,#,%s,Shape_Area,-1,-1;
+		ED_int \"ED_int\" true true false 5 Long 0 5 ,First,#,%s,ED_int,-1,-1;
+		Ed_str \"Ed_str\" true true false 5 Text 0 0 ,First,#,%s,Ed_str,-1,-1""" % (vm, vm, vm, vm, vm, vm)
+	arcpy.FeatureClassToFeatureClass_conversion(in_features=vm, 
+		out_path=geo_path, 
+		out_name=fc, 
+		field_mapping=ftc_mapping)
+
+		#Calculate some fields
+
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Shape_Leng", 
+		expression="!SHAPE.LENGTH!",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Shape_Area", 
+		expression="!SHAPE.AREA!",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="ED_int", 
+		expression="int(!ed!)",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Ed_str", 
+		expression="str(int(!ed!))",
+		expression_type="PYTHON_9.3")
+
+	# Process: Generate Spatial Weights Matrix
+	arcpy.GenerateSpatialWeightsMatrix_stats(Input_Feature_Class=geo_path+fc, 
+		Unique_ID_Field="ED_int", 
+		Output_Spatial_Weights_Matrix_File=swm_file, 
+		Conceptualization_of_Spatial_Relationships="CONTIGUITY_EDGES_CORNERS", 
+		Distance_Method="EUCLIDEAN", 
+		Exponent=1,  
+		Number_of_Neighbors=0, 
+		Row_Standardization="NO_STANDARDIZATION")
+
+	# Process: Convert Spatial Weights Matrix to Table
+	arcpy.ConvertSpatialWeightsMatrixtoTable_stats(Input_Spatial_Weights_Matrix_File=swm_file, 
+		Output_Table=swm_table)
+
+	# Do the thing to create the lists for adjacent EDs (inclusive of the ED)
+
+	field_names = [x.name for x in arcpy.ListFields(swm_table)]
+	cursor = arcpy.da.SearchCursor(swm_table, field_names)
+	silly_dict = {}
+
+	for row in cursor :
+		Dict_append_unique(silly_dict,row[2],row[3])
+		Dict_append_unique(silly_dict,row[2],row[2])
+
+	#Remove ED = 0 (unknown EDs)
+	silly_dict = {k:[i for i in v if v != 0] for k,v in silly_dict.items() if k != 0}
+
+	#Formatted ED's from Amory's weights matrix formating script
+	if os.path.isfile(fe):
+		os.remove(fe)	
+
+	arcpy.CreateTable_management(out_path=geo_path, 
+		out_name=fe_file)
+
+	arcpy.AddField_management(in_table=fe, 
+		field_name="ed", 
+		field_type="SHORT")
+	arcpy.AddField_management(in_table=fe, 
+		field_name="contig_ed", 
+		field_type="TEXT")
+
+	rows = arcpy.InsertCursor(fe)
+
+	for k, v in silly_dict.items():
+		row = rows.newRow()
+		row.setValue("ed",k)
+		v = [str(x) for x in v]
+		row.setValue("contig_ed",";".join(v))
+		rows.insertRow(row)
+
+	del row
+	del rows
+
 # Geocode function
-def geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr):
+def geocode(geo_path,name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr):
 	print("Step 1 of 3: The 'Geocode' function has started and the program has started to implement the intersect function")
 	arcpy.Intersect_analysis (in_features=[sg, vm], 
 		out_feature_class=sg_vm, 
 		join_attributes="ALL")
 	print("Step 2 of 3: The program has finished implementing the intersect function and has begun creating the address locator")
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [dir_path+'\\'+x for x in os.listdir(dir_path) if x.startswith(name+"_addloc_ED")]
+	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(name+"_addloc_ED.")]
 	for f in add_loc_files:
 		if os.path.isfile(f):
 			os.remove(f)
@@ -101,10 +202,8 @@ def geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,a
 	print("The program has finished the geocoding process and 'Geocode' function is complete")
 
 # Validate function (adjacent EDs)
-def validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file):
-
-	fe = dir_path + fe_file
-
+def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, residual_file):
+	fe = geo_path + city_name + state_abbr + "_1930_formattedEDs.dbf"
 	# Process: Spatial Join
 	arcpy.SpatialJoin_analysis(target_features=gr, 
 		join_features=vm, 
@@ -113,90 +212,6 @@ def validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notco
 		join_type="KEEP_ALL")
 	print "spatial join has finished"
 
-	print "creating the swm"
-	# Process: Feature Class to Feature Class
-	ftc_mapping = """OBJECTID \"OBJECTID\" true true false 10 Long 0 10 ,First,#,%s,OBJECTID,-1,-1;
-		ed \"ed\" true true false 19 Double 0 0 ,First,#,%s,ed,-1,-1;
-		Shape_Leng \"Shape_Leng\" true true false 19 Double 0 0 ,First,#,%s,Shape_Leng,-1,-1;
-		Shape_Area \"Shape_Area\" true true false 19 Double 0 0 ,First,#,%s,Shape_Area,-1,-1;
-		ED_int \"ED_int\" true true false 5 Long 0 5 ,First,#,%s,ED_int,-1,-1;
-		Ed_str \"Ed_str\" true true false 5 Text 0 0 ,First,#,%s,Ed_str,-1,-1""" % (vm, vm, vm, vm, vm, vm)
-	arcpy.FeatureClassToFeatureClass_conversion(in_features=vm, 
-		out_path=dir_path, 
-		out_name=fc, 
-		field_mapping=ftc_mapping)
-
-		#Calculate some fields
-
-	arcpy.CalculateField_management(in_table=dir_path+fc, 
-		field="Shape_Leng", 
-		expression="!SHAPE.LENGTH!",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=dir_path+fc, 
-		field="Shape_Area", 
-		expression="!SHAPE.AREA!",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=dir_path+fc, 
-		field="ED_int", 
-		expression="int(!ed!)",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=dir_path+fc, 
-		field="Ed_str", 
-		expression="str(int(!ed!))",
-		expression_type="PYTHON_9.3")
-
-	# Process: Generate Spatial Weights Matrix
-	arcpy.GenerateSpatialWeightsMatrix_stats(Input_Feature_Class=dir_path+fc, 
-		Unique_ID_Field="ED_int", 
-		Output_Spatial_Weights_Matrix_File=swm_file, 
-		Conceptualization_of_Spatial_Relationships="CONTIGUITY_EDGES_CORNERS", 
-		Distance_Method="EUCLIDEAN", 
-		Exponent=1,  
-		Number_of_Neighbors=0, 
-		Row_Standardization="NO_STANDARDIZATION")
-
-	# Process: Convert Spatial Weights Matrix to Table
-	arcpy.ConvertSpatialWeightsMatrixtoTable_stats(Input_Spatial_Weights_Matrix_File=swm_file, 
-		Output_Table=swm_table)
-
-	# Do the thing to create the lists for adjacent EDs (inclusive of the ED)
-
-	field_names = [x.name for x in arcpy.ListFields(swm_table)]
-	cursor = arcpy.da.SearchCursor(swm_table, field_names)
-	silly_dict = {}
-
-	for row in cursor :
-		Dict_append_unique(silly_dict,row[2],row[3])
-		Dict_append_unique(silly_dict,row[2],row[2])
-
-	#Remove ED = 0 (unknown EDs)
-	silly_dict = {k:[i for i in v if v != 0] for k,v in silly_dict.items() if k != 0}
-
-	#Formatted ED's from Amory's weights matrix formating script
-	if os.path.isfile(fe):
-		os.remove(fe)	
-
-	arcpy.CreateTable_management(out_path=dir_path, 
-		out_name=fe_file)
-
-	arcpy.AddField_management(in_table=fe, 
-		field_name="ed", 
-		field_type="SHORT")
-	arcpy.AddField_management(in_table=fe, 
-		field_name="contig_ed", 
-		field_type="TEXT")
-
-	rows = arcpy.InsertCursor(fe)
-
-	for k, v in silly_dict.items():
-		row = rows.newRow()
-		row.setValue("ed",k)
-		v = [str(x) for x in v]
-		row.setValue("contig_ed",";".join(v))
-		rows.insertRow(row)
-
-	del row
-	del rows
 
 	print "joining the swm"
 	# Process: Join field using Pandas and not ArcPy (since it's super slow)
@@ -238,14 +253,13 @@ def validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notco
 	vars_to_keep = [i for i in df_notcor.columns.tolist() if i not in to_del]
 	df_notcor_togeocode = df_notcor[vars_to_keep]
 
-	csv_file = dir_path+"temp.csv"
+	csv_file = geo_path+"temp.csv"
 	df_notcor_togeocode.to_csv(csv_file,index=False)
-	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=dir_path, out_name=residual_file)
+	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=geo_path, out_name=residual_file)
 	os.remove(csv_file)
 
 # Combine geocodes
 def combine_geocodes(geo_path, city_name, state_abbr):
-
 	def merge(list_of_shp):
 		for shp in list_of_shp:
 			arcpy.AddField_management(in_table=shp, 
@@ -261,11 +275,11 @@ def combine_geocodes(geo_path, city_name, state_abbr):
 					field="geocoded", 
 					expression="'No'",
 					expression_type="PYTHON_9.3")
-		outfile = dir_path + "StLouisMO_GeocodeFinal.shp"
+		outfile = geo_path + "StLouisMO_GeocodeFinal.shp"
 		arcpy.Merge_management(list_of_shp, outfile)
 		df_merge = dbf2DF(outfile)
 		df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','contig_ed','geocoded']).size().reset_index(name='count')
-		outfile_excel = dir_path + "StLouisMO_GeocodeFinal.xlsx"
+		outfile_excel = geo_path + "StLouisMO_GeocodeFinal.xlsx"
 		writer = pd.ExcelWriter(outfile_excel, engine='xlsxwriter')
 		df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
 		writer.save()

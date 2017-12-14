@@ -114,9 +114,10 @@ print(str(float(end-start)/60)+" minutes")
 # Step 5: Renumber grid based on updated 1930 microdata and street grid
 #
 
-renumber_grid(name=city, 
-	state=state, 
-	df=df_micro2)
+renumber_grid(city_name=city, 
+	state_abbr=state, 
+	paths=paths, df=None)
+#	df=df_micro2)
 
 #
 # Step 6: Fill in blanks
@@ -136,15 +137,8 @@ fill_blank_segs(city_name=city,
 # Path
 geo_path = dir_path + '/GIS_edited/'
 
-# Common files
-
-# "vm" is the verified map (e.g., ED or block map)
-vm = geo_path + city + "_1930_ED.shp"
-# Feature Class to Feature Class file
-fc = city + state + "_1930_ED_Feature.shp"
-# Spatial weights files:
-swm_file = geo_path + city + state + "_1930_spatweight.swm"
-swm_table = geo_path + city + state + "_1930_swmTab.dbf"
+# Get adjacent EDs
+get_adjacent_eds(geo_path, city, state)
 
 # Common variables
 
@@ -179,9 +173,6 @@ tr = "MAX_RTOADD"
 add = geo_path + city + "_1930_Addresses.csv"
 # "sg" is the name of the street grid on which the previous list of addresses will be geocoded
 sg = geo_path + city + state + "_1930_stgrid_renumbered.shp"
-# Amory's formatted EDs dbf
-fe = geo_path + city + state + "_1930_formattedEDs.dbf"
-fe_file = city + state + "_1930_formattedEDs.dbf"
 # "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
 al = geo_path + city + "_addloc_ED"
 # "gr" is the filename of the geocoding results
@@ -195,9 +186,9 @@ notcor = geo_path + city + state + "_1930_NotGeocodedCorrect.shp"
 # Correct geocode
 cor = geo_path + city + state + "_1930_GeocodedCorrect.shp"
 
-geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr)
+geocode(geo_path, city, add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
 
-validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file="NotGeocoded.dbf")
+validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, residual_file="NotGeocoded.dbf")
 
 #
 # Geocode on contemporary house number ranges
@@ -207,8 +198,6 @@ validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, c
 add = geo_path + city + state + "_NotGeocoded.dbf"
 # "sg" is the name of the street grid on which the previous list of addresses will be geocoded
 sg = geo_path + city + state + "_1930_stgrid_edit_Uns2.shp"
-# Amory's formatted EDs dbf
-fe_file = city + state + "_1930_Contemp.dbf"
 # "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
 al = geo_path + city + "_addloc_ED_Contemp"
 # "gr" is the filename of the geocoding results
@@ -222,9 +211,9 @@ notcor = geo_path + city + state + "_1930_NotGeocodedCorrect_Contemp.shp"
 # Correct geocode
 cor = geo_path + city + state + "_1930_GeocodedCorrect_Contemp.shp"
 
-geocode(add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr)
+geocode(geo_path, city, add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
 
-validate(dir_path, gr, vm, spatjoin, fc, swm_file, swm_table, fe_file, notcor, cor, residual_file="NotGeocoded_Contemp.dbf")
+validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, residual_file="NotGeocoded_Contemp.dbf")
 
 #
 # Combine both geocodes to get the best geocode
