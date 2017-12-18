@@ -16,6 +16,8 @@ import arcpy
 import os
 import pysal as ps
 import pandas as pd
+from blocknum.blocknum import *
+import random
 
 # All Python to overwrite any ESRI output files (e.g., shapefiles)
 arcpy.env.overwriteOutput=True
@@ -147,14 +149,14 @@ def get_adjacent_eds(geo_path, city_name, state_abbr):
 	del rows
 
 # Geocode function
-def geocode(geo_path,name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr):
+def geocode(geo_path,city_name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr):
 	print("Step 1 of 3: The 'Geocode' function has started and the program has started to implement the intersect function")
 	arcpy.Intersect_analysis (in_features=[sg, vm], 
 		out_feature_class=sg_vm, 
 		join_attributes="ALL")
 	print("Step 2 of 3: The program has finished implementing the intersect function and has begun creating the address locator")
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(name+"_addloc_ED.")]
+	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addloc_ED.")]
 	for f in add_loc_files:
 		if os.path.isfile(f):
 			os.remove(f)
@@ -202,8 +204,10 @@ def geocode(geo_path,name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_st
 	print("The program has finished the geocoding process and 'Geocode' function is complete")
 
 # Validate function (adjacent EDs)
-def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, residual_file):
+def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, residual_file, slow=False):
+
 	fe = geo_path + city_name + state_abbr + "_1930_formattedEDs.dbf"
+
 	# Process: Spatial Join
 	arcpy.SpatialJoin_analysis(target_features=gr, 
 		join_features=vm, 
@@ -211,7 +215,6 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, res
 		join_operation="JOIN_ONE_TO_ONE", 
 		join_type="KEEP_ALL")
 	print "spatial join has finished"
-
 
 	print "joining the swm"
 	# Process: Join field using Pandas and not ArcPy (since it's super slow)
@@ -229,17 +232,57 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, res
 	df_merge['ed'] = df_merge['ed_x']
 	df_merge['is_touch'] = df_merge.apply(lambda x: is_touch(x['ed'],x['contig_ed']), axis=1)
 
-	vars_to_keep = ['index','Match_addr','Status','Mblk','Ref_ID',
-		'address','hn','fullname','type','state','city','ed','ed_1','contig_ed','is_touch']
-	df_merge = df_merge[vars_to_keep]
+	try:
+		vars_to_keep = ['index','Match_addr','Status','Mblk','Ref_ID',
+			'address','hn','fullname','type','state','city','ed','ed_1','is_touch']
+		df_merge = df_merge[vars_to_keep]
+	except:
+		vars_to_keep = ['index','Match_addr','Status','mblk','Ref_ID',
+			'address','hn','fullname','type','state','city','ed','ed_1','is_touch']
+		df_merge = df_merge[vars_to_keep]
 
-	save_dbf(df_merge, spatjoin)
+	# Function to save Pandas DF as DBF file 
+	def save_dbf_geo(df, shapefile_name, field_map=False):
+		file_temp = shapefile_name.split('/')[-1]
+		rand_post = str(random.randint(1,100001))
+		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
+		df.to_csv(csv_file,index=False)
+		try:
+			os.remove(geo_path + "/schema.ini")
+		except:
+			pass
 
-	print "selecting the incorrect geocodes"
-	# Process: Select (Not geocoded or not geocoded correctly)
-	arcpy.Select_analysis(in_features=spatjoin, 
-		out_feature_class=notcor, 
-		where_clause="\"is_touch\" = 0  OR \"Status\" = 'U'")
+		# Add a specific field mapping for a special case
+		if field_map:
+			file = csv_file
+			field_mapping = """index "index" true true false 10 Long 0 0 ,First,#,%s,index,-1,-1;
+			Match_addr "Match_addr" true true false 100 Text 0 0 ,First,#,%s,Match_addr,-1,-1;
+			Status "Status" true true false 1 Text 0 0 ,First,#,%s,Status,-1,-1;
+			mblk "mblk" true true false 10 Long 0 0 ,First,#,%s,mblk,-1,-1;
+			Ref_ID "Ref_ID" true true false 10 Long 0 0 ,First,#,%s,Ref_ID,-1,-1;
+			address "address" true true false 100 Text 0 0 ,First,#,%s,address,-1,-1;
+			hn "hn" true true false 10 Long 0 0 ,First,#,%s,hn,-1,-1;
+			fullname "fullname" true true false 100 Text 0 0 ,First,#,%s,fullname,-1,-1;
+			type "type" true true false 10 Text 0 10 ,First,#,%s,type,-1,-1;
+			state "state" true true false 2 Text 0 0 ,First,#,%s,state,-1,-1;
+			city "city" true true false 50 Text 0 0 ,First,#,%s,city,-1,-1;
+			ed "ed" true true false 10 Long 0 0 ,First,#,%s,ed,-1,-1;
+			ed_1 "ed_1" true true false 10 Long 0 0 ,First,#,%s,ed_1,-1,-1;
+			is_touch "is_touch" true true false 1 Long 0 0 ,First,#,%s,is_touch,-1,-1""" % tuple(14*[file])
+		else:
+			field_map = None
+
+		arcpy.TableToTable_conversion(in_rows=csv_file, 
+			out_path=geo_path, 
+			out_name="temp_for_shp"+rand_post+".dbf",
+			field_mapping=field_mapping)
+		os.remove(shapefile_name.replace('.shp','.dbf'))
+		#os.remove(csv_file)
+		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
+
+	save_dbf_geo(df_merge, spatjoin, field_map=True)
 
 	print "selecting the correct geocodes"
 	# Process: Select correct geocodes
@@ -247,20 +290,33 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, res
 		out_feature_class=cor, 
 		where_clause="\"is_touch\" =1")
 
+	print "selecting the incorrect geocodes"
+	# Process: Select (Not geocoded or not geocoded correctly)
+	if slow:
+		arcpy.Select_analysis(in_features=spatjoin, 
+			out_feature_class=notcor, 
+			where_clause="\"is_touch\" = 0  OR \"Status\" = 'U'")
+		df_notcor = dbf2DF(notcor.replace('.shp','.dbf'))
+	else:
+		df_notcor = df_merge.loc[(df_merge['is_touch']==0)|(df_merge['Status']=='U')] 
 	# Process: Delete Fields and Save Table
-	df_notcor = dbf2DF(notcor.replace('.shp','.dbf'))
-	to_del = ['Match_addr','Ref_ID','Status','ed_1','is_touch','contig_ed']
+	to_del = ['Match_addr','Ref_ID','Status','ed_1','is_touch']
 	vars_to_keep = [i for i in df_notcor.columns.tolist() if i not in to_del]
 	df_notcor_togeocode = df_notcor[vars_to_keep]
 
-	csv_file = geo_path+"temp.csv"
+	rand_post = str(random.randint(1,100001))
+	csv_file = geo_path+"temp"+rand_post+".csv"
 	df_notcor_togeocode.to_csv(csv_file,index=False)
-	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=geo_path, out_name=residual_file)
+	residual_file_name = residual_file.split('/')[-1]
+	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=geo_path, out_name=residual_file_name)
 	os.remove(csv_file)
 
 # Combine geocodes
-def combine_geocodes(geo_path, city_name, state_abbr):
-	def merge(list_of_shp):
+def combine_geocodes(geo_path, city_name, state_abbr, list_of_shp, notcor, outfile):
+
+	post = outfile.split('/')[-1].split('.')[0].split('_GeocodeFinal')[1]
+
+	def merge_and_tag_geocoded(list_of_shp):
 		for shp in list_of_shp:
 			arcpy.AddField_management(in_table=shp, 
 				field_name="geocoded", 
@@ -275,25 +331,21 @@ def combine_geocodes(geo_path, city_name, state_abbr):
 					field="geocoded", 
 					expression="'No'",
 					expression_type="PYTHON_9.3")
-		outfile = geo_path + "StLouisMO_GeocodeFinal.shp"
 		arcpy.Merge_management(list_of_shp, outfile)
 		df_merge = dbf2DF(outfile)
-		df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','contig_ed','geocoded']).size().reset_index(name='count')
-		outfile_excel = geo_path + "StLouisMO_GeocodeFinal.xlsx"
+		try:
+			df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','geocoded']).size().reset_index(name='count')
+		except:
+			df_merge_collapse = df_merge.groupby(['fullname','address','mblk','ed','ed_1','geocoded']).size().reset_index(name='count')
+		outfile_excel = geo_path + "StLouisMO_GeocodeFinal"+post+".xlsx"
 		writer = pd.ExcelWriter(outfile_excel, engine='xlsxwriter')
 		df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
 		writer.save()
 
-	correct_1930 = geo_path + city_name + state_abbr + "_1930_GeocodedCorrect.shp"
-	correct_contemp = geo_path + city_name + state_abbr + "_1930_GeocodedCorrect_Contemp.shp"
-	not_correct_contemp = geo_path + city_name + state_abbr + "_1930_NotGeocodedCorrect_Contemp.shp"
-
-	list_of_shp = [correct_1930, correct_contemp, not_correct_contemp]
-
-	merge(list_of_shp)
+	merge_and_tag_geocoded(list_of_shp)
 
 	# Create list of streets from ungeocoded points that are not in the grid
-	df_ungeocoded = dbf2DF(not_correct_contemp)
+	df_ungeocoded = dbf2DF(notcor)
 	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
 	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
 
@@ -304,7 +356,7 @@ def combine_geocodes(geo_path, city_name, state_abbr):
 	df_ungeocoded_st_ed_tocheck = df_ungeocoded_st_ed[~df_ungeocoded_st_ed['fullname'].isin(grid_streets_list)].sort_values(['ed'])
 
 	# Create a Pandas Excel writer using XlsxWriter as the engine.
-	file_name = geo_path + '/' + name + state + '_ungeocoded_not_in_grid.xlsx'
+	file_name = geo_path + '/' + city_name + state_abbr + '_ungeocoded_not_in_grid'+post+'.xlsx'
 	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 
 	# Convert the dataframe to an XlsxWriter Excel object.

@@ -9,12 +9,14 @@ import sys
 import re
 import time
 import pickle
+import random
 from operator import itemgetter
 import pandas as pd
 import pysal as ps
 import numpy as np
 import subprocess
 import fuzzyset
+import math
 from microclean.STstandardize import *
 
 #
@@ -58,18 +60,19 @@ def dbf2DF(dbfile, upper=False):
 # Function to save Pandas DF as DBF file 
 def save_dbf(df, shapefile, dir_path):
 	shapefile_name = dir_path + shapefile
-	csv_file = dir_path + "/temp_for_dbf.csv"
+	rand_post = str(random.randint(1,100001))
+	csv_file = dir_path + "/temp_for_dbf"+rand_post+".csv"
 	df.to_csv(csv_file,index=False)
 	try:
 		os.remove(dir_path + "/schema.ini")
 	except:
 		pass
-	arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp.dbf")
+	arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp"+rand_post+".dbf")
 	os.remove(shapefile_name.replace('.shp','.dbf'))
 	os.remove(csv_file)
-	os.rename(dir_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-	os.remove(dir_path+"/temp_for_shp.dbf.xml")
-	os.remove(dir_path+"/temp_for_shp.cpg")
+	os.rename(dir_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
+	os.remove(dir_path+"/temp_for_shp"+rand_post+".dbf.xml")
+	os.remove(dir_path+"/temp_for_shp"+rand_post+".cpg")
 
 #
 # Functions for calling R scripts 
@@ -172,18 +175,23 @@ def create_1930_addresses(city_name, state_abbr, paths, df=None):
 		street_var = 'st_best_guess'
 	if 'overall_match' in df.columns.values:
 		street_var = 'overall_match'
-	df.loc[:,('fullname')] = df[street_var]
+	# Change '.' to blank string
+	df.loc[:,'fullname'] = df[street_var]
+	df.loc[df['fullname']=='.','fullname'] = ''
 	# Make sure we found a street name variable
 	if 'fullname' not in df.columns.values:
 		print("No street name variable selected")
 		raise
 	# Select variables for file
 	vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn']
-	df_add = df[vars_of_interest]
-	df_add.loc[:,('hn')] = df_add['hn'].astype(str).str.replace('.0','')
-	df_add.loc[:,('city')] = city_name
-	df_add.loc[:,('state')] = state_abbr
-	df_add.loc[:,('address')] = (df_add['hn'] + " " + df_add['fullname']).str.strip()
+	df_add = df.loc[:,vars_of_interest]
+	# Change missing and 0 to blank string
+	df_add.loc[(np.isnan(df_add['hn']))|(df_add['hn']==0),'hn'] = '-1'
+	df_add.loc[:,'hn'] = df_add['hn'].astype(int)
+	df_add.loc[:,'hn'] = df_add['hn'].astype(str).str.replace('-1','')
+	df_add.loc[:,'city'] = city_name
+	df_add.loc[:,'state'] = state_abbr
+	df_add.loc[:,'address'] = (df_add['hn'] + " " + df_add['fullname']).str.strip()
 	# Save address file	
 	addresses = dir_path + "/GIS_edited/" + city_name + "_1930_Addresses.csv"
 	df_add.to_csv(addresses)
@@ -198,6 +206,8 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
+	hn_ranges = ['MIN_LFROMA', 'MIN_RFROMA', 'MAX_LTOADD', 'MAX_RTOADD']
+
 	different_geocode = False
 	if geocode_file != None:
 		different_geocode = True
@@ -207,13 +217,13 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 
 	print("The script has started to work and is running the 'street' function")
 
-	problem_segments = street(geo_path, city_name, state_abbr)
+	problem_segments = street(geo_path, city_name, state_abbr, hn_ranges)
 	print("The script has finished executing the 'street' function and has now started executing 'physical_blocks' function")
 
 	physical_blocks(geo_path, city_name)
 	print("The script has finished executing the 'physical_blocks' function and has now started executing 'geocode' function")
 
-	initial_geocode(geo_path, city_name, state_abbr)
+	initial_geocode(geo_path, city_name, state_abbr, hn_ranges)
 	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
 
 	if different_geocode:
@@ -226,12 +236,15 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
-def street(geo_path, city_name, state_abbr):
+def street(geo_path, city_name, state_abbr, hn_ranges):
+
+	min_l, max_l, min_r, max_r = hn_ranges
 
 	# Function to save Pandas DF as DBF file 
 	def save_dbf_st(df, shapefile_name, field_map = None):
 		file_temp = shapefile_name.split('/')[-1]
-		csv_file = geo_path + "/temp_for_dbf.csv"
+		rand_post = str(random.randint(1,100001))
+		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
 		df.to_csv(csv_file,index=False)
 		try:
 			os.remove(geo_path + "/schema.ini")
@@ -244,29 +257,34 @@ def street(geo_path, city_name, state_abbr):
 			field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
 			CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
 			STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
-			MIN_LFROMA "MIN_LFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_LFROMA,-1,-1;
-			MAX_LTOADD "MAX_LTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_LTOADD,-1,-1;
-			MIN_RFROMA "MIN_RFROMA" true true false 10 Text 0 0 ,First,#,%s,MIN_RFROMA,-1,-1;
-			MAX_RTOADD "MAX_RTOADD" true true false 10 Text 0 0 ,First,#,%s,MAX_RTOADD,-1,-1;
-			grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, file, file, file, file, file)
+			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
+			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
+			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
+			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
+			grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, 
+				min_l, min_l, file, min_l,
+				max_l, max_l, file, max_l,
+				min_r, min_r, file, min_r,
+				max_r, max_r, file, max_r,				
+				file)
 		else:
 			field_map = None
 
 		arcpy.TableToTable_conversion(in_rows=csv_file, 
 			out_path=geo_path, 
-			out_name="temp_for_shp.dbf",
+			out_name="temp_for_shp"+rand_post+".dbf",
 			field_mapping=field_map)
 		os.remove(shapefile_name.replace('.shp','.dbf'))
 		os.remove(csv_file)
-		os.rename(geo_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-		os.remove(geo_path+"/temp_for_shp.dbf.xml")
-		os.remove(geo_path+"/temp_for_shp.cpg")
+		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
 
 	#Create Paths to be used throughout Process
 	grid_1940 = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
-	grid = geo_path + city_name + state_abbr + "_1940_stgrid_edit.shp"
+	grid = geo_path + city_name + state_abbr + "_1930_stgrid_edit.shp"
 	dissolve_grid = geo_path + city_name + "_1930_stgrid_Dissolve.shp"
-	temp = geo_path + city_name + "_temp.shp"
+	temp = geo_path + city_name + "_temp"+rand_post+".shp"
 	split_grid = geo_path + city_name + "_1930_stgrid_Split.shp"
 	grid_uns =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns.shp"
 	grid_uns2 =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
@@ -313,7 +331,7 @@ def street(geo_path, city_name, state_abbr):
 	arcpy.CalculateField_management(split_grid, "grid_id", expression, "PYTHON_9.3")
 
 	#Intersect with grid
-	temp = geo_path + 'temp_step.shp'
+	temp = geo_path + "temp_step"+rand_post+".shp"
 	arcpy.CopyFeatures_management(grid, temp)
 	arcpy.Intersect_analysis([temp, split_grid], grid)
 	arcpy.DeleteFeatures_management(temp)
@@ -340,9 +358,9 @@ def street(geo_path, city_name, state_abbr):
 
 	#Assign longest street name by grid_id (also add city and state for geolocator)
 	df_grid_uns = dbf2DF(grid_uns)
-	df_grid_uns.loc[:,('CITY')] = city_name
-	df_grid_uns.loc[:,('STATE')] = state_abbr
-	df_grid_uns.loc[:,('FULLNAME')] = df_grid_uns.apply(lambda x: longest_name_dict[x['grid_id']], axis=1)
+	df_grid_uns.loc[:,'CITY'] = city_name
+	df_grid_uns.loc[:,'STATE'] = state_abbr
+	df_grid_uns.loc[:,'FULLNAME'] = df_grid_uns.apply(lambda x: longest_name_dict[x['grid_id']], axis=1)
 
 	#Blank out the big/small numbers now that aggregation is done
 
@@ -353,7 +371,6 @@ def street(geo_path, city_name, state_abbr):
 		else:
 			return x
 
-	hn_ranges = ["MIN_LFROMA", "MIN_RFROMA", "MAX_LTOADD", "MAX_RTOADD"]
 	for field in hn_ranges:
 		df_grid_uns[field] = df_grid_uns[field].astype(str)
 		df_grid_uns[field] = df_grid_uns.apply(lambda x: replace_nums(x[field]), axis=1)
@@ -363,26 +380,21 @@ def street(geo_path, city_name, state_abbr):
 	#Add a unique, static identifier (so ranges can be changed later)
 	arcpy.DeleteField_management(grid_uns, "grid_id")
 	expression="!FID! + 1"
-	arcpy.AddField_management(grid_uns, "grid_id", "LONG", 4, "", "","", "", "")
+	arcpy.AddField_management(grid_uns, "grid_id", "LONG", 10, "", "","", "", "")
 	arcpy.CalculateField_management(grid_uns, "grid_id", expression, "PYTHON_9.3")
 
 	#Fix duplicate address ranges
-	t = fix_dup_address_ranges(grid_uns)
+	t = fix_dup_address_ranges(grid_uns,hn_ranges)
 	print(t)
 
 	return problem_segments
 
 # Amory's code for fixing duplicate address ranges
-def fix_dup_address_ranges(grid_uns,debug_flag=False):
-	shp = grid_uns
-	## ENTER ALTERNATE FIELD NAMES ## ENTER ALTERNATE FIELD NAMES ## ENTER ALTERNATE FIELD NAMES ##
-	LFROMADD = "MIN_LFROMA"  
-	LTOADD = "MAX_LTOADD" 
-	RFROMADD = "MIN_RFROMA"  
-	RTOADD = "MAX_RTOADD" 
-	OBJECTID = "FID"
-	## ENTER ALTERNATE FIELD NAMES ## ENTER ALTERNATE FIELD NAMES ## ENTER ALTERNATE FIELD NAMES ## 
-
+def fix_dup_address_ranges(shp,hn_ranges,debug_flag=False):
+	# Set range names
+	LFROMADD, LTOADD, RFROMADD, RTOADD = hn_ranges
+	# Set OBJECTID (grid_id is FID+1)
+	OBJECTID = "grid_id" 
 	# Calculate starting and ending coordinates and length for each line segment
 	arcpy.AddGeometryAttributes_management(shp, "LENGTH_GEODESIC;LINE_START_MID_END")
 
@@ -603,10 +615,22 @@ def fix_dup_address_ranges(grid_uns,debug_flag=False):
 
 	with arcpy.da.UpdateCursor(newShp,[LFROMADD,LTOADD,RFROMADD,RTOADD]) as cursor:
 		for i,row in enumerate(cursor):
-			row[0] = Data[i][1]
-			row[1] = Data[i][2]
-			row[2] = Data[i][3]
-			row[3] = Data[i][4]
+			if Data[i][1] == 0:
+				row[0] = ''
+			else:
+				row[0] = Data[i][1]
+			if Data[i][2] == 0:
+				row[1] = ''
+			else:
+				row[1] = Data[i][2]
+			if Data[i][3] == 0:
+				row[2] = ''
+			else:
+				row[2] = Data[i][3]
+			if Data[i][4] == 0:
+				row [3] = ''
+			else:
+				row[3] = Data[i][4]
 			cursor.updateRow(row)
 	addresses.write("Topology Errors. Must be fixed and re-run script or re-address manually.\n")
 
@@ -633,7 +657,9 @@ def physical_blocks(geo_path, city_name):
 	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
 
 # Performs initial geocode on contemporary grid
-def initial_geocode(geo_path, city_name, state_abbr):
+def initial_geocode(geo_path, city_name, state_abbr, hn_ranges):
+
+	min_l, max_l, min_r, max_r = hn_ranges
 
 	# Files
 	add_locator = geo_path + city_name + "_addloc"
@@ -643,10 +669,10 @@ def initial_geocode(geo_path, city_name, state_abbr):
 	reference_data = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp 'Primary Table'"
 
 	field_map="'Feature ID' FID VISIBLE NONE; \
-	'*From Left' MIN_LFROMA VISIBLE NONE; \
-	'*To Left' MAX_LTOADD VISIBLE NONE; \
-	'*From Right' MIN_RFROMA VISIBLE NONE; \
-	'*To Right' MAX_RTOADD VISIBLE NONE; \
+	'*From Left' %s VISIBLE NONE; \
+	'*To Left' %s  VISIBLE NONE; \
+	'*From Right' %s  VISIBLE NONE; \
+	'*To Right' %s  VISIBLE NONE; \
 	'Prefix Direction' <None> VISIBLE NONE; \
 	'Prefix Type' <None> VISIBLE NONE; \
 	'*Street Name' FULLNAME VISIBLE NONE; \
@@ -670,7 +696,7 @@ def initial_geocode(geo_path, city_name, state_abbr):
 	'Right parity' <None> VISIBLE NONE; \
 	'Left Additional Field' <None> VISIBLE NONE; \
 	'Right Additional Field' <None> VISIBLE NONE; \
-	'Altname JoinID' <None> VISIBLE NONE"
+	'Altname JoinID' <None> VISIBLE NONE" % (min_l, max_l, min_r, max_r)
 
 	#Make sure address locator doesn't already exist - if it does, delete it
 	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addloc")]
@@ -700,7 +726,7 @@ def attach_pblk_id(geo_path, city_name, points30):
 #
 
 # Renumber grid using microdata
-def renumber_grid(city_name, state_abbr, paths, df=None):
+def renumber_grid(city_name, state_abbr, paths, df=None, geocode=False):
 
 	#Paths
 	_, _, dir_path = paths
@@ -715,24 +741,28 @@ def renumber_grid(city_name, state_abbr, paths, df=None):
 	addresses = geo_path + city_name + "_1930_Addresses.csv"
 	points30 = geo_path + city_name + "_1930_Points_updated.shp"
 	pblk_file = block_shp_file #Note: This is the manually edited block file
-	pblk_grid_file2 = geo_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ2.shp"
+	pblk_grid_file = geo_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ2.shp"
 	add_locator = geo_path + city_name + "_addlocOld" 
 
 	# Load
 	df_grid = dbf2DF(stgrid_file.replace(".shp",".dbf"),upper=False)
 	df_block = dbf2DF(block_dbf_file,upper=False)
-	if df == None:
+	if df is None:
 		df_micro = load_large_dta(microdata_file)
 	else:
 		df_micro = df
 
+	if 'st_best_guess' in df_micro.columns.values:
+		micro_street_var = 'st_best_guess'
+	else:
+		micro_street_var = 'overall_match'
 	try:
-		block = 'block_old'
-		vars_of_interest = ['ed','hn','autostud_street',block]
+		block = 'block'
+		vars_of_interest = ['ed','hn',micro_street_var,block]
 		df_micro = df_micro[vars_of_interest]
 	except:
-		block = 'block'
-		vars_of_interest = ['ed','hn','autostud_street',block]
+		block = 'block_old'
+		vars_of_interest = ['ed','hn',micro_street_var,block]
 		df_micro = df_micro[vars_of_interest]
 	df_micro = df_micro.dropna(how='any')
 	df_micro['hn'] = df_micro['hn'].astype(int)
@@ -778,7 +808,7 @@ def renumber_grid(city_name, state_abbr, paths, df=None):
 			pass
 
 	# Get house number ranges for block-street combinations from microdata
-	df_micro_byblkst = df_micro.groupby(['edblock','autostud_street'])
+	df_micro_byblkst = df_micro.groupby(['edblock',micro_street_var])
 	blkst_hn_dict = {}
 	bad_blkst = []
 	for group, group_data in df_micro_byblkst:
@@ -789,22 +819,25 @@ def renumber_grid(city_name, state_abbr, paths, df=None):
 		except:
 			bad_blkst.append(group)
 
-
-	# Get dictionary linking edblock to pblk_id
+	# Get dictionaries {pblk_id:edblock} and {pblk_id:ed} 
 	bn_var = 'am_bn'
 	temp = df_block.loc[df_block[bn_var]!='',[bn_var,'ed','pblk_id']]
 	pblk_edblock_dict = temp.set_index('pblk_id')[bn_var].to_dict()
 	pblk_ed_dict = temp.set_index('pblk_id')['ed'].to_dict()
 
-	# Join pblk to stgrid
+	# Intersect block map and stgrid (needs to be manual block map because dissolved pblks)
 	field_mapSJ = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
 	ed "ed" true true false 10 Long 0 10 ,First,#,%s,ed,-1,-1;
 	FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-	grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (pblk_file, pblk_file, stgrid_file, stgrid_file)
-	arcpy.SpatialJoin_analysis(target_features=pblk_file, join_features=stgrid_file, out_feature_class=pblk_grid_file2, 
-		join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
-		match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
-	df_pblk_grid = dbf2DF(pblk_grid_file2.replace(".shp",".dbf"),upper=False)
+	grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (block_shp_file, block_shp_file, stgrid_file, stgrid_file)
+	arcpy.Intersect_analysis (in_features=[block_shp_file, stgrid_file], 
+		out_feature_class=pblk_grid_file, 
+		join_attributes="ALL")
+ 	# Used spatial join before, but results in fewer cases (some streets not on block boundaries?)
+ 	#arcpy.SpatialJoin_analysis(target_features=block_shp_file, join_features=stgrid_file, out_feature_class=pblk_grid_file, 
+    #	join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
+ 	#	match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
+	df_pblk_grid = dbf2DF(pblk_grid_file.replace(".shp",".dbf"),upper=False)
 
 	# Create dictionary linking grid_id to pblk_id
 	grid_pblk_dict = {}
@@ -813,7 +846,8 @@ def renumber_grid(city_name, state_abbr, paths, df=None):
 		grid_pblk_dict[grid_id] = pblk_df['pblk_id'].tolist()
 
 	# Create dictionary linking grid_id to fullname
-	grid_fullname_dict = df_pblk_grid.set_index('grid_id').to_dict()['FULLNAME']
+	# OLd WORKING: grid_fullname_dict = df_pblk_grid.set_index('grid_id').to_dict()['FULLNAME']
+	grid_fullname_dict = df_grid.set_index('grid_id').to_dict()['FULLNAME']
 
 	# Create dictionary linking grid_id to list of edblocks it intersects
 	grid_edblock_dict = {grid_id:[pblk_edblock_dict[int(pblk_id)] for pblk_id in pblk_id_list] for grid_id, pblk_id_list in grid_pblk_dict.items()}
@@ -867,45 +901,47 @@ def renumber_grid(city_name, state_abbr, paths, df=None):
 		if os.path.isfile(f):
 			os.remove(f)
 
-	#Recreate Address Locator
-	field_map="'Feature ID' FID VISIBLE NONE; \
-	'*From Left' MIN_LFROMA VISIBLE NONE; \
-	'*To Left' MAX_LTOADD VISIBLE NONE; \
-	'*From Right' MIN_RFROMA VISIBLE NONE; \
-	'*To Right' MAX_RTOADD VISIBLE NONE; \
-	'Prefix Direction' <None> VISIBLE NONE; \
-	'Prefix Type' <None> VISIBLE NONE; \
-	'*Street Name' FULLNAME VISIBLE NONE; \
-	'Suffix Type' '' VISIBLE NONE; \
-	'Suffix Direction' <None> VISIBLE NONE; \
-	'Left City or Place' ed VISIBLE NONE; \
-	'Right City or Place' ed VISIBLE NONE; \
-	'Left ZIP Code' <None> VISIBLE NONE; \
-	'Right ZIP Code' <None> VISIBLE NONE; \
-	'Left State' STATE VISIBLE NONE; \
-	'Right State' STATE VISIBLE NONE; \
-	'Left Street ID' <None> VISIBLE NONE; \
-	'Right Street ID' <None> VISIBLE NONE; \
-	'Display X' <None> VISIBLE NONE; \
-	'Display Y' <None> VISIBLE NONE; \
-	'Min X value for extent' <None> VISIBLE NONE; \
-	'Max X value for extent' <None> VISIBLE NONE; \
-	'Min Y value for extent' <None> VISIBLE NONE; \
-	'Max Y value for extent' <None> VISIBLE NONE; \
-	'Left parity' <None> VISIBLE NONE; \
-	'Right parity' <None> VISIBLE NONE; \
-	'Left Additional Field' <None> VISIBLE NONE; \
-	'Right Additional Field' <None> VISIBLE NONE; \
-	'Altname JoinID' <None> VISIBLE NONE"
-	address_fields= "Street address; City city; State state"
-	arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", 
-		in_reference_data=out_file, 
-		in_field_map=field_map, 
-		out_address_locator=add_locator, 
-		config_keyword="")
+	if geocode:
 
-	#Geocode Points
-	arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
+		#Recreate Address Locator
+		field_map="'Feature ID' FID VISIBLE NONE; \
+		'*From Left' MIN_LFROMA VISIBLE NONE; \
+		'*To Left' MAX_LTOADD VISIBLE NONE; \
+		'*From Right' MIN_RFROMA VISIBLE NONE; \
+		'*To Right' MAX_RTOADD VISIBLE NONE; \
+		'Prefix Direction' <None> VISIBLE NONE; \
+		'Prefix Type' <None> VISIBLE NONE; \
+		'*Street Name' FULLNAME VISIBLE NONE; \
+		'Suffix Type' '' VISIBLE NONE; \
+		'Suffix Direction' <None> VISIBLE NONE; \
+		'Left City or Place' CITY VISIBLE NONE; \
+		'Right City or Place' CITY VISIBLE NONE; \
+		'Left ZIP Code' <None> VISIBLE NONE; \
+		'Right ZIP Code' <None> VISIBLE NONE; \
+		'Left State' STATE VISIBLE NONE; \
+		'Right State' STATE VISIBLE NONE; \
+		'Left Street ID' <None> VISIBLE NONE; \
+		'Right Street ID' <None> VISIBLE NONE; \
+		'Display X' <None> VISIBLE NONE; \
+		'Display Y' <None> VISIBLE NONE; \
+		'Min X value for extent' <None> VISIBLE NONE; \
+		'Max X value for extent' <None> VISIBLE NONE; \
+		'Min Y value for extent' <None> VISIBLE NONE; \
+		'Max Y value for extent' <None> VISIBLE NONE; \
+		'Left parity' <None> VISIBLE NONE; \
+		'Right parity' <None> VISIBLE NONE; \
+		'Left Additional Field' <None> VISIBLE NONE; \
+		'Right Additional Field' <None> VISIBLE NONE; \
+		'Altname JoinID' <None> VISIBLE NONE"
+		address_fields= "Street address; City city; State state"
+		arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", 
+			in_reference_data=out_file, 
+			in_field_map=field_map, 
+			out_address_locator=add_locator, 
+			config_keyword="")
+
+		#Geocode Points
+		arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
 
 #
 # consecutive_segments.py
@@ -1516,8 +1552,9 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 
 	# File names
 
-	ed_map = geo_path + city_name + "_1930_ED.shp"
-	temp = geo_path + "temp.shp"
+	rand_post = str(random.randint(1,100001))
+	ed_shp_file = geo_path + city_name + "_1930_ED.shp"
+	temp = geo_path + "temp"+rand_post+".shp"
 	add_locator_contemp = geo_path + city_name + "_addloc"
 	resid_add_dbf = geo_path + city_name + "_1930_Addresses_residual.dbf"
 	resid_add_csv = geo_path + city_name + "_1930_Addresses_residual.csv"
@@ -1543,16 +1580,16 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 	if os.path.isfile(resid_add_csv.replace('.csv','.dbf')):
 		os.remove(resid_add_csv.replace('.csv','.dbf'))
 	arcpy.TableToTable_conversion(resid_add_csv, '/'.join(resid_add_dbf.split('/')[:-1]), resid_add_dbf.split('/')[-1])
-	temp_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith("temp")]
+	temp_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith("temp"+rand_post)]
 	for f in temp_files:
-	    if os.path.isfile(f):
-	        os.remove(f)
+		if os.path.isfile(f):
+			os.remove(f)
 
 	# Geocode residuals using street grid with contemporary HN ranges
 	arcpy.GeocodeAddresses_geocoding(resid_add_dbf, add_locator_contemp, address_fields_contemp, points30_resid)
 
 	# Intersect geocoded points with ED map
-	arcpy.Intersect_analysis([ed_map, points30_resid], intersect_resid_ed)
+	arcpy.Intersect_analysis([ed_shp_file, points30_resid], intersect_resid_ed)
 
 	# Identify points in the correct ED
 	arcpy.MakeFeatureLayer_management(intersect_resid_ed, "geocodelyr1")
@@ -1943,7 +1980,8 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	# Function to save Pandas DF as DBF file 
 	def save_dbf_st(df, shapefile_name, field_map = False):
 		file_temp = shapefile_name.split('/')[-1]
-		csv_file = geo_path + "/temp_for_dbf.csv"
+		rand_post = str(random.randint(1,100001))
+		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
 		df.to_csv(csv_file,index=False)
 		try:
 			os.remove(geo_path + "/schema.ini")
@@ -1969,12 +2007,12 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 
 		arcpy.TableToTable_conversion(in_rows=csv_file, 
 			out_path=geo_path, 
-			out_name="temp_for_shp.dbf",
+			out_name="temp_for_shp"+rand_post+".dbf",
 			field_mapping=field_map)
 		os.remove(shapefile_name.replace('.shp','.dbf'))
 		os.remove(csv_file)
-		os.rename(geo_path+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-		os.remove(geo_path+"/temp_for_shp.dbf.xml")
-		os.remove(geo_path+"/temp_for_shp.cpg")
+		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
 
 	save_dbf_st(df_uns2, grid_uns2, field_map=True)

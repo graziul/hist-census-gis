@@ -25,6 +25,7 @@ dir_path = "C:/Projects/1940Census/" + city #TO DO: Directories need to be city_
 r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
 script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
 paths = [r_path, script_path, dir_path]
+hn_ranges = ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD']
 
 start = time.time()
 
@@ -90,7 +91,8 @@ create_1930_addresses(city_name=city,
 # Second, get updated contemporary geocode (using updated adresses from df_micro)
 initial_geocode(geo_path=dir_path+'/GIS_edited/', 
 	city_name=city, 
-	state_abbr=state)
+	state_abbr=state,
+	hn_ranges=hn_ranges)
 
 # Third, fix microdata block numbers using updated geocode and microdata
 
@@ -100,11 +102,13 @@ df_micro2 = fix_micro_blocks_using_ed_map(city_name=city,
 	df_micro=df_micro)
 
 # If we want, save the microdata file 
-file_name_students = dir_path + '/StataFiles_Other/1930/%s%s_StudAutoDirBlockFixed.csv' % (city, state)
-df_micro2.to_csv(file_name_students)
-dofile = script_path + "/utils/ConvertCsvToDta.do"
-cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
-subprocess.call(cmd) 
+save = False
+if save:
+	file_name_students = dir_path + '/StataFiles_Other/1930/%s%s_StudAutoDirBlockFixed.csv' % (city, state)
+	df_micro2.to_csv(file_name_students)
+	dofile = script_path + "/utils/ConvertCsvToDta.do"
+	cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
+	subprocess.call(cmd) 
 
 end = time.time()
 
@@ -114,10 +118,13 @@ print(str(float(end-start)/60)+" minutes")
 # Step 5: Renumber grid based on updated 1930 microdata and street grid
 #
 
+#microdata_file2 = dir_path + '/StataFiles_Other/1930/%s%s_StudAutoDirBlockFixed.dta' % (city, state)
+#df_micro2 = load_large_dta(microdata_file2)
+
 renumber_grid(city_name=city, 
 	state_abbr=state, 
-	paths=paths, df=None)
-#	df=df_micro2)
+	paths=paths, 
+	df=df_micro2)
 
 #
 # Step 6: Fill in blanks
@@ -142,6 +149,8 @@ get_adjacent_eds(geo_path, city, state)
 
 # Common variables
 
+# "vm" is the verified map (e.g., ED or block map)
+vm = geo_path + city + "_1930_ED.shp"
 # "cal_street" is the name of the street as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (hence "cal_"; REQUIRED)
 cal_street = "FULLNAME" 
 # "cal_city" is the name of the city as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (e.g., city or ED; NOT REQUIRED)
@@ -172,11 +181,11 @@ tr = "MAX_RTOADD"
 # "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
 add = geo_path + city + "_1930_Addresses.csv"
 # "sg" is the name of the street grid on which the previous list of addresses will be geocoded
-sg = geo_path + city + state + "_1930_stgrid_renumbered.shp"
+sg = geo_path + city + state + "_1930_stgrid_renumberedbf.shp"
 # "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
 al = geo_path + city + "_addloc_ED"
 # "gr" is the filename of the geocoding results
-gr = geo_path + city + state + "_1930_geocode_renumberedED.shp"
+gr = geo_path + city + state + "_1930_geocode_renumberedEDbf.shp"
 # "sg_vm" is the filename of the intersection of the street grid and the verified map
 sg_vm = geo_path + city + state + "_grid_poly_intersect.shp"
 #"spatjoin" is joining the geocode to the verified map (e.g., ED or block map)
@@ -185,17 +194,19 @@ spatjoin = geo_path + city + state + "_1930_geo_map_spatjoin.shp"
 notcor = geo_path + city + state + "_1930_NotGeocodedCorrect.shp"
 # Correct geocode
 cor = geo_path + city + state + "_1930_GeocodedCorrect.shp"
+# Ungeocoded addresses
+resid_add = geo_path + city + "_1930_AddNotGeocoded.dbf"
 
 geocode(geo_path, city, add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
 
-validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, residual_file="NotGeocoded.dbf")
+validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, residual_file=resid_add)
 
 #
 # Geocode on contemporary house number ranges
 #
 
 # "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
-add = geo_path + city + state + "_NotGeocoded.dbf"
+# "add" is resid_add from above
 # "sg" is the name of the street grid on which the previous list of addresses will be geocoded
 sg = geo_path + city + state + "_1930_stgrid_edit_Uns2.shp"
 # "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
@@ -210,10 +221,12 @@ spatjoin = geo_path + city + state + "_1930_geo_map_spatjoin_Contemp.shp"
 notcor = geo_path + city + state + "_1930_NotGeocodedCorrect_Contemp.shp"
 # Correct geocode
 cor = geo_path + city + state + "_1930_GeocodedCorrect_Contemp.shp"
+# Ungeocoded addresses
+resid_add_contemp = geo_path + city + "_1930_AddNotGeocoded_Contemp.dbf"
 
-geocode(geo_path, city, add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
+geocode(geo_path, city, resid_add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
 
-validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, residual_file="NotGeocoded_Contemp.dbf")
+validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, residual_file=resid_add_contemp)
 
 #
 # Combine both geocodes to get the best geocode
