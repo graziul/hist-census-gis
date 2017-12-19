@@ -527,6 +527,11 @@ def is_ED_boundary(st,ED) :
     except KeyError : #st_ed from map+morse not found in micro
         return 'nfm'
     temp_addresses = list(filter(lambda x: not (x==None or x=='' or x==' ' or x=='nan'),temp_addresses_unfiltered))
+    for a in list(temp_addresses) :
+        try :
+            float(a)
+        except :
+            temp_addresses.remove(a)
     ED_addr_outliers = get_cray_z_scores([int(x) for x in temp_addresses if not math.isnan(float(x))])
     if ED_addr_outliers == None : #this happens if there's only 1 or 2 addresses in temp_addresses
         ED_Addresses = temp_addresses
@@ -535,7 +540,7 @@ def is_ED_boundary(st,ED) :
         #print(temp_addresses)
         #print(ED_Addresses)
 
-    City_Addresses = list(filter(lambda x: not (x==None or x=='' or x==' '),ST_Address_DICT[st]))
+    City_Addresses = list(filter(lambda x: not (x==None or x=='' or x==' ' or x=='nan'),ST_Address_DICT[st]))
     city_even_odd = even_or_odd(City_Addresses)
     ED_even_odd = even_or_odd(ED_Addresses)
     if city_even_odd == 'na' or ED_even_odd == 'na' :
@@ -701,8 +706,8 @@ def RunAnalysis(city_name) :
         NAME = standardize_street(MList[2])[0]
         ED = MList[3]
         ADDR = MList[6]
-        Dict_append(ST_ED_Address_DICT,NAME+ED,ADDR) # used to be Dict_append_unique!!!
-        Dict_append(ST_Address_DICT,NAME,ADDR) # used to be Dict_append_unique!!!
+        Dict_append_unique(ST_ED_Address_DICT,NAME+ED,ADDR) # used to be Dict_append_unique!!!
+        Dict_append_unique(ST_Address_DICT,NAME,ADDR) # used to be Dict_append_unique!!!
         
         Dict_append_unique(ST_ED_DICT_mi,NAME,ED)
         Dict_append_unique(ED_ST_DICT_mi,ED,NAME)
@@ -969,7 +974,7 @@ def prepare_map_intersections(stgrid_file) :
 ### THIS IS WHERE YOU ENTER THINGS:
 # Change directory to the folder with the input text file:  
 
-city = "SanDiegoCA"
+city = "StLouisMO"
 decade = 1930
 
 
