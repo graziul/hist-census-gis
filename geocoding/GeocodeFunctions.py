@@ -149,14 +149,14 @@ def get_adjacent_eds(geo_path, city_name, state_abbr):
 	del rows
 
 # Geocode function
-def geocode(geo_path,city_name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr):
+def geocode(geo_path,city_name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr,no_side_offset=True):
 	print("Step 1 of 3: The 'Geocode' function has started and the program has started to implement the intersect function")
 	arcpy.Intersect_analysis (in_features=[sg, vm], 
 		out_feature_class=sg_vm, 
 		join_attributes="ALL")
 	print("Step 2 of 3: The program has finished implementing the intersect function and has begun creating the address locator")
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addloc_ED.")]
+	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(al.split('/')[-1]+'.')]
 	for f in add_loc_files:
 		if os.path.isfile(f):
 			os.remove(f)
@@ -192,6 +192,14 @@ def geocode(geo_path,city_name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,c
 													'Right Additional Field' "+addfield+" VISIBLE NONE;\
 													'Altname JoinID' <None> VISIBLE NONE",
 										out_address_locator=al)
+
+	if no_side_offset:
+		locator_fn = al+'.loc'
+		locator_file = open(locator_fn,'a')  # open for appending
+		locator_file.writelines('SideOffset = 0')
+		locator_file.writelines('SideOffsetUnits = Feet')
+		locator_file.close()
+
 	print("Step 3 of 3: The program has finished creating the address locator and has started the geocoding process")
 
 	arcpy.GeocodeAddresses_geocoding(in_table=add, 
@@ -201,6 +209,7 @@ def geocode(geo_path,city_name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,c
 			State "+g_state+" VISIBLE NONE",
 		out_feature_class=gr, 
 		out_relationship_type="STATIC")
+
 	print("The program has finished the geocoding process and 'Geocode' function is complete")
 
 # Validate function (adjacent EDs)
