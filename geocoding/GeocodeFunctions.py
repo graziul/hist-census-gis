@@ -265,13 +265,13 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, res
 		if field_map:
 			file = csv_file
 			field_mapping = """index "index" true true false 10 Long 0 0 ,First,#,%s,index,-1,-1;
-			Match_addr "Match_addr" true true false 100 Text 0 0 ,First,#,%s,Match_addr,-1,-1;
+			Match_addr "Match_addr" true true false 254 Text 0 0 ,First,#,%s,Match_addr,-1,-1;
 			Status "Status" true true false 1 Text 0 0 ,First,#,%s,Status,-1,-1;
 			mblk "mblk" true true false 10 Long 0 0 ,First,#,%s,mblk,-1,-1;
 			Ref_ID "Ref_ID" true true false 10 Long 0 0 ,First,#,%s,Ref_ID,-1,-1;
-			address "address" true true false 100 Text 0 0 ,First,#,%s,address,-1,-1;
+			address "address" true true false 254 Text 0 0 ,First,#,%s,address,-1,-1;
 			hn "hn" true true false 10 Long 0 0 ,First,#,%s,hn,-1,-1;
-			fullname "fullname" true true false 100 Text 0 0 ,First,#,%s,fullname,-1,-1;
+			fullname "fullname" true true false 254 Text 0 0 ,First,#,%s,fullname,-1,-1;
 			type "type" true true false 10 Text 0 10 ,First,#,%s,type,-1,-1;
 			state "state" true true false 2 Text 0 0 ,First,#,%s,state,-1,-1;
 			city "city" true true false 50 Text 0 0 ,First,#,%s,city,-1,-1;
