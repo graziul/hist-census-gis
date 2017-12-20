@@ -867,25 +867,24 @@ def aggregate_blk_inter_data(inter_dict) :
             try :
                 possible_eds += [int(x) for x in v[1]]
             except :
-                return 0
-        mode = find_mode(possible_eds)
-        if mode == -999 :
-            print(inter_dict)
-            return 0
-        if len(mode) == 1 :
-            return mode[0]
-        else :
-            return '|'.join([str(x) for x in mode])  
+                continue
+    mode = find_mode(possible_eds)
+    if mode == -999 :
+        print(inter_dict)
+        return 0
+    if len(mode) == 1 :
+        return mode[0]
+    else :
+        return '|'.join([str(x) for x in mode])  
             
 
 def draw_EDs(pblk_filename) :
     targ = path_to_city+"\\IntersectionsIntermediateFiles\\"+city+"_1930_stgrid_edit_Uns2_spatial_join.shp"
     targ1 = path_to_city+"\\"+pblk_filename
-    try :
-        inter = arcpy.Intersect_analysis(in_features=[targ,targ1], \
+
+    inter = arcpy.Intersect_analysis(in_features=[targ,targ1], \
                              out_feature_class=path_to_city+"\\IntersectionsIntermediateFiles\\intersectToGetEDs.shp",join_attributes="ALL", cluster_tolerance="-1 Unknown", output_type="INPUT")
-    except :
-        print("poo")
+
         #inter = "C:/Users/akisch/Documents/ArcGIS/Default.gdb/StLouisMO_1930_stgrid_edit_U2"
     field_names = [x.name for x in arcpy.ListFields(inter)]
     cursor = arcpy.da.SearchCursor(inter, field_names)
