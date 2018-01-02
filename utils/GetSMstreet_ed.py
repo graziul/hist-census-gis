@@ -90,7 +90,7 @@ def sm_standardize(st) :
             TYPE = "Aly"
     else :
         if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
-            TYPE = None
+            TYPE = ""
         else :
             TYPE = "St"
     
