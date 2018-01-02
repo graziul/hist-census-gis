@@ -89,7 +89,10 @@ def sm_standardize(st) :
         if(re.match("All?e?y?",TYPE)) :
             TYPE = "Aly"
     else :
-        TYPE = "St"
+        if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
+            TYPE = None
+        else :
+            TYPE = "St"
     
     NAME = st
     st = (DIR+" "+NAME+" "+TYPE).strip()
