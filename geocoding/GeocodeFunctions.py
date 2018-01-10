@@ -325,51 +325,53 @@ def combine_geocodes(geo_path, city_name, state_abbr, list_of_shp, notcor, outfi
 
 	post = outfile.split('/')[-1].split('.')[0].split('_GeocodeFinal')[1]
 
-	def merge_and_tag_geocoded(list_of_shp):
-		for shp in list_of_shp:
-			arcpy.AddField_management(in_table=shp, 
-				field_name="geocoded", 
-				field_type="TEXT")			
-			if "_GeocodedCorrect" in shp:
-				arcpy.CalculateField_management(in_table=shp, 
-					field="geocoded", 
-					expression="'Yes'",
-					expression_type="PYTHON_9.3")
-			else:
-				arcpy.CalculateField_management(in_table=shp, 
-					field="geocoded", 
-					expression="'No'",
-					expression_type="PYTHON_9.3")
-		arcpy.Merge_management(list_of_shp, outfile)
-		df_merge = dbf2DF(outfile)
-		try:
-			df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','geocoded']).size().reset_index(name='count')
-		except:
-			df_merge_collapse = df_merge.groupby(['fullname','address','mblk','ed','ed_1','geocoded']).size().reset_index(name='count')
-		outfile_excel = geo_path + "StLouisMO_GeocodeFinal"+post+".xlsx"
-		writer = pd.ExcelWriter(outfile_excel, engine='xlsxwriter')
-		df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
-		writer.save()
-
-	merge_and_tag_geocoded(list_of_shp)
+	# Merge shapefiles and tag geocoded
+	merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post)
 
 	# Create list of streets from ungeocoded points that are not in the grid
 	df_ungeocoded = dbf2DF(notcor)
-	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
-	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
-
 	grid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
 	df_grid = dbf2DF(grid_file)
+	get_st_in_micro_not_grid(df_ungeocoded, df_grid)
+
+def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
+	for shp in list_of_shp:
+		arcpy.AddField_management(in_table=shp, 
+			field_name="geocoded", 
+			field_type="TEXT")			
+		if "_GeocodedCorrect" in shp:
+			arcpy.CalculateField_management(in_table=shp, 
+				field="geocoded", 
+				expression="'Yes'",
+				expression_type="PYTHON_9.3")
+		else:
+			arcpy.CalculateField_management(in_table=shp, 
+				field="geocoded", 
+				expression="'No'",
+				expression_type="PYTHON_9.3")
+	arcpy.Merge_management(list_of_shp, outfile)
+	df_merge = dbf2DF(outfile)
+	try:
+		df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','geocoded']).size().reset_index(name='count')
+	except:
+		df_merge_collapse = df_merge.groupby(['fullname','address','mblk','ed','ed_1','geocoded']).size().reset_index(name='count')
+	outfile_excel = geo_path + "StLouisMO_GeocodeFinal"+post+".xlsx"
+	writer = pd.ExcelWriter(outfile_excel, engine='xlsxwriter')
+	df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
+	writer.save()
+
+def get_st_in_micro_not_grid(df_ungeocoded, df_grid):
+	# Get ungeocoded street-ED combinations (and count number of ungeocoded cases)
+	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
+	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
+	# Get street list from grid
 	grid_streets_list = df_grid['FULLNAME'].drop_duplicates().tolist()
-
+	# Select ungeocoded streets not in grid
 	df_ungeocoded_st_ed_tocheck = df_ungeocoded_st_ed[~df_ungeocoded_st_ed['fullname'].isin(grid_streets_list)].sort_values(['ed'])
-
 	# Create a Pandas Excel writer using XlsxWriter as the engine.
 	file_name = geo_path + '/' + city_name + state_abbr + '_ungeocoded_not_in_grid'+post+'.xlsx'
 	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-
 	# Convert the dataframe to an XlsxWriter Excel object.
 	df_ungeocoded_st_ed_tocheck.to_excel(writer, sheet_name='Sheet1', index=False)
-
 	# Close the Pandas Excel writer and output the Excel file.
 	writer.save()
