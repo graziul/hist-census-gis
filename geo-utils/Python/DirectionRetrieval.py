@@ -312,10 +312,10 @@ def standardize_street(st):
 		return [st, DIR, NAME, TYPE]
 
 # Paths
-dir_path = "S:\\Users\\Chris\\"
-stedit_path = "S:\\Projects\\1940Census\\StreetGridsStdName\\"
-tiger2012_path = "S:\\Projects\\1940Census\\County Shapefiles\\"
-sj_path = "S:\\Projects\\1940Census\\DirAdd\\"
+dir_path = "S:/Users/Chris/"
+stedit_path = "S:/Projects/1940Census/StreetGridsStdName/"
+tiger2012_path = "S:/Projects/1940Census/County Shapefiles/"
+sj_path = "S:/Projects/1940Census/DirAdd/"
 
 # Get city list
 city_info_csv = tiger2012_path + 'CityInfo.csv'
