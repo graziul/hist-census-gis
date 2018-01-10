@@ -359,6 +359,11 @@ def create_1930_addresses(city_name, state_abbr, paths, df=None):
 	# Select variables for file
 	vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn']
 	df_add = df.loc[:,vars_of_interest]
+	# Create ED-block
+	df_add['ed_int'] = df_pre['ed'].astype(int)
+	df_add['ed_block'] = df_pre['ed_int'].astype(str) + '-' + df_pre['block'].astype(str)
+	del df_add['ed_int']
+	
 	# Change missing and 0 to blank string
 	df_add.loc[(np.isnan(df_add['hn']))|(df_add['hn']==0),'hn'] = '-1'
 	df_add.loc[:,'hn'] = df_add['hn'].astype(int)
