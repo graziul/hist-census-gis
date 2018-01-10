@@ -1,3 +1,15 @@
 "OrganizeUpload1940stgrids.py" 
 *.pyc
 geo-utils/Python/FixDirAndBlockNumsUsingMap.py
+geo-utils/Python/FixDirAndBlockNumsUsingMap.py
+geo-utils/Python/FixStGridNames.py
+geocoding/Geocode1Check.py
+geocoding/Geocode1Check2017_11_07.py
+geocoding/Geocode1Check.py
+geocoding/Geocode1Checktemp.py
+geocoding/Geocode1Check.py
+new_addresses.csv
+*.pyc
+new_addresses.csv
+*.log
+*.pyc

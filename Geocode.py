@@ -49,7 +49,11 @@ create_blocks_and_block_points(city_name=city,
 	state_abbr=state, 
 	paths=paths)
 
-# Identify 1930 EDs (this will eventually incorporate Amory's ED map)
+# Identify 1930 EDs 
+
+# Matt's code
+# Amory's code
+# Combination code
 #identify_1930_eds(city_name, paths)
 
 # Manual process of filling in EDs 
@@ -94,7 +98,20 @@ initial_geocode(geo_path=dir_path+'/GIS_edited/',
 	state_abbr=state,
 	hn_ranges=hn_ranges)
 
-# Third, fix microdata block numbers using updated geocode and microdata
+# Save current
+file_name_students = dir_path + '/StataFiles_Other/1930/%s%s_StudAutoDirFixed.csv' % (city, state)
+df_micro2.to_csv(file_name_students)
+dofile = script_path + "/utils/ConvertCsvToDta.do"
+cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
+subprocess.call(cmd) 
+
+# Get block numbers
+
+identify_1930_blocks_geocode(city_name, paths)
+identify_1930_blocks_microdata(city_name, state_abbr, micro_street_var, paths)
+
+
+# Third, fix microdata block numbers using updated geocode and microdata (requires block map)
 
 df_micro2 = fix_micro_blocks_using_ed_map(city_name=city, 
 	state_abbr=state, 
@@ -115,11 +132,8 @@ end = time.time()
 print(str(float(end-start)/60)+" minutes")
 
 #
-# Step 5: Renumber grid based on updated 1930 microdata and street grid
+# Step 5: Renumber grid based on updated 1930 microdata and street grid (requires block map)
 #
-
-#microdata_file2 = dir_path + '/StataFiles_Other/1930/%s%s_StudAutoDirBlockFixed.dta' % (city, state)
-#df_micro2 = load_large_dta(microdata_file2)
 
 renumber_grid(city_name=city, 
 	state_abbr=state, 
