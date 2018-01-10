@@ -81,7 +81,7 @@ arcpy.DeleteFeatures_management(temp_shp_file)
 #Select non-missing EDs
 arcpy.CopyFeatures_management(edit_shp_file,temp_shp_file)
 arcpy.MakeFeatureLayer_management(temp_shp_file,"edit_lyr")
-arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "ed" <> \'\' ')
+arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "ed" <> 0 ')
 arcpy.CopyFeatures_management("edit_lyr",ed_shp_file)
 arcpy.DeleteFeatures_management(temp_shp_file)
 
