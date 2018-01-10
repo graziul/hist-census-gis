@@ -13,3 +13,4 @@ new_addresses.csv
 new_addresses.csv
 *.log
 *.pyc
+geocoding/ArcContiguityFormat.py
