@@ -332,7 +332,7 @@ def combine_geocodes(geo_path, city_name, state_abbr, list_of_shp, notcor, outfi
 	df_ungeocoded = dbf2DF(notcor)
 	grid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
 	df_grid = dbf2DF(grid_file)
-	get_st_in_micro_not_grid(df_ungeocoded, df_grid)
+	get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, post)
 
 def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
 	for shp in list_of_shp:
@@ -360,7 +360,7 @@ def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
 	df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
 	writer.save()
 
-def get_st_in_micro_not_grid(df_ungeocoded, df_grid):
+def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, post=''):
 	# Get ungeocoded street-ED combinations (and count number of ungeocoded cases)
 	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
 	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
@@ -368,10 +368,17 @@ def get_st_in_micro_not_grid(df_ungeocoded, df_grid):
 	grid_streets_list = df_grid['FULLNAME'].drop_duplicates().tolist()
 	# Select ungeocoded streets not in grid
 	df_ungeocoded_st_ed_tocheck = df_ungeocoded_st_ed[~df_ungeocoded_st_ed['fullname'].isin(grid_streets_list)].sort_values(['ed'])
+	# Remove streets with <50 people on them
+	thresh = 50
+	temp = df_ungeocoded_st_ed_tocheck.groupby('fullname')['count'].aggregate(sum) >= thresh
+	temp = temp.reset_index(name='select_street')
+	st_list = temp.loc[temp['select_street'],'fullname'].tolist()
+	df_ungeocoded_st_ed_tocheck_final = df_ungeocoded_st_ed_tocheck[df_ungeocoded_st_ed_tocheck['fullname'].isin(st_list)]
 	# Create a Pandas Excel writer using XlsxWriter as the engine.
 	file_name = geo_path + '/' + city_name + state_abbr + '_ungeocoded_not_in_grid'+post+'.xlsx'
 	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 	# Convert the dataframe to an XlsxWriter Excel object.
-	df_ungeocoded_st_ed_tocheck.to_excel(writer, sheet_name='Sheet1', index=False)
+	df_ungeocoded_st_ed_tocheck_final.to_excel(writer, sheet_name='Sheet1', index=False)
 	# Close the Pandas Excel writer and output the Excel file.
 	writer.save()
+
