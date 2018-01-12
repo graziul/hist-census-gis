@@ -360,8 +360,8 @@ def create_1930_addresses(city_name, state_abbr, paths, df=None):
 	vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn']
 	df_add = df.loc[:,vars_of_interest]
 	# Create ED-block
-	df_add['ed_int'] = df_pre['ed'].astype(int)
-	df_add['ed_block'] = df_pre['ed_int'].astype(str) + '-' + df_pre['block'].astype(str)
+	df_add['ed_int'] = df_add['ed'].astype(int)
+	df_add['ed_block'] = df_add['ed_int'].astype(str) + '-' + df_add['Mblk'].astype(str)
 	del df_add['ed_int']
 	
 	# Change missing and 0 to blank string
@@ -419,10 +419,11 @@ def street(geo_path, city_name, state_abbr, hn_ranges):
 
 	min_l, max_l, min_r, max_r = hn_ranges
 
+	rand_post = str(random.randint(1,100001))
+
 	# Function to save Pandas DF as DBF file 
 	def save_dbf_st(df, shapefile_name, field_map = None):
 		file_temp = shapefile_name.split('/')[-1]
-		rand_post = str(random.randint(1,100001))
 		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
 		df.to_csv(csv_file,index=False)
 		try:
