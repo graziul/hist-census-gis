@@ -53,6 +53,10 @@ if int(version) < 3:
 	autocleaned_file_name = file_path + '/%s/autocleaned/V5/%s_AutoCleanedV5.csv' % (str(year),city.replace(' ',''))
 else:
 	autocleaned_file_name = file_path + '/%s/autocleaned/V%s/%s_AutoCleanedV%s.csv' % (str(year),str(version),city.replace(' ',''),str(version))
+if ~os.path.isfile(autocleaned_file_name):
+	autocleaned_file_name = file_path + '/%s/autocleaned/V4/%s_AutoCleanedV4.csv' % (str(year),city.replace(' ',''))
+if ~os.path.isfile(autocleaned_file_name):
+	autocleaned_file_name = file_path + '/%s/autocleaned/V3/%s_AutoCleanedV3.csv' % (str(year),city.replace(' ',''))
 
 #
 # Helper functions
