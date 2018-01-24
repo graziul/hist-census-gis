@@ -34,8 +34,6 @@ from colorama import AnsiToWin32, init
 from microclean.STstandardize import *
 from microclean.HNclean import *
 
-file_path = '/home/s4-data/LatestCities' 
-
 #Pretty output for easy reading
 class color:
    PURPLE = '\033[95m'
@@ -63,7 +61,7 @@ def dbf2DF(dbfile, upper=False): #Reads in DBF files and returns Pandas DF
 # Step 1: Load city
 #
 
-def load_city(city, state, year):
+def load_city(city, state, year, file_path):
 
 	start = time.time()
 
@@ -267,7 +265,7 @@ def remove_duplicates(df):
 	# Remove if pages are duplicates (using sequences of age/gender)
 	image_id = df[['image_id', 'self_residence_info_age', 'self_empty_info_gender']]
 	image_id_chunks = image_id.groupby('image_id')
-	image_id_chunks_dict = {name:np.array(group[['self_residence_info_age', 'self_empty_info_gender']]).tolist() for name, group in image_id_chunks}
+	image_id_chunks_dict = {name:np.array(group[['self_residence_info_age', 'self_empty_info_gender']].values).tolist() for name, group in image_id_chunks}
 	repeat = {k:v for k, v in image_id_chunks_dict.items() if v in removekey(image_id_chunks_dict, k).values() and len(v) > 2}
 
 	# Identify and remove image_id where all age/gender values are blank ('')
@@ -321,26 +319,23 @@ def remove_duplicates(df):
 # Step 2a: Properly format street names and get Steve Morse street-ed information
 #
 
+
 def preclean_street(df, city, state, year):
 
 	start = time.time()
 
 	#Create dictionary for (and run precleaning on) unique street names
 
-	def create_unique_street_dict(var):
-		grouped = df.groupby([var])
-		unique_street_dict = {}
-		for name, _ in grouped:
-			unique_street_dict[name] = standardize_street(name)
-		return unique_street_dict
+	def create_cleaning_street_dict(var):
+		temp = df[var].drop_duplicates().apply(standardize_street)
+		temp.index = df[var].drop_duplicates()
+		cleaning_dict = temp.to_dict()
+		return cleaning_dict
 
-	cleaning_dict = create_unique_street_dict('street_raw')
+	cleaning_dict = create_cleaning_street_dict('street_raw')
 	
 	#Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
-	df['street_precleaned'] = df['street_raw'].apply(lambda s: cleaning_dict[s][0])
-	df['DIR'] = df['street_raw'].apply(lambda s: cleaning_dict[s][1])
-	df['NAME'] = df['street_raw'].apply(lambda s: cleaning_dict[s][2])
-	df['TYPE'] = df['street_raw'].apply(lambda s: cleaning_dict[s][3])
+	df['street_precleaned'], df['DIR'], df['NAME'] ,df['TYPE'] = zip(*df['street_raw'].apply(lambda s: cleaning_dict[s]))
 
 	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city, state, year)
 
@@ -402,7 +397,7 @@ def preclean_street(df, city, state, year):
 
 	return df, preclean_info
 
-def load_steve_morse(city, state, year):
+def load_steve_morse(city, state, year, file_path):
 
 	#NOTE: This dictionary must be built independently of this script
 	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year), str(year)), 'rb'))
@@ -446,7 +441,7 @@ def specials(error):
 codecs.register_error('specials', specials)
 
 #Function to load 1940 street grid data (no or incomplete ED information)
-def get_streets_from_1940_street_grid(city, state): 
+def get_streets_from_1940_street_grid(city, state, file_path): 
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',
@@ -481,7 +476,7 @@ def get_streets_from_1940_street_grid(city, state):
 	return streets
 
 #Function to load 1940, Contemporary, and Chicago group 1930 street grid data (joined with Chicago group 1930 EDs)
-def get_stgrid_with_EDs(city, state, map_type): 
+def get_stgrid_with_EDs(city, state, map_type, file_path): 
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',

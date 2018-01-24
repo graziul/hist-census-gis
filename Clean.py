@@ -44,6 +44,8 @@ version = 6
 
 datestr = time.strftime("%Y_%m_%d")
 
+file_path = '/home/s4-data/LatestCities' 
+
 def clean_microdata(city_info, ed_map=False, debug=False):
 
 	#
@@ -76,7 +78,7 @@ def clean_microdata(city_info, ed_map=False, debug=False):
 	# Step 1: Load city and standardize variable names
 	#
 
-	df, load_time = load_city(city.replace(' ',''), state, year)
+	df, load_time = load_city(city.replace(' ',''), state, year, file_path)
 
 	#
 	# Step 2: Format raw street names and fill in blank street names
@@ -99,7 +101,7 @@ def clean_microdata(city_info, ed_map=False, debug=False):
 	#
 
 	# Step 3a: Import street names from 1940 street grid  
-	st_grid_st_list = get_streets_from_1940_street_grid(city,state)
+	st_grid_st_list = get_streets_from_1940_street_grid(city,state,file_path)
 
 	# Step 3b: Identify exact matches based on 1930 Steve Morse and 1940 street grid
 	df, exact_info = find_exact_matches(df, city, 'street_precleanedHN', sm_all_streets, sm_st_ed_dict, st_grid_st_list)

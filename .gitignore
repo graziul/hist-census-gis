@@ -15,3 +15,10 @@ new_addresses.csv
 *.pyc
 geocoding/ArcContiguityFormat.py
 geo-utils/Python/FixDirAndBlockNumsUsingMap.py
+*.pyc
+microclean/STstandardize.pyc
+new_addresses.csv
+new_addresses.csv
+*.pyc
+microclean/STclean.pyc
+microclean/STstandardize.pyc
