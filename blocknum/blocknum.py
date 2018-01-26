@@ -45,6 +45,23 @@ def load_large_dta(fname):
 
 	print '\nloaded {} rows\n'.format(len(df))
 
+	# Try to change dtype to save memory
+	for col in df.columns:
+		# Convert objects to categories to save memory
+		if df[col].dtype == 'object':
+			num_unique_values = len(df[col].unique())
+			num_total_values = len(df[col])
+			if num_unique_values / num_total_values < 0.5:
+				df.loc[:,col] = df[col].astype('category')
+			else:
+				df.loc[:,col] = df[col]
+		# Downcast int 
+		if df[col].dtype == 'int':
+			df.loc[:,col] = df[col].apply(pd.to_numeric,downcast='signed')
+		# Downcast float 
+		if df[col].dtype == 'float':
+			df.loc[:,col] = df[col].apply(pd.to_numeric,downcast='float')
+	
 	return df
 
 # Function to reads in DBF files and return Pandas DF
