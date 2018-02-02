@@ -22,3 +22,5 @@ new_addresses.csv
 *.pyc
 microclean/STclean.pyc
 microclean/STstandardize.pyc
+geo-utils/Python/FixDirAndBlockNumsUsingMap.py
+geo-utils/Python/FixDirAndBlockNumsUsingMap.py

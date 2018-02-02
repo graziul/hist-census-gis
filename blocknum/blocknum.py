@@ -38,23 +38,22 @@ def load_large_dta(fname):
 		while len(chunk) > 0:
 			df = df.append(chunk, ignore_index=True)
 			chunk = reader.get_chunk(100*1000)
-			print '.',
+			print '.'
 			sys.stdout.flush()
 	except (StopIteration, KeyboardInterrupt):
 		pass
 
 	print '\nloaded {} rows\n'.format(len(df))
 
-	# Try to change dtype to save memory
+	# Convert objects to categories to save memory
 	for col in df.columns:
-		# Convert objects to categories to save memory
-		if df[col].dtype == 'object':
-			num_unique_values = len(df[col].unique())
-			num_total_values = len(df[col])
-			if num_unique_values / num_total_values < 0.5:
-				df.loc[:,col] = df[col].astype('category')
-			else:
-				df.loc[:,col] = df[col]
+		#if df[col].dtype == 'object':
+		#	num_unique_values = len(df[col].unique())
+		#	num_total_values = len(df[col])
+		#	if num_unique_values / num_total_values < 0.5:
+		#		df.loc[:,col] = df[col].astype('category')
+		#	else:
+		#		df.loc[:,col] = df[col]
 		# Downcast int 
 		if df[col].dtype == 'int':
 			df.loc[:,col] = df[col].apply(pd.to_numeric,downcast='signed')
@@ -354,7 +353,7 @@ def set_blocknum_confidence(city_name, paths):
 def create_1930_addresses(city_name, state_abbr, paths, df=None):
 	r_path, script_path, dir_path = paths
 	# Load microdata file if not passed to function
-	if type(df) == 'NoneType':
+	if type(df) == 'NoneType' or df == None:
 		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
 		df = load_large_dta(microdata_file)
 	# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)

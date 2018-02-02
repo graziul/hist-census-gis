@@ -26,7 +26,7 @@ trim <- function( x ) {
 
 #Bring in microdata points
   dbf_file<-paste(dir_path,city_name,"_1930_Pblk_Points.dbf",sep="")
-  Points<-read.dbf(dbf_file)
+  Points<-read.dbf(dbf_file)$dbf
   tot_points<-length(Points[,1])  
 #Make variable names lowercase
   names(Points)<-tolower(names(Points))
