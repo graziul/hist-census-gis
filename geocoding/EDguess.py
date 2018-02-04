@@ -1477,66 +1477,9 @@ def identify_1930_eds(city_name, paths):
 	else:
 		print("OK!\n")
 
-##
-## Execute functions
-##
-
-# City info
-city = "Worcester"
-state = "MA"
-
-# Paths
-dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
-r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
-script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
-paths = [r_path, script_path, dir_path]
-
-# Full street name variable
-fullname_var = "FULLNAME"
-
 #
-# First create address file as well as street grid and physical block shapefiles 
+# Function to select best ED guess based on three methods
 #
-
-create_1930_addresses(city, state, paths)
-create_blocks_and_block_points(city, state, paths)
-
-#
-# Run Amory's ED descriptions script (unmodified from Amory's script)
-#
-
-ed_desc_algo(city, state, fullname_var, paths)
-
-#
-# Run Amory's intersections script
-#
-
-ed_inter_algo(city, state, fullname_var, paths)
-
-#
-# Run Matt's script (based on initial geocoding)
-#
-
-identify_1930_eds(city, paths)
-
-#
-# Create new shapefile including all three and apply logic for...
-#
-#	1. Assigning confidence to guesses
-#	2. Identifying potential guesses
-#
-
-# This file is created by Matt's script and has the ED guesses from previous two steps (from pblk shapefile)
-last_step = dir_path + '/GIS_edited/' + city + '_1930_ED_Choice_map.shp'
-# This is a copy that we then clean up a bit 
-ed_guess_file = dir_path + '/GIS_edited/' + city + state + '_ED_guess_map.shp'
-arcpy.CopyFeatures_management(last_step, ed_guess_file)
-
-df = dbf2DF(ed_guess_file)
-df['ed_geocode'] = df['FirstE'].astype(int)
-relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
-
-df_ed_guess = df[relevant_vars]
 
 def select_best_ed_guess(x):
 	
@@ -1597,29 +1540,107 @@ def select_best_ed_guess(x):
 		ed_guess_conf = [ed_guess, ed_conf]
 
 	return ed_guess_conf
-	
-df_ed_guess.loc[:,'ed_guess'], df_ed_guess.loc[:,'ed_conf'] = zip(*df_ed_guess.apply(lambda x: select_best_ed_guess(x), axis=1))
 
-def label_conf(conf):
-	if conf == -1:
-		return "-1. No guess"
-	elif conf == 1:
-		return "1. All agree"
-	elif conf == 2:
-		return "2. Two agree"
-	elif conf == 3:
-		return "3. SM descriptions"
-	elif conf == 4:
-		return "4. Intersections"
-	else:
-		return "5. Geocoding"
+##
+## Execute functions
+##
 
-df_ed_guess['conf'] = df_ed_guess['conf'].apply(lambda x: label_conf(x), axis=1)
+# Head script for running everything - produces ED guess map and statistics
+def get_ed_guesses(city, state, fullname_var):
 
-save_dbf(df_ed_guess, ed_guess_file.split('/')[-1], '/'.join(ed_guess_file.split('/')[:-1])+'/')
+	city = city.replace(' ','')
 
-#
-# Print some useful information
-#
+	# Paths
+	dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+	r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
+	script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
+	paths = [r_path, script_path, dir_path]
 
-print(df_ed_guess['ed_conf'].value_counts().sort())
+	# Step 1: create address file as well as street grid and physical block shapefiles 
+	create_1930_addresses(city, state, paths)
+	create_blocks_and_block_points(city, state, paths)
+
+	# Step 2: Run Amory's ED descriptions script (unmodified from Amory's script)
+	ed_desc_algo(city, state, fullname_var, paths)
+
+	# Step 3: Run Amory's intersections script
+	ed_inter_algo(city, state, fullname_var, paths)
+
+	# Step 4: Run Matt's script (based on initial geocoding)
+	identify_1930_eds(city, paths)
+
+	# Step 5: Create new shapefile including all three then...
+	#	a. Identify best guesses
+	#	b. Assign confidence to guesses
+
+	# Create a copy of file created by Matt's script (contains guesses from all three methods)
+	last_step = dir_path + '/GIS_edited/' + city + '_1930_ED_Choice_map.shp'
+	ed_guess_file = dir_path + '/GIS_edited/' + city + state + '_ED_guess_map.shp'
+	arcpy.CopyFeatures_management(last_step, ed_guess_file)
+
+	# Select relevant variables and extract best ED guesses
+	df = dbf2DF(ed_guess_file)
+	df['ed_geocode'] = df['FirstE'].astype(int)
+	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
+	df_ed_guess = df[relevant_vars]
+	df_ed_guess.loc[:,'ed_guess'], df_ed_guess.loc[:,'ed_conf'] = zip(*df_ed_guess.apply(lambda x: select_best_ed_guess(x), axis=1))
+
+	# Create a tabular summary of number guessed by confidence in guess
+	info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
+	info['city'] = city
+	info['state'] = state
+
+	# Relabel confidence variable descriptively (for mapping purposes)
+	def label_conf(conf):
+		if conf == -1:
+			return "-1. No guess"
+		elif conf == 1:
+			return "1. All agree"
+		elif conf == 2:
+			return "2. Two agree"
+		elif conf == 3:
+			return "3. SM descriptions"
+		elif conf == 4:
+			return "4. Intersections"
+		else:
+			return "5. Geocoding"
+	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf(x['ed_conf']), axis=1)
+	save_dbf(df_ed_guess, ed_guess_file.split('/')[-1], '/'.join(ed_guess_file.split('/')[:-1])+'/')
+
+	return info
+
+# City info
+#city = "Worcester"
+#state = "MA"
+
+# Full street name variable
+fullname_var = "FULLNAME"
+
+# To be included in the city_info_list, must have:
+#	a. [CITY][STATE]_1940_stgrid_diradd.shp
+#	b. [CITY][STATE]_StudAuto.dta
+
+city_info_list = [
+	['Albany','NY'],
+	['Dayton','OH'],
+	['Houston','TX'],
+	['Miami','FL'],
+	['New Haven','CT'],
+	['Newark','NJ'],
+	['Rochester','NY'],
+	['San Diego','CA'],
+	['Seattle','WA'],
+	['St Paul','MN'],
+	['Worcester','MA'],
+	['Yonkers','NY']
+	]
+
+info = []
+for city_info in city_info_list:
+	city, state = city_info
+	try:
+		info.append(get_ed_guesses(city, state, fullname_var))
+	except:
+		continue
+df = pd.concat(info)
+df.to_csv('S:/Users/Chris/ed_guess_info.csv')
