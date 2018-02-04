@@ -9,9 +9,13 @@ from microclean.HNclean import *
 from microclean.SetPriority import *
 
 # Version number
-version = 6
+version = 7
 
 # Changelog
+#
+# V7
+#   - Using grid street names for exact name matching and first fuzzy name matching (SM used for second)
+#	- Removed assignment of manual cleaning priority from the process
 #
 # V6
 #	- Added fuzzy matching against 1940 grid, 1930 Chicago group grid, and contemporary grid (using ED maps)
@@ -46,7 +50,7 @@ datestr = time.strftime("%Y_%m_%d")
 
 file_path = '/home/s4-data/LatestCities' 
 
-def clean_microdata(city_info, ed_map=False, debug=False):
+def clean_microdata(city_info, ed_map=True, debug=False):
 
 	#
 	# Step 0: Initialize a bunch of variables for use throughout
@@ -61,15 +65,15 @@ def clean_microdata(city_info, ed_map=False, debug=False):
 	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
 	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
 
-#	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
-#		print("%s is done" % (city))
-#		return None
+ #	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
+ #		print("%s is done" % (city))
+ #		return None
 
 	HN_SEQ = {}
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-#	init()
+ #	init()
  #	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
@@ -85,7 +89,7 @@ def clean_microdata(city_info, ed_map=False, debug=False):
 	#
 
 	# Step 2a: Properly format street names and get Steve Morse street-ed information
-	df, preclean_info = preclean_street(df, city, state, year)  
+	df, preclean_info = preclean_street(df, city, state, year, file_path)  
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
 
 	# Step 2b: Use formatted street names to get house number sequences
@@ -112,7 +116,7 @@ def clean_microdata(city_info, ed_map=False, debug=False):
 
 	# Step 4a: Search for fuzzy matches
 	ed_map = True
-	df, fuzzy_info = find_fuzzy_matches(df, city, state, 'street_precleanedHN', sm_all_streets, sm_ed_st_dict, ed_map)
+	df, fuzzy_info = find_fuzzy_matches(df, city, state, 'street_precleanedHN', sm_all_streets, sm_ed_st_dict, file_path, ed_map)
 
 	# Step 4b: Use fuzzy matches to get house number sequences
 	street_var = 'street_post_fuzzy'
@@ -136,7 +140,7 @@ def clean_microdata(city_info, ed_map=False, debug=False):
 	# Step 6: Set priority level for residual cases
 	#
 
-	df, priority_info = set_priority(df)
+	#df, priority_info = set_priority(df)
 
 	#
 	# Step 7: Save full dataset and generate dashboard information 
@@ -152,31 +156,7 @@ def clean_microdata(city_info, ed_map=False, debug=False):
 
 	#Generate dashbaord info
 	times = [load_time, total_time]
-	info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, priority_info, times)
-
-	# Save only a subset of variables for students to use when cleaning
-	df = df.replace({'check_ed' : { True : 'yes', False: ''}})
-
-	if year==1940:
-		student_vars = ['hhid','hhorder','institution','rel_id','dn','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','check_ed','clean_priority']
-	if year==1930:
-		df['street_fuzzy_match'] = ''
-		df.loc[~df['overall_match_bool'],'street_fuzzy_match'] = df['fuzzy_match']		
-		student_vars = ['index','pid','hhid','dn','institution','block','rel_id','image_id','line_num','ed','hn_raw','hn','hn_flag','street_raw','street_precleanedHN','street_fuzzy_match','overall_match','clean_priority']
-
-	df = df[student_vars]
-	file_name_students = file_path + '/%s/forstudents/%s_ForStudents%s.csv' % (str(year), city_file_name, 'V'+str(version))
-	df.to_csv(file_name_students)
-
-	# Set do-file information
-	dofile = file_path + "/ConvertCsvToDta.do"
-	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
-	cmd = ["stata","-b","do", dofile, file_name_students, file_name_stata,"&"]
-	# Run do-file
-	subprocess.call(cmd) 
-
-	# Remove .csv's
-	os.remove(file_name_students)
+	info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, times)
 
 	return info 
 
@@ -189,7 +169,8 @@ city_info_df['city_name'] = city_info_df['city_name'].str.replace('.','')
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
 # Get year and add it to city list information
-year = int(sys.argv[1])
+#year = int(sys.argv[1])
+year = 1930
 for i in city_info_list:                
 	i.append(year)
 
@@ -207,10 +188,6 @@ HNprop_names = city_state + ['propCheckHn','propCheckStHn','propCheckHnTotal']
 HNnum_names = city_state + ['CheckHn','CheckStHn','CheckHnTotal']
 Rprop_names = city_state + ['propCheckHn','propCheckStHn','propCheckSt','propCheckTotal']
 Rnum_names = city_state + ['CheckHn','CheckStHn','CheckSt','CheckTotal']
-Priority_names = city_state + ['100+ Cases','50-99 Cases','20-49 Cases','10-19 Cases','5-9 Cases','2-4 Cases','1 Case','TotalPriority']
-perPriority_names = city_state + ['100+ Cases (%)','50-99 Cases (%)','20-49 Cases (%)','10-19 Cases (%)','5-9 Cases (%)','2-4 Cases (%)','1 Case (%)','perTotalPriority']
-seqPriority_names = city_state + ['Seq 100+','Seq 50-99','Seq 20-49','Seq 10-19','Seq 5-9','Seq 2-4','Seq 1','seqTotal']
-perseqPriority_names = city_state + ['Seq 100+ (%)','Seq 50-99 (%)','Seq 20-49 (%)','Seq 10-19 (%)','Seq 5-9 (%)','Seq 2-4 (%)','Seq 1 (%)','perseqTotal']
 ED_names = city_state + ['ProblemEDs']
 FixBlank_names = city_state + ['HnOutliers1','StreetNameBlanks1','BlankSingletons1','PerSingletons1',
 	'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2']
@@ -228,13 +205,9 @@ dfHNprop = df.ix[:,18:24].sort_values(by='propCheckHnTotal').reset_index()
 dfHNnum = df.ix[:,24:30].sort_values(by='CheckHnTotal').reset_index()
 dfRprop =df.ix[:,30:37].sort_values(by='propCheckTotal').reset_index()
 dfRnum = df.ix[:,37:44].sort_values(by='CheckTotal').reset_index()
-dfPriority = df.ix[:,44:55].sort_values(by='TotalPriority').reset_index()
-dfperPriority = df.ix[:,55:66].sort_values(by='perTotalPriority').reset_index()
-dfseqPriority = df.ix[:,66:77].sort_values(by='seqTotal').reset_index()
-dfperseqPriority = df.ix[:,77:88].sort_values(by='perseqTotal').reset_index()
-dfED = df.ix[:,88:92].sort_values(by=city_state,ascending=False).reset_index()
-dfFixBlank = df.ix[:,92:103].reset_index()
-dfTime = df.ix[:,103:114].sort_values(by='TotalTime').reset_index()
+dfED = df.ix[:,44:48].sort_values(by=city_state,ascending=False).reset_index()
+dfFixBlank = df.ix[:,48:59].reset_index()
+dfTime = df.ix[:,59:70].sort_values(by='TotalTime').reset_index()
 
 dashboard = pd.concat([dfSTprop, dfSTnum, dfHNprop, dfHNnum, dfRprop, dfRnum, dfperPriority, dfPriority, dfseqPriority, dfperseqPriority, dfED, dfFixBlank, dfTime],axis=1)
 del dashboard['index']

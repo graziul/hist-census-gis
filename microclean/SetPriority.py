@@ -143,12 +143,12 @@ def create_overall_match_variables(df,street_post_fuzzy=None):
 
 	return df
 
-def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, priority_info, times):
+def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, times):
 
 	#Parse exact matching info
+	#num_exact_matches_sm, num_noexact_matches_sm, \
+	#num_streets_exact_sm, num_streets_noexact_sm, \
 	num_records, num_streets, \
-	num_exact_matches_sm, num_noexact_matches_sm, \
-	num_streets_exact_sm, num_streets_noexact_sm, \
 	num_exact_matches_stgrid, num_noexact_matches_stgrid, \
 	num_streets_exact_stgrid, num_streets_noexact_stgrid, \
 	exact_matching_time = exact_info 
@@ -173,8 +173,6 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 
 	_, _, _, preclean_time = preclean_info
 
-	priority_counts, num_priority, priority_time = priority_info
-	
 	load_time,total_time = times
 
 	blank_fix_time = blank_fix_time1 + blank_fix_time2
@@ -231,23 +229,7 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	HNnum = [city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_hn_total]
 	Rprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_check_st, prop_resid_total]
 	Rnum = [city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_check_st, num_resid_total]
-	Priority = [city, state, priority_counts[1],priority_counts[2],priority_counts[3],priority_counts[4],priority_counts[5],priority_counts[6],priority_counts[7],sum(priority_counts.values())]
-	perPriority = [city, state, float(priority_counts[1])/num_records,
-		float(priority_counts[2])/num_records,
-		float(priority_counts[3])/num_records,
-		float(priority_counts[4])/num_records,
-		float(priority_counts[5])/num_records,
-		float(priority_counts[6])/num_records,
-		float(priority_counts[7])/num_records,float(sum(priority_counts.values()))/num_records]
-	seqPriority = [city, state, num_priority[1],num_priority[2],num_priority[3],num_priority[4],num_priority[5],num_priority[6],num_priority[7],sum(num_priority.values())]
 	num_seqs = len(np.unique(df['enum_seq1']))
-	perseqPriority = [city, state, float(priority_counts[1])/num_seqs,
-		float(num_priority[2])/num_seqs,
-		float(num_priority[3])/num_seqs,
-		float(num_priority[4])/num_seqs,
-		float(num_priority[5])/num_seqs,
-		float(num_priority[6])/num_seqs,
-		float(num_priority[7])/num_seqs,float(sum(num_priority.values()))/num_seqs]
 	ED = [city, state, problem_EDs_present]
 	FixBlank = [city, state, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
 		num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2]
@@ -255,6 +237,6 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 		blank_fix_time, priority_time, total_time]
 
 	sp = ['']
-	info = header + STprop + sp + STnum + sp + HNprop + sp + HNnum + sp + Rprop + sp + Rnum + sp + Priority + sp + perPriority + sp + seqPriority + sp + perseqPriority + sp + ED + sp + FixBlank + sp + Time
+	info = header + STprop + sp + STnum + sp + HNprop + sp + HNnum + sp + Rprop + sp + Rnum + sp + ED + sp + FixBlank + sp + Time
 
 	return info

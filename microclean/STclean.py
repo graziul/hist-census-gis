@@ -320,7 +320,7 @@ def remove_duplicates(df):
 #
 
 
-def preclean_street(df, city, state, year):
+def preclean_street(df, city, state, year, file_path):
 
 	start = time.time()
 
@@ -337,7 +337,7 @@ def preclean_street(df, city, state, year):
 	#Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
 	df['street_precleaned'], df['DIR'], df['NAME'] ,df['TYPE'] = zip(*df['street_raw'].apply(lambda s: cleaning_dict[s]))
 
-	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city, state, year)
+	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city, state, year, file_path)
 
 	#Create dictionary {NAME:num_NAME_versions}
 	num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
@@ -598,7 +598,9 @@ def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, st_grid_
 	basic_info = [post,num_records,num_streets]
 
 	# Check for exact matches between microdata and Steve Morse
-	df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
+	#df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
+	df['exact_match_sm_bool'+post] = False
+	exact_info_sm = []
 
 	# Check for exact matches between microdata and 1940 street grid 
 	df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
@@ -737,7 +739,8 @@ def find_fuzzy_matches_module(df, city, street, grid_all_streets, grid_ed_st_dic
 
 	#Compute current number of residuals
 	num_records = len(df)
-	num_current_residual_cases = num_records - len(df[df['current_match_bool'+post]])
+	if resid == 0:
+		resid = num_records - len(df[df['current_match_bool'+post]])
 	#Get fuzzy matches 
 	df[fuzzy_match], df[fuzzy_score], df[fuzzy_bool] = zip(*df.apply(lambda x: get_fuzzy_match(x['current_match_bool'+post], fuzzy_match_dict, x[street], x['ed']), axis=1))
 	#Update current match 
@@ -749,20 +752,13 @@ def find_fuzzy_matches_module(df, city, street, grid_all_streets, grid_ed_st_dic
 	end = time.time()
 	fuzzy_matching_time = round(float(end-start)/60, 1)
 	fuzzy_info = [num_fuzzy_matches, fuzzy_matching_time]
-
-	if map_type == "sm":
-		cprint("Fuzzy matches (using Steve Morse): "+str(num_fuzzy_matches)+" of "+str(num_current_residual_cases)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(num_current_residual_cases), 1))+"%)\n", file=AnsiToWin32(sys.stdout))
-	else:
-		cprint("Fuzzy matches (using " + map_type + " grid street-ED): "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)\n", file=AnsiToWin32(sys.stdout))
+	cprint("Fuzzy matches (using " + map_type + ": "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)\n", file=AnsiToWin32(sys.stdout))
 	cprint("Fuzzy matching for %s took %s\n" % (city, fuzzy_matching_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
-	if map_type == "sm":
-		return df, fuzzy_info, num_current_residual_cases
-	else:
-		return df, fuzzy_info
+	return df, fuzzy_info, resid
 
 #Function to run all fuzzy matching and return results to Clean.py
-def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, ed_map=False):
+def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, file_path, ed_map=False):
 
 	try:
 		post = '_' + street.split('_')[2].split('HN')[0]
@@ -774,30 +770,34 @@ def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, e
 	#Initialize fuzzy_match_bool
 	df['fuzzy_match_bool'] = False
 
-	#Get Steve Morse fuzzy matches
+	#Initialize current match to exact matches that were found
 	df['current_match'+post] = ''
 	df['current_match_bool'+post] = df['exact_match_bool']
 	df.loc[df['current_match_bool'+post],'current_match'+post] = df['street_precleaned'+post+'HN']
-	df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, city, street, sm_all_streets, sm_ed_st_dict, "sm")
 
 	if ed_map:
 		
 		#Get 1940 grid fuzzy matches
-		grid_1940_all_streets, grid_1940_ed_st_dict = get_stgrid_with_EDs(city, state, "1940")
-		df, fuzzy_info_1940_grid = find_fuzzy_matches_module(df, city, street, grid_1940_all_streets, grid_1940_ed_st_dict, "1940", resid)
+		grid_1940_all_streets, grid_1940_ed_st_dict = get_stgrid_with_EDs(city, state, "1940", file_path)
+		df, fuzzy_info_1940_grid, resid = find_fuzzy_matches_module(df, city, street, grid_1940_all_streets, grid_1940_ed_st_dict, "1940")
 
 		#Get Contemporary grid fuzzy matches
-		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city, state, "Contemp")
-		df, fuzzy_info_Contemp_grid = find_fuzzy_matches_module(df, city, street, grid_Contemp_all_streets, grid_Contemp_ed_st_dict, "Contemp", resid)
+		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city, state, "Contemp", file_path)
+		df, fuzzy_info_Contemp_grid, resid = find_fuzzy_matches_module(df, city, street, grid_Contemp_all_streets, grid_Contemp_ed_st_dict, "Contemp", resid)
 
 		#Get Chicago group 1930 grid fuzzy matches
 		if city in ['Boston', 'Cincinnatti','Philadelphia']:
-			grid_1930_all_streets, grid_1930_ed_st_dict = get_stgrid_with_EDs(city, state, "Chicago")
-			df, fuzzy_info_1930_grid = find_fuzzy_matches_module(df, city, street, grid_1930_all_streets, grid_1930_ed_st_dict, "Chicago", resid)
-			fuzzy_info = fuzzy_info_sm + fuzzy_info_1940_grid + fuzzy_info_Contemp_grid + fuzzy_info_1930_grid
+			grid_1930_all_streets, grid_1930_ed_st_dict = get_stgrid_with_EDs(city, state, "Chicago", file_path)
+			df, fuzzy_info_1930_grid, resid = find_fuzzy_matches_module(df, city, street, grid_1930_all_streets, grid_1930_ed_st_dict, "Chicago", resid)
+			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid + fuzzy_info_1930_grid
 		else:
-			fuzzy_info = fuzzy_info_sm + fuzzy_info_1940_grid + fuzzy_info_Contemp_grid 
+			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid 
 
+	# Get Steve Morse fuzzy matches
+	df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, city, street, sm_all_streets, sm_ed_st_dict, "sm", resid)
+
+	if ed_map:
+		fuzzy_info = fuzzy_info + fuzzy_info_sm 
 	else:
 		fuzzy_info = fuzzy_info_sm
 
