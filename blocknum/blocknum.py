@@ -38,7 +38,7 @@ def load_large_dta(fname):
 		while len(chunk) > 0:
 			df = df.append(chunk, ignore_index=True)
 			chunk = reader.get_chunk(100*1000)
-			print '.'
+			print '.',
 			sys.stdout.flush()
 	except (StopIteration, KeyboardInterrupt):
 		pass
@@ -47,13 +47,6 @@ def load_large_dta(fname):
 
 	# Convert objects to categories to save memory
 	for col in df.columns:
-		#if df[col].dtype == 'object':
-		#	num_unique_values = len(df[col].unique())
-		#	num_total_values = len(df[col])
-		#	if num_unique_values / num_total_values < 0.5:
-		#		df.loc[:,col] = df[col].astype('category')
-		#	else:
-		#		df.loc[:,col] = df[col]
 		# Downcast int 
 		if df[col].dtype == 'int':
 			df.loc[:,col] = df[col].apply(pd.to_numeric,downcast='signed')
@@ -2212,3 +2205,4 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
 
 	save_dbf_st(df_uns2, grid_uns2, field_map=True)
+
