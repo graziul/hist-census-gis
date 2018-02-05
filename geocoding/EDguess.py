@@ -13,6 +13,7 @@ import pickle
 import pandas as pd
 import numpy as np
 import arcpy
+from collections import defaultdict
 from fuzzywuzzy import fuzz
 from blocknum.blocknum import *
 arcpy.env.overwriteOutput = True
@@ -25,6 +26,22 @@ arcpy.env.overwriteOutput = True
 # Shared functions
 #
 
+# Dict: add v(alue) to k(ey), create k if it doesn't exist
+def Dict_append(Dict, k, v) :
+	if not k in Dict :
+		Dict[k] = [v]
+	else :
+		Dict[k].append(v)
+
+# Version of Dict_append that only accepts unique v(alues) for each k(ey)
+def Dict_append_unique(Dict, k, v) :
+	if not k in Dict :
+		Dict[k] = [v]
+	else :
+		if not v in Dict[k] :
+			Dict[k].append(v)
+
+# Standardize numbered street name
 def Num_Standardize(NAME) :
 
 	NAME = re.sub("^[Tt]enth","10th",NAME)
@@ -67,33 +84,17 @@ def Num_Standardize(NAME) :
 	
 	return NAME
 
-# Dict: add v(alue) to k(ey), create k if it doesn't exist
-def Dict_append(Dict, k, v) :
-	if not k in Dict :
-		Dict[k] = [v]
-	else :
-		Dict[k].append(v)
-
-# Version of Dict_append that only accepts unique v(alues) for each k(ey)
-def Dict_append_unique(Dict, k, v) :
-	if not k in Dict :
-		Dict[k] = [v]
-	else :
-		if not v in Dict[k] :
-			Dict[k].append(v)
-
 # Prepare map intersections
 def prepare_map_intersections(stgrid_file, fullname_var, paths) :
 	print("Preparing Map Intersections File")
-	
+
+	city_name, _ =  os.path.splitext(stgrid_file)
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 	
 	if not os.path.exists(geo_path + "IntersectionsIntermediateFiles"):
 		os.makedirs(geo_path + "IntersectionsIntermediateFiles")
 	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
-
-	city_name, _ =  os.path.splitext(stgrid_file)
 
 	latest_stage = intermed_path + "fullname_dissolve.shp"
 	#dissolve all street segments based on FULLNAME
@@ -192,6 +193,7 @@ def prepare_map_intersections(stgrid_file, fullname_var, paths) :
 		Output_ASCII_File = intermed_path + city_name + "_Intersections.txt", 
 		Add_Field_Names_to_Output="ADD_FIELD_NAMES")
 
+# Draw ED maps (descriptions, intersections)
 def draw_EDs(city, state, paths, new_var_name, is_desc) :
 
 	_, _, dir_path = paths
@@ -218,6 +220,32 @@ def draw_EDs(city, state, paths, new_var_name, is_desc) :
 
 	# If using Amory's ED description method do this
 	if is_desc:
+		output_shp = geo_path+city+"_ED_desc.shp"
+		arcpy.CreateFeatureclass_management(geo_path,city+"_ED_desc.shp")
+		blk_file = intermed_path+"fullname_dissolve_split.shp"
+		arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
+		arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
+		with arcpy.da.InsertCursor(output_shp, ("SHAPE@", "ed_desc")) as cursor:
+			for ED, inter in ED_Intersect_ID_dict.items() :
+				inter = inter.replace("(","").replace(")","").split(",") #convert intersect string to list 
+				block_list = []
+				for ind,i in enumerate(inter) :
+					i2 = inter[(ind+1)%len(inter)]
+					block_list.append(get_block_by_intersections(i,i2))
+				block_str = str(block_list).replace("'","").replace("[","(").replace("]",")")
+				arcpy.SelectLayerByAttribute_management ("blk_lyr", "NEW_SELECTION", '"FID" IN '+block_str)
+				#arcpy.CopyFeatures_management("blk_lyr", "lyr", "", "0", "0", "0")
+				arcpy.FeatureToPolygon_management("blk_lyr", intermed_path+"poly_lyr.shp", "", "ATTRIBUTES", "")
+				with arcpy.da.UpdateCursor(intermed_path+"poly_lyr.shp",("SHAPE@", "Id")) as icursor:
+					for irow in icursor:
+						irow[1]=ED
+						cursor.insertRow(irow)
+				#ASSIGN ED # TO POLYGON
+				arcpy.SelectLayerByAttribute_management("blk_lyr", "CLEAR_SELECTION")
+				#feature_to_polygon on the selected segments
+		arcpy.Delete_management(intermed_path+"poly_lyr.shp")
+		'''
+		# CHRIS'S APPROACH TO DRAWING ED MAP FOR DESCRIPTIONS ALGORITHM
 		# Load ED-intersection data
 		ed_inter_data = open(geo_path + city+"_EDs.txt","r").readlines()
 		ed_inter_dict = {int(ed):[int(i) for i in list(ints.strip()
@@ -246,7 +274,8 @@ def draw_EDs(city, state, paths, new_var_name, is_desc) :
 				except KeyError:
 					row[1] = 0
 				up_cursor.updateRow(row)		
-	# If using Amory's intersection method do this
+		'''
+	# If using Amory's intersection method do this...
 	elif ~is_desc:
 		blk_ed_dict = {}
 		for blk in polyblk_inter_dict.keys() :
@@ -317,6 +346,27 @@ def get_intersect_by_stnames(stlist) :
 		except KeyError :
 			return []
 	return list(in_common)
+
+def get_block_by_intersections(i1,i2) :
+	in_common = [x for x in Intersect_BLOCK_dict[i1] if x in Intersect_BLOCK_dict[i2]]
+	if in_common :
+		try :
+			assert len(in_common) == 1
+		except :
+			print("Warning: More than one block "+str(in_common)+" associated with intersections "+str(i1)+" & "+str(i2))
+		return in_common[0]
+	else :
+		print("NO BLOCK FOUND FOR INTERSECTIONS "+str(i1)+" and "+str(i2))
+
+# looks for duplicate adjacent elements and deletes one
+# iterate backwards to avoid problems with iterating and modifying list simultaneously...!
+def f7(seq):
+	ind = len(seq) - 2
+	while ind >= 0 :
+		if seq[ind] == seq[ind+1] :
+			del seq[ind+1]
+		ind -= 1
+	return seq
 
 #compares st1 with st2, which can be a string or a list of strings
 #if list, return True if st1 matches with ANY string in st2
@@ -394,7 +444,7 @@ def find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = Fa
 					
 			#if the correct next intersection is already in visited, don't filter it out!
 			#check results if using descript_ind rather than x==start as the condition to satisfy this ^
-			new_vertices = filter(lambda x : not x == vertex and not x == predecessor_dict[vertex] and not x in queue and (not x in visited or (x==start and (next_name in Intersect_NAME_dict[x] or fuzzy and fuzzy_st_test(next_name,Intersect_NAME_dict[x])))), new_vertices)
+			new_vertices = filter(lambda x : (not x == vertex or (next_name in Intersect_NAME_dict[x] or fuzzy and fuzzy_st_test(next_name,Intersect_NAME_dict[x]))) and not x == predecessor_dict[vertex] and not x in queue and (not x in visited or (x==start and (next_name in Intersect_NAME_dict[x] or fuzzy and fuzzy_st_test(next_name,Intersect_NAME_dict[x])))), new_vertices)
 			#new_vertices = filter(lambda x : not x == vertex and not x == predecessor_dict[vertex] and not x in queue and (not x in visited or next_name in Intersect_NAME_dict[x] or fuzzy and fuzzy_st_test(next_name,Intersect_NAME_dict[x])), new_vertices)
 			if debug:print("new_vertices: "+str(new_vertices))
 			for v in new_vertices :
@@ -458,7 +508,7 @@ def find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = Fa
 			string = string[:-1]+")"
 			return finished,string
 
-	return finished,str(filter(None,predecessor_dict.values())).replace("'","").replace("[","(").replace("]",")")+" "+next_name
+	return finished,str(filter(None,predecessor_dict.values())).replace("'","").replace("[","(").replace("]",")")+" "+str(vertex)+" "+next_name
 
 def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 
@@ -483,14 +533,14 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 	global ST_Intersect_dict
 	global BLOCK_Intersect_dict
 	global BLOCK_NAME_dict
-	Intersect_ST_dict = {} # lookup intersection -> which STs (phrases)
+	Intersect_ST_dict = defaultdict(list) # lookup intersection -> which STs (phrases)
 	Intersect_BLOCK_dict = {} # lookup intersection -> which BLOCKs
-	Intersect_NAME_dict = {} # lookup intersection -> which STs (NAMEs)
+	Intersect_NAME_dict = defaultdict(list) # lookup intersection -> which STs (NAMEs)
 	ST_Intersect_dict = {} # lookup ST -> which intersections
 	BLOCK_Intersect_dict = {} # lookup BLOCK ID -> which intersections
 	BLOCK_NAME_dict = {} # lookup BLOCK ID -> NAME of segment
 
-	print("Preparing Input Data for "+city)
+	print("Preparing Input for "+city+ " (descriptions)")
 
 	# Create Map DICTs
 	for ind, iline in enumerate(InterLines) :
@@ -516,6 +566,8 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 			row[1] = isolate_st_name(str(row[0]))
 			up_cursor.updateRow(row)
 
+	# Isolate St NAMEs
+
 	print("Analyzing ED Descriptions")
 
 	good_EDs = []
@@ -524,6 +576,10 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 	for ED, descript in ED_description_dict.items() :
 		#if ED != "486" and ED!="225" and ED!='152':
 		#    continue
+
+		#keep only unique street names, but preserve order in description
+		descript = f7(descript)
+		
 		intersect = []
 		start_ind = 0
 		#find an exactly matching starting intersection
@@ -543,18 +599,25 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 
 			#change descript to be just the NAMEs of the streets
 			descript = ED_NAME_description_dict[ED]
+			#keep only unique street names, but preserve order in description
+			descript = f7(descript)
 			if debug:print(str(ED)+": "+str(descript))
 
 			success, string = find_descript_segments(descript,intersect,start_ind,start_streets,debug=debug)
 			if success :
 				output.write(str(ED)+": "+string+"\n")
+				ED_Intersect_ID_dict[ED] = string
 			else :
 				try_fuzzy_EDs.append(ED)
+	
 	
 	for ED in try_fuzzy_EDs :
 		descript = ED_description_dict[ED]
 		intersect = []
 		start_ind = 0
+
+		#keep only unique street names, but preserve order in description
+		descript = f7(descript)
 		
 		#find an exactly matching starting intersection
 		while start_ind <= len(descript) - 1:
@@ -573,15 +636,17 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 
 			#change descript to be just the NAMEs of the streets
 			descript = ED_NAME_description_dict[ED]
+			#keep only unique street names, but preserve order in description
+			descript = f7(descript)
 			if debug:print(str(ED)+": "+str(descript))
 
 			success, string = find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = True,debug=debug)
 			if success :
 				if debug:print("FUZZY WORKED FOR "+str(ED)+"!!!!!!!!!!!!!!!!!!!!!")
 				output.write(str(ED)+": "+string+"\n")
+				ED_Intersect_ID_dict[ED] = string
 			else :
 				problem_EDs.write(str(ED)+": "+string+"\n")
-				
 
 	if debug:print("discovered_problem: "+str(discovered_problem))
 
@@ -608,6 +673,10 @@ def ed_desc_algo(city, state, fullname_var, paths):
 	InterLines = Intersect_TXT.readlines()[1:]
 	Descriptions = open(Descriptions_path).readlines()
 
+	# Derived Dict #
+	global ED_Intersect_ID_dict
+	ED_Intersect_ID_dict = {} # lookup ED -> string of Intersection IDs
+
 	st_grid_exists = os.path.isfile(shp_targ)
 	descriptions_exist = os.stat(Descriptions_path).st_size != 0
 	if st_grid_exists and descriptions_exist:
@@ -615,7 +684,7 @@ def ed_desc_algo(city, state, fullname_var, paths):
 	else :
 		print(city+": Error finding stgrid ("+str(st_grid_exists)+") and/or descriptions ("+str(descriptions_exist)+")")
 	
-	#print("Creating ED Map")
+	print("Creating ED Map for %s (Descriptions algorithm)" % (city))
 	draw_EDs(city, state, paths, "ED_desc", True)
 
 #
@@ -652,263 +721,6 @@ def ed_desc_algo(city, state, fullname_var, paths):
 # Directional Streets - fuzzy matching will match E Howard Ave w/ W Howard Ave instead of Howard Ave
 # Numbered Streets - fuzzy matching will match S 27th St with S 17th St instead of 27th St
 # ->->-> GO THRU CHRIS's fuzzy match, copy the code over
-
-def standardize_street(st):
-	runAgain = False
-	st = st.rstrip('\n')
-	orig_st = st
-	
-	st = st.lower()
-
-	###Remove Punctuation, extraneous words at end of stname###
-	st = re.sub(r'[\.,]',' ',st)
-	st = re.sub(' +',' ',st)
-	st = st.strip()
-	st = re.sub('\\\\','',st)
-	st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
-	#consider extended a diff stname#
-	#st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
-
-	#Check if st is empty or blank and return empty to [st,DIR,NAME,TYPE]
-	if st == '' or st == ' ':
-		return ['','','','']
-	
-	###stname part analysis###
-	DIR = ''
-	NAME = ''
-	TYPE = ''
- 
-	# Combinations of directions at end of stname (has to be run first)
-	if re.search(r'[ \-]+([Nn][\.\-]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)$',st):
-		st = "NE "+re.sub(r'[ \-]+([Nn][\.\-]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth[\s]+?[Ee]ast)$','',st)
-		DIR = 'NE'
-	if re.search(r'[ \-]+([Nn][\.\-]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)$',st):
-		st = "NW "+re.sub(r'[ \-]+([Nn][\.\-]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)$','',st)
-		DIR = 'NW'
-	if re.search(r'[ \-]+([Ss][\.\-]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)$',st):
-		st = "SE "+re.sub(r'[ \-]+([Ss][\.\-]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)$','',st)
-		DIR = 'SE'
-	if re.search(r'[ \-]+([Ss][\.\-]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)$',st):
-		st = "SW "+re.sub(r'[ \-]+([Ss][\.\-]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)$','',st)
-		DIR = 'SW'
-   
-	#First check if DIR is at end of stname. make sure that it's the DIR and not actually the NAME (e.g. "North Ave" or "Avenue E")#
-	if re.search(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$',st) and not re.match('^[Nn][Oo][Rr][Tt][Hh]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Nn]$',st) :
-		st = "N "+re.sub(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$','',st)
-		DIR = 'N'
-	if re.search(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$',st) and not re.search('^[Ss][Oo][Uu][Tt][Hh]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ss]$',st) :
-		st = "S "+re.sub(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$','',st)
-		DIR = 'S'
-	if re.search(r'[ \-]+([Ww][Ee][Ss][Tt]|[Ww])$',st) and not re.search('^[Ww][Ee][Ss][Tt]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ww]$',st) :
-		st = "W "+re.sub(r'[ \-]+([Ww][Ee][Ss][Tt]|[Ww])$','',st)
-		DIR = 'W'
-	if re.search(r'[ \-]+([Ee][Aa][Ss][Tt]|[Ee])$',st) and not re.search('^[Ee][Aa][Ss][Tt]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ee]$',st) :
-		st = "E "+re.sub(r'[ \-]+([Ee][Aa][Ss][Tt]|[Ee])$','',st)
-		DIR = 'E'
-
-	#See if a st TYPE can be identified#
-	st = re.sub(r'[ \-]+([Ss][Tt][Rr]?[Ee]?[Ee]?[Tt]?[SsEe]?|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
-	#st = re.sub(r'[ \-]+[Ss]tr?e?e?t?[ \-]',' St ',st) # Fix things like "4th Street Place"
-	st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|[aA]veenue|[Aa]vn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
-	match = re.search("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+([a-zA-Z])$",st)
-	if match :
-		 st = re.sub("([a-zA-Z])$","",st)
-		 st = re.sub("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+",match.group(2)+" Ave",st)
-	st = re.sub(r'[ \-]+([Bb]\'?[Ll][Vv]\'?[Dd]|Bl\'?v\'?d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb][Oo][Uu][Ll][EeAa]?[Vv]?[Aa]?[Rr]?[Dd]?)$',' Blvd',st)
-	st = re.sub(r'[ \-]+([Rr][Dd]|[Rr][Oo][Aa][Dd])$',' Road',st)
-	st = re.sub(r'[ \-]+[Dd][Rr][Ii]?[Vv]?[Ee]?$',' Drive',st)
-	st = re.sub(r'[ \-]+([Cc][Oo][Uu]?[Rr][Tt]|[Cc][Tt])$',' Ct',st)
-	st = re.sub(r'[ \-]+([Pp][Ll][Aa]?[Cc]?[Ee]?)$',' Pl',st)
-	st = re.sub(r'[ \-]+([Ss][Qq][Uu]?[Aa]?[Rr]?[Ee]?)$',' Sq',st)
-	st = re.sub(r'[ \-]+[Cc]ircle$',' Cir',st)
-	st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kway|[Pp]ky|[Pp]arkwy|[Pp]rakway|[Pp]rkwy|[Pp]wy)$',' Pkwy',st)
-	st = re.sub(r'[ \-]+[Ww][Aa][Yy]$',' Way',st)
-	st = re.sub(r'[ \-]+[Aa][Ll][Ll]?[Ee]?[Yy]?$',' Aly',st)
-	st = re.sub(r'[ \-]+[Tt][Ee][Rr]+[EeAa]?[Cc]?[Ee]?$',' Ter',st)
-	st = re.sub(r'[ \-]+([Ll][Aa][Nn][Ee]|[Ll][Nn])$',' Ln',st)
-	st = re.sub(r'[ \-]+([Pp]lzaz|[Pp][Ll][Aa][Zz][Aa])$',' Plaza',st)
-	st = re.sub(r'[ \-]+([Hh]ighway)$',' Hwy',st)
-	st = re.sub(r'[ \-]+([Hh]eights?)$',' Heights',st)
-
-	# "Park" is not considered a valid TYPE because it should probably actually be part of NAME #
-	match = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Heights|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
-	if match :
-		TYPE = match.group(1)
-
-	#Combinations of directions
-	
-	match = re.search(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Northeast'
-		else :
-			st = "NE "+re.sub(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+','',st)
-			DIR = 'NE'
-	match = re.search(r'^([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Northwest'
-		else :
-			st = "NW "+re.sub(r'^([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+','',st)
-			DIR = 'NW'
-	match = re.search(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Southeast'
-		else :
-			st = "SE "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+','',st)
-			DIR = 'SE'
-	match = re.search(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+',st)
-	if match :
-		if st == match.group(0)+TYPE :
-			NAME = 'Southwest'
-		else :
-			st = "SW "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+','',st)
-			DIR = 'SW'
-		
-	#See if there is a st DIR. again, make sure that it's the DIR and not actually the NAME (e.g. North Ave, E St [not East St])
-	if(DIR=='') :
-		match =  re.search(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1 :
-					NAME = 'North'
-				else : NAME = 'N'
-			else :
-				st = "N "+re.sub(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+','',st)
-				DIR = 'N'
-		match =  re.search(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1:
-					NAME = 'South'
-				else : NAME = 'S'
-			else :
-				st = "S "+re.sub(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+','',st)
-				DIR = 'S'
-		match =  re.search(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1 :
-					NAME = 'West'
-				else : NAME = 'W'
-			else :
-				st = "W "+re.sub(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+','',st)
-				DIR = 'W'
-		match =  re.search(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+',st)
-		if match :
-			if st==match.group(0)+TYPE :
-				if len(match.group(1))>1 :
-					NAME = 'East'
-				else : NAME = 'E'
-			else :
-				st = "E "+re.sub(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+','',st)
-				DIR = 'E'
-				
-	#get the st NAME and standardize it
-			
-	match = re.search('^'+DIR+'(.+)'+TYPE+'$',st)
-	if NAME=='' :
-		#If NAME is not 'North', 'West', etc...
-		if match :
-			NAME = match.group(1).strip()
-			
-			#convert written-out numbers to digits
-			#TODO: Make these work for all exceptions (go thru text file with find)
-			#if re.search("[Tt]enth|Eleven(th)?|[Tt]wel[f]?th|[Tt]hirteen(th)?|Fourt[h]?een(th)?|[Ff]ift[h]?een(th)?|[Ss]event[h]?een(th)?|[Ss]event[h]?een(th)?|[eE]ighteen(th)?|[Nn]inet[h]?een(th)?|[Tt]wentieth|[Tt]hirtieth|[Ff]o[u]?rtieth|[Ff]iftieth|[Ss]ixtieth|[Ss]eventieth|[Ee]ightieth|[Nn]inetieth|Twenty[ \-]?|Thirty[ \-]?|Forty[ \-]?|Fifty[ \-]?|Sixty[ \-]?|Seventy[ \-]?|Eighty[ \-]?|Ninety[ \-]?|[Ff]irst|[Ss]econd|[Tt]hird|[Ff]ourth|[Ff]ifth|[Ss]ixth|[Ss]eventh|[Ee]ighth|[Nn]inth",st) :
-			NAME = re.sub("^[Tt]enth","10th",NAME)
-			NAME = re.sub("^[Ee]leven(th)?","11th",NAME)
-			NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
-			NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
-			NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
-			NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
-			NAME = re.sub("^[Ss]ixt[h]?een(th)?","16th",NAME)
-			NAME = re.sub("^[Ss]event[h]?een(th)?","17th",NAME)
-			NAME = re.sub("^[eE]ighteen(th)?","18th",NAME)
-			NAME = re.sub("^[Nn]inet[h]?e+n(th)?","19th",NAME)
-			NAME = re.sub("^[Tt]went[iy]eth","20th",NAME)
-			NAME = re.sub("^[Tt]hirt[iy]eth","30th",NAME)
-			NAME = re.sub("^[Ff]o[u]?rt[iy]eth","40th",NAME)
-			NAME = re.sub("^[Ff]ift[iy]eth", "50th",NAME)
-			NAME = re.sub("^[Ss]ixt[iy]eth", "60th",NAME)
-			NAME = re.sub("^[Ss]event[iy]eth", "70th",NAME)
-			NAME = re.sub("^[Ee]ight[iy]eth", "80th",NAME)
-			NAME = re.sub("^[Nn]inet[iy]eth", "90th",NAME)
-
-			NAME = re.sub("[Tt]wenty[ \-]*","2",NAME)
-			NAME = re.sub("[Tt]hirty[ \-]*","3",NAME)
-			NAME = re.sub("[Ff]orty[ \-]*","4",NAME)
-			NAME = re.sub("[Ff]ifty[ \-]*","5",NAME)
-			NAME = re.sub("[Ss]ixty[ \-]*","6",NAME)
-			NAME = re.sub("[Ss]eventy[ \-]*","7",NAME)
-			NAME = re.sub("[Ee]ighty[ \-]*","8",NAME)
-			NAME = re.sub("[Nn]inety[ \-]*","9",NAME)
-			
-			if re.search("(^|[0-9]+.*)([Ff]irst|[Oo]ne)$",NAME) : NAME = re.sub("([Ff]irst|[Oo]ne)$","1st",NAME)
-			if re.search("(^|[0-9]+.*)([Ss]econd|[Tt]wo)$",NAME) : NAME = re.sub("([Ss]econd|[Tt]wo)$","2nd",NAME)
-			if re.search("(^|[0-9]+.*)([Tt]hird|[Tt]hree)$",NAME) : NAME = re.sub("([Tt]hird|[Tt]hree)$","3rd",NAME)
-			if re.search("(^|[0-9]+.*)[Ff]our(th)?$",NAME) : NAME = re.sub("[Ff]our(th)?$","4th",NAME)
-			if re.search("(^|[0-9]+.*)([Ff]ifth|[Ff]ive)$",NAME) : NAME = re.sub("([Ff]ifth|[Ff]ive)$","5th",NAME)
-			if re.search("(^|[0-9]+.*)[Ss]ix(th)?$",NAME) : NAME = re.sub("[Ss]ix(th)?$","6th",NAME)
-			if re.search("(^|[0-9]+.*)[Ss]even(th)?$",NAME) : NAME = re.sub("[Ss]even(th)?$","7th",NAME)
-			if re.search("(^|[0-9]+.*)[Ee]igh?th?$",NAME) : NAME = re.sub("[Ee]igh?th?$","8th",NAME)
-			if re.search("(^|[0-9]+.*)[Nn]in(th|e)+$",NAME) : NAME = re.sub("[Nn]in(th|e)+$","9th",NAME)
-			
-			if re.search("[0-9]+",NAME) :
-				if re.search("^[0-9]+$",NAME) : #if NAME is only numbers (no suffix), add the correct suffix
-					foo = True
-					suffixes = {'11':'11th','12':'12th','13':'13th','1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th','8':'8th','9':'9th','0':'0th'}
-					num = re.search("[0-9]+$",NAME).group(0)
-					suff = ''
-					# if num is not found in suffixes dict, remove leftmost digit until it is found... 113 -> 13 -> 13th;    24 -> 4 -> 4th
-					while(suff=='') :
-						try :
-							suff = suffixes[num]
-						except KeyError :
-							num = num[1:]
-							if len(num) == 0 :
-								break
-					if not suff == '' :
-						NAME = re.sub(num+'$',suff,NAME)
-				else :
-					# Fix incorrect suffixes e.g. "73d St" -> "73rd St"
-					if re.search("[23]d$",NAME) :
-						NAME = re.sub("3d","3rd",NAME)
-						NAME = re.sub("2d","2nd",NAME)
-					if re.search("1 [Ss]t|2 nd|3 rd|1[1-3] th|[04-9] th",NAME) :
-						try :
-							suff = re.search("[0-9] ([Sa-z][a-z])",NAME).group(1)
-						except :
-							print("NAME: "+NAME+", suff: "+suff+", st: "+st)
-						NAME = re.sub(" "+suff,suff,NAME)
-					# TODO: identify corner cases with numbers e.g. "51 and S- Hermit"
-				
-				# This \/ is a bit overzealous...! #
-				hnum = re.search("^([0-9]+[ \-]+).+",NAME) #housenum in stname?
-				if hnum : 
-					#False
-					NAME = re.sub(hnum.group(1),"",NAME) #remove housenum. May want to update housenum field, maybe not though.
-					runAgain = True
-			else :
-				NAME = NAME.title()
-			
-		else :
-			assert(False)
-		# Standardize "St ____ Ave" -> "Saint ____ Ave" #
-		NAME = re.sub("^([Ss][Tt]\.?|[Ss][Aa][Ii][Nn][Tt])[ \-]","Saint ",NAME)
-	st = re.sub(re.escape(match.group(1).strip()),NAME,st).strip()
-	try :
-		assert st == (DIR+' '+NAME+' '+TYPE).strip()
-	except AssertionError :
-		print("Something went a bit wrong while trying to pre-standardize stnames.")
-		print("orig was: "+orig_st)
-		print("st is: \""+st+"\"")
-		print("components: ["+(DIR+','+NAME+','+TYPE).strip()+"]")
-	
-	if runAgain :
-		return standardize_street(st)
-	else :
-		return [st, DIR, NAME, TYPE]
 
 def csv_from_excel(excel_file, csv_name):
 	workbook = xlrd.open_workbook(excel_file)
@@ -1034,8 +846,8 @@ def even_or_odd(Address_List) :
 			else :
 				odd_cnt = odd_cnt+1
 		except ValueError :
-			print("not an address #: "+str(a_str))
-
+			# print("not an address #: "+str(a_str))
+			continue
 	if even_cnt / len(Address_List) >= .9 :
 		return 'even'
 	elif odd_cnt / len(Address_List) >= .9 :
@@ -1087,8 +899,8 @@ def get_st_by_name(name, st_dict) :
 #If second argument is True, return a list of all components 
 def isolate_st_name(st,whole_phrase = False) :
 	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
-		print("it is "+str(whole_phrase))
-		print(str(st)+" is not a silly string")
+		# print("it is "+str(whole_phrase))
+		# print(str(st)+" is not a silly string")
 		return None
 	else :
 		TYPE = re.search(" (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$",st)
@@ -1185,11 +997,46 @@ def fuzzy_match(phrase,st_list) :
 		if(m_TYPE == TYPE) :
 			return m
 
+def find_mode(l) :
+	mode_dict = {}
+	for i in l :
+		if not i in mode_dict.keys() :
+			mode_dict[i] = 1
+		else :
+		   mode_dict[i] += 1
+	try :
+		max_freq = sorted(mode_dict.values())[-1]
+	except :
+		print("max_freq prob")
+		print(l)
+		return -999
+	return [x[0] for x in mode_dict.items() if x[1]==max_freq]
+
+# given a intersect->info dict for a particular block, return what ED the block should be in
+def aggregate_blk_inter_data(inter_dict) :
+	possible_eds = []
+	for k,v in inter_dict.items() :
+		if isinstance(v[1],int) :
+			possible_eds += [v[1]]
+		if isinstance(v[1],list) :
+			try :
+				possible_eds += [int(x) for x in v[1]]
+			except :
+				continue
+	mode = find_mode(possible_eds)
+	if mode == -999 :
+		print(inter_dict)
+		return 0
+	if len(mode) == 1 :
+		return mode[0]
+	else :
+		return '|'.join([str(x) for x in mode])  
+
 # Main Program Loop - also outputs statistics and results to .txt files
 def RunAnalysisInt(city_name) :
 	#Put this  on  hold until it can be standardized or discarded, as necessary (based on the decade comparison of SM 10/30/40)
 	#SM_st_corrections = pickle.load( open("SM_decade_compare_st_corrections.p","rb"))
-	print("Processing Input Files")
+	print("Preparing Input for "+city_name+ " (intersections)")
 
 	# Create Map DICTs
 	for ind, iline in enumerate(InterLines) :
@@ -1273,18 +1120,18 @@ def RunAnalysisInt(city_name) :
 							# resolve ambiguity using addresses
 							try :
 								_,ambig_st = find_unique_st(discrete_st_list) #ambig_st is the non-unique st in the intersection
+								ED_bound_test = is_ED_boundary(ambig_st[0],EDs[0])
+								if ED_bound_test == "nfm" : #st_ed from map+morse not found in micro
+									Intersect_Info_DICT[i] = ['nfm',int(EDs[0])]
+								elif ED_bound_test == "na" :
+									Intersect_Info_DICT[i] = ['na',int(EDs[0])]
+								elif ED_bound_test == "yes" :
+									Intersect_Info_DICT[i] = ['b',int(EDs[0])] #boundary
+								else :
+									Intersect_Info_DICT[i] = ['i',int(EDs[0])] #internal
 							except ValueError :
 								if debug : print("couldn't find a unique st out of "+str(discrete_st_list))
-								Intersect_Info_DICT[i] = ['a'] #ambiguous
-							ED_bound_test = is_ED_boundary(ambig_st[0],EDs[0])
-							if ED_bound_test == "nfm" : #st_ed from map+morse not found in micro
-								Intersect_Info_DICT[i] = ['nfm',int(EDs[0])]
-							elif ED_bound_test == "na" :
-								Intersect_Info_DICT[i] = ['na',int(EDs[0])]
-							elif ED_bound_test == "yes" :
-								Intersect_Info_DICT[i] = ['b',int(EDs[0])] #boundary
-							else :
-								Intersect_Info_DICT[i] = ['i',int(EDs[0])] #internal
+								Intersect_Info_DICT[i] = ['a', 0] #ambiguous
 						elif len(EDs)>1 :
 							Intersect_Info_DICT[i] = ['e',[int(x) for x in EDs]] #external (could include boundary intersections) - associated with more than one ED
 						elif len(EDs)==1 :
@@ -1358,41 +1205,6 @@ def RunAnalysisInt(city_name) :
 		else :
 			Output_TXT.write(i+","+info[0]+"\n")
 
-def find_mode(l) :
-	mode_dict = {}
-	for i in l :
-		if not i in mode_dict.keys() :
-			mode_dict[i] = 1
-		else :
-		   mode_dict[i] += 1
-	try :
-		max_freq = sorted(mode_dict.values())[-1]
-	except :
-		print("max_freq prob")
-		print(l)
-		return -999
-	return [x[0] for x in mode_dict.items() if x[1]==max_freq]
-
-# given a intersect->info dict for a particular block, return what ED the block should be in
-def aggregate_blk_inter_data(inter_dict) :
-	possible_eds = []
-	for k,v in inter_dict.items() :
-		if isinstance(v[1],int) :
-			possible_eds += [v[1]]
-		if isinstance(v[1],list) :
-			try :
-				possible_eds += [int(x) for x in v[1]]
-			except :
-				continue
-	mode = find_mode(possible_eds)
-	if mode == -999 :
-		print(inter_dict)
-		return 0
-	if len(mode) == 1 :
-		return mode[0]
-	else :
-		return '|'.join([str(x) for x in mode])  
-
 def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 
 	city = city.replace(' ','')
@@ -1419,7 +1231,7 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 	global Intersect_BLOCK_DICT
 	global ST_Intersect_DICT
 	global BLOCK_Intersect_DICT
-	Intersect_ST_DICT = {} # lookup intersection -> which STs (names)
+	Intersect_ST_DICT = defaultdict(list) # lookup intersection -> which STs (names)
 	Intersect_BLOCK_DICT = {} # lookup intersection -> which BLOCKs
 	ST_Intersect_DICT = {} # lookup ST -> which intersections
 	BLOCK_Intersect_DICT = {} # lookup BLOCK ID -> which intersections
@@ -1448,7 +1260,7 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 	SM_ED_TXT = open(csv_name+".csv",'r')
 	SM_ED_TXT1 = open(csv_name+"_ED.csv",'r')
 
-	if ~os.path.isfile(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_1930_stgrid_edit_Uns2.shp'):
+	if ~os.path.isfile(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_1930_stgrid_edit_Uns2_Intersections.shp'):
 		prepare_map_intersections(city + state + '_1930_stgrid_edit_Uns2.shp', fullname_var, paths)
 
 	Intersect_TXT = open(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_1930_stgrid_edit_Uns2_Intersections.txt')
@@ -1460,7 +1272,7 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 
 	RunAnalysisInt(city)
 
-	print("Creating ED Map")
+	print("Creating ED Map for %s (Intersections algorithm)" % (city))
 	draw_EDs(city, state, paths, "ED_inter", False)
 		
 #
@@ -1575,12 +1387,25 @@ def get_ed_guesses(city, state, fullname_var):
 
 	# Create a copy of file created by Matt's script (contains guesses from all three methods)
 	last_step = dir_path + '/GIS_edited/' + city + '_1930_ED_Choice_map.shp'
+	ed_desc_map = dir_path + '/GIS_edited/' + city + '_ED_desc.shp'
 	ed_guess_file = dir_path + '/GIS_edited/' + city + state + '_ED_guess_map.shp'
-	arcpy.CopyFeatures_management(last_step, ed_guess_file)
+
+	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
+	arcpy.SpatialJoin_analysis(target_features=last_step, 
+		join_features=ed_desc_map, 
+		out_feature_class=ed_guess_file, 
+		join_operation="JOIN_ONE_TO_ONE", 
+		join_type="KEEP_ALL")
 
 	# Select relevant variables and extract best ED guesses
 	df = dbf2DF(ed_guess_file)
-	df['ed_geocode'] = df['FirstE'].astype(int)
+	def replace_blanks(ed):
+		if ed == '':
+			return '0'
+		else:
+			return ed
+	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1).astype(int)
+	df.loc[:,'ed_geocode'] = df['FirstE'].astype(int)
 	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
 	df_ed_guess = df[relevant_vars]
 	df_ed_guess.loc[:,'ed_guess'], df_ed_guess.loc[:,'ed_conf'] = zip(*df_ed_guess.apply(lambda x: select_best_ed_guess(x), axis=1))
@@ -1636,11 +1461,14 @@ city_info_list = [
 	]
 
 info = []
+num_finished = 0
 for city_info in city_info_list:
 	city, state = city_info
 	try:
 		info.append(get_ed_guesses(city, state, fullname_var))
+		num_finished += 1
 	except:
 		continue
+print("%s of %s cities processed" % (str(num_finished), str(len(city_info_list))))
 df = pd.concat(info)
-df.to_csv('S:/Users/Chris/ed_guess_info.csv')
+df.to_csv('S:/Users/Chris/ed_guess_info.csv', index=False)
