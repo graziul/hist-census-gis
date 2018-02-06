@@ -420,7 +420,7 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 	else:
 		points30 = geo_path + city_name + "_1930_Points.shp"
 
- #	attach_pblk_id(geo_path, city_name, points30)
+ 	attach_pblk_id(geo_path, city_name, points30)
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
