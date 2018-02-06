@@ -244,37 +244,6 @@ def draw_EDs(city, state, paths, new_var_name, is_desc) :
 				arcpy.SelectLayerByAttribute_management("blk_lyr", "CLEAR_SELECTION")
 				#feature_to_polygon on the selected segments
 		arcpy.Delete_management(intermed_path+"poly_lyr.shp")
-		'''
-		# CHRIS'S APPROACH TO DRAWING ED MAP FOR DESCRIPTIONS ALGORITHM
-		# Load ED-intersection data
-		ed_inter_data = open(geo_path + city+"_EDs.txt","r").readlines()
-		ed_inter_dict = {int(ed):[int(i) for i in list(ints.strip()
-			.replace("\r\n","")
-			.replace("(","")
-			.replace(")","")
-			.split(","))] for ed, ints in [i.split(":") for i in ed_inter_data]}
-		# Use ED-intersection and block-intersection data to get block-ED data
-		blk_ed_dict = {blk:[ed for ed, inters1 in ed_inter_dict.items() for inter in inters1 if inter in inters] for blk, inters in polyblk_inter_dict.items()}
-		def return_eds(v):
-			eds = find_mode(v)
-			if len(eds) == 1:
-				return str(eds[0])
-			else:
-				return '|'.join([str(ed) for ed in eds])
-		blk_ed_dict = {k:return_eds(v) for k,v in blk_ed_dict.items() if v != []}
-		# Attach EDs to blocks
-		try :
-			arcpy.AddField_management (targ1, new_var_name, "TEXT")
-		except :
-			pass
-		with arcpy.da.UpdateCursor(targ1, ["pblk_id",new_var_name]) as up_cursor:
-			for row in up_cursor :
-				try:
-					row[1] = blk_ed_dict[row[0]]
-				except KeyError:
-					row[1] = 0
-				up_cursor.updateRow(row)		
-		'''
 	# If using Amory's intersection method do this...
 	elif ~is_desc:
 		blk_ed_dict = {}
@@ -389,8 +358,11 @@ def get_predecessors(pre_dict,v) :
 	orig_v = v
 	l = []
 	while pre_dict[v] and pre_dict[v] != orig_v :
-		l.append(pre_dict[v])
-		v = pre_dict[v]
+		if len(l) > 200:
+			return l
+		else:
+			l.append(pre_dict[v])
+			v = pre_dict[v]
 	return l
 
 def find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = False,debug = False) :
@@ -1007,8 +979,8 @@ def find_mode(l) :
 	try :
 		max_freq = sorted(mode_dict.values())[-1]
 	except :
-		print("max_freq prob")
-		print(l)
+		#print("max_freq prob")
+		#print(l)
 		return -999
 	return [x[0] for x in mode_dict.items() if x[1]==max_freq]
 
@@ -1025,7 +997,7 @@ def aggregate_blk_inter_data(inter_dict) :
 				continue
 	mode = find_mode(possible_eds)
 	if mode == -999 :
-		print(inter_dict)
+		#print(inter_dict)
 		return 0
 	if len(mode) == 1 :
 		return mode[0]
@@ -1295,7 +1267,7 @@ def identify_1930_eds(city_name, paths):
 
 def select_best_ed_guess(x):
 	
-	_, ed_desc, ed_inter, ed_geocode = x.copy()
+	_, ed_desc, ed_inter, ed_geocode = x
 	
 	# Split if multiple EDs
 	if '|' in str(ed_desc):
@@ -1308,7 +1280,11 @@ def select_best_ed_guess(x):
 		ed_inter = [int(i) for i in ed_inter]
 	else:
 		ed_inter = [int(ed_inter)]
-	ed_geocode = [int(ed_geocode)]
+	if '|' in str(ed_inter):
+		ed_geocode = ed_geocode.split('|')
+		ed_geocode = [int(i) for i in ed_geocode]
+	else:
+		ed_geocode = [int(ed_geocode)]
 
 	# List of EDs guessed
 	ed_list = list(set(ed_desc + ed_inter + ed_geocode))
@@ -1318,7 +1294,7 @@ def select_best_ed_guess(x):
 	ed_guess_list = []
 	
 	# Initialize guess to be missing, confidence -1 
-	ed_guess_conf = [0, -1]
+	ed_guess_conf = [-1, 0]
 	
 	# If no guesses, return missing
 	if len(ed_list) == 0:
@@ -1349,7 +1325,17 @@ def select_best_ed_guess(x):
 	if len(df_one_ed_guess) > 0:
 		ed_conf = df_one_ed_guess['conf'].min()
 		ed_guess = df_one_ed_guess.loc[df_one_ed_guess['conf']==ed_conf,'ed'].values[0]
-		ed_guess_conf = [ed_guess, ed_conf]
+		ed_guess_conf = [ed_conf, ed_guess]
+	elif len(df_ed_guess[df_ed_guess['count']>1]) > 0:
+		df_two_plus_ed_guess = df_ed_guess[df_ed_guess['count']>1]
+		for ed in df_two_plus_ed_guess['ed'].tolist():
+			if ed in ed_desc:
+				if (ed in ed_inter) or (ed in ed_geocode):
+					ed_guess_conf = [2, ed]
+					return ed_guess_conf
+				else:
+					ed_guess_conf = [3, ed]
+					return ed_guess_conf
 
 	return ed_guess_conf
 
@@ -1367,8 +1353,9 @@ def get_ed_guesses(city, state, fullname_var):
 	r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
 	script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
 	paths = [r_path, script_path, dir_path]
+	geo_path = dir_path + '/GIS_edited/'
 
-	# Step 1: create address file as well as street grid and physical block shapefiles 
+	# Step 1: create address file, street grid, physical block, and initial geocode shapefiles 
 	create_1930_addresses(city, state, paths)
 	create_blocks_and_block_points(city, state, paths)
 
@@ -1386,16 +1373,18 @@ def get_ed_guesses(city, state, fullname_var):
 	#	b. Assign confidence to guesses
 
 	# Create a copy of file created by Matt's script (contains guesses from all three methods)
-	last_step = dir_path + '/GIS_edited/' + city + '_1930_ED_Choice_map.shp'
-	ed_desc_map = dir_path + '/GIS_edited/' + city + '_ED_desc.shp'
-	ed_guess_file = dir_path + '/GIS_edited/' + city + state + '_ED_guess_map.shp'
+	last_step = geo_path + city + '_1930_ED_Choice_map.shp'
+	ed_desc_map = geo_path + city + '_ED_desc.shp'
+	ed_guess_file = geo_path + city + state + '_ED_guess_map.shp'
 
 	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
+
 	arcpy.SpatialJoin_analysis(target_features=last_step, 
 		join_features=ed_desc_map, 
 		out_feature_class=ed_guess_file, 
 		join_operation="JOIN_ONE_TO_ONE", 
-		join_type="KEEP_ALL")
+		join_type="KEEP_ALL",
+		match_option="HAVE_THEIR_CENTER_IN")
 
 	# Select relevant variables and extract best ED guesses
 	df = dbf2DF(ed_guess_file)
@@ -1405,59 +1394,103 @@ def get_ed_guesses(city, state, fullname_var):
 		else:
 			return ed
 	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1).astype(int)
-	df.loc[:,'ed_geocode'] = df['FirstE'].astype(int)
+	def get_ed_geocode(eds):
+		eds = [ed for ed in eds if ed != '0']
+		if len(eds) == 0:
+			return '0'
+		elif len(eds) == 1:
+			return eds[0]
+		else:
+			return '|'.join(eds)
+	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].astype(int).astype(str).apply(lambda x: get_ed_geocode(x), axis=1)
 	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
 	df_ed_guess = df[relevant_vars]
-	df_ed_guess.loc[:,'ed_guess'], df_ed_guess.loc[:,'ed_conf'] = zip(*df_ed_guess.apply(lambda x: select_best_ed_guess(x), axis=1))
+	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
+
+	# Relabel confidence variable descriptively 
+	label_conf = {}
+	label_conf[-1] = "-1. No guess"
+	label_conf[1] = "1. Three agree"
+	label_conf[2] = "2. Two agree"
+	label_conf[3] = "3. Descriptions only"
+	label_conf[4] = "4. Intersections only"
+	label_conf[5] = "5. Geocoding only"
+	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)
+	
+	# Save dbf (have to use field mapping to preserve TEXT data format)
+	def save_dbf_ed(df, geo_path, shapefile_name):
+		file_temp = shapefile_name.split('/')[-1]
+		rand_post = str(random.randint(1,100001))
+		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
+		df.to_csv(csv_file,index=False)
+		try:
+			os.remove(geo_path + "/schema.ini")
+		except:
+			pass
+
+		# Add a specific field mapping for a special case
+		file = csv_file
+		field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+		ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
+		ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
+		ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
+		ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
+		ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file)
+
+		arcpy.TableToTable_conversion(in_rows=csv_file, 
+			out_path=geo_path, 
+			out_name="temp_for_shp"+rand_post+".dbf",
+			field_mapping=field_map)
+		os.remove(shapefile_name.replace('.shp','.dbf'))
+		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
+		os.remove(csv_file)
+
+	save_dbf_ed(df_ed_guess, geo_path, ed_guess_file)
+
+	df_ed_guess.index = df_ed_guess['pblk_id']
+	df_ed_guess_dict = df_ed_guess.to_dict('index')
+	with arcpy.da.UpdateCursor(ed_guess_file, ['pblk_id','ed_inter']) as up_cursor:
+		for row in up_cursor :
+			row[1] = df_ed_guess_dict[str(row[0])]['ed_inter']
+			up_cursor.updateRow(row)
+
 
 	# Create a tabular summary of number guessed by confidence in guess
 	info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
 	info['city'] = city
 	info['state'] = state
 
-	# Relabel confidence variable descriptively (for mapping purposes)
-	def label_conf(conf):
-		if conf == -1:
-			return "-1. No guess"
-		elif conf == 1:
-			return "1. All agree"
-		elif conf == 2:
-			return "2. Two agree"
-		elif conf == 3:
-			return "3. SM descriptions"
-		elif conf == 4:
-			return "4. Intersections"
-		else:
-			return "5. Geocoding"
-	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf(x['ed_conf']), axis=1)
-	save_dbf(df_ed_guess, ed_guess_file.split('/')[-1], '/'.join(ed_guess_file.split('/')[:-1])+'/')
-
 	return info
 
+
 # City info
-#city = "Worcester"
-#state = "MA"
+#city = "Dayton"
+#state = "OH"
 
 # Full street name variable
 fullname_var = "FULLNAME"
+
+#info = get_ed_guesses(city, state, fullname_var)
 
 # To be included in the city_info_list, must have:
 #	a. [CITY][STATE]_1940_stgrid_diradd.shp
 #	b. [CITY][STATE]_StudAuto.dta
 
 city_info_list = [
-	['Albany','NY'],
-	['Dayton','OH'],
+	['Albany','NY'],	
+	['Dayton','OH'], 	
 	['Houston','TX'],
 	['Miami','FL'],
-	['New Haven','CT'],
-	['Newark','NJ'],
-	['Rochester','NY'],
-	['San Diego','CA'],
+	['New Haven','CT'], 
+	['Newark','NJ'], 	
+	['Rochester','NY'], 
+	['San Diego','CA'], 
 	['Seattle','WA'],
 	['St Paul','MN'],
-	['Worcester','MA'],
-	['Yonkers','NY']
+	['Worcester','MA'], 
+	['Yonkers','NY']  	
 	]
 
 info = []
@@ -1471,4 +1504,5 @@ for city_info in city_info_list:
 		continue
 print("%s of %s cities processed" % (str(num_finished), str(len(city_info_list))))
 df = pd.concat(info)
-df.to_csv('S:/Users/Chris/ed_guess_info.csv', index=False)
+df_to_write = pd.pivot_table(df, values='pblk_id', index=['city','state'], columns=['ed_conf'])
+df_to_write.to_csv('S:/Users/Chris/ed_guess_info.csv')
