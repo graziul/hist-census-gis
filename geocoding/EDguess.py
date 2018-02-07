@@ -6,6 +6,7 @@ from __future__ import print_function
 import os
 import re
 import math
+import copy
 import csv
 import xlrd
 import sys
@@ -331,11 +332,13 @@ def get_block_by_intersections(i1,i2) :
 # iterate backwards to avoid problems with iterating and modifying list simultaneously...!
 def f7(seq):
 	ind = len(seq) - 2
+	rem_list = []
 	while ind >= 0 :
 		if seq[ind] == seq[ind+1] :
 			del seq[ind+1]
+			rem_list.append(ind+1)
 		ind -= 1
-	return seq
+	return seq, rem_list
 
 #compares st1 with st2, which can be a string or a list of strings
 #if list, return True if st1 matches with ANY string in st2
@@ -550,13 +553,13 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 		#    continue
 
 		#keep only unique street names, but preserve order in description
-		descript = f7(descript)
-		
+		descript_stripped,rem_list = f7(copy.copy(descript))
+
 		intersect = []
 		start_ind = 0
 		#find an exactly matching starting intersection
-		while start_ind <= len(descript) - 1:
-			start_streets = [descript[start_ind], descript[(start_ind+1)%len(descript)]]
+		while start_ind <= len(descript_stripped) - 1:
+			start_streets = [descript_stripped[start_ind], descript_stripped[(start_ind+1)%len(descript_stripped)]]
 			if debug:print("start_streets: "+str(start_streets))
 			intersect = get_intersect_by_stnames(start_streets)
 			if intersect == [] or start_streets[0] == start_streets[1] :
@@ -564,18 +567,18 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 			else :
 				break
 		if intersect == [] or start_streets[0] == start_streets[1] :
-			if debug:print("Could not find any exactly matching intersections out of "+str(descript))
+			if debug:print("Could not find any exactly matching intersections out of "+str(descript_stripped))
 		else :
 			#breadth-first search through block/intersection dicts to find
 			#path to intersection with next street in the description
-
 			#change descript to be just the NAMEs of the streets
-			descript = ED_NAME_description_dict[ED]
-			#keep only unique street names, but preserve order in description
-			descript = f7(descript)
-			if debug:print(str(ED)+": "+str(descript))
 
-			success, string = find_descript_segments(descript,intersect,start_ind,start_streets,debug=debug)
+			descript_orig = copy.copy(ED_NAME_description_dict[ED])
+			#remove streets at the indices that were previously removed
+			for i in rem_list :
+				del descript_orig[i]
+
+			success, string = find_descript_segments(descript_orig,intersect,start_ind,start_streets,debug=debug)
 			if success :
 				output.write(str(ED)+": "+string+"\n")
 				ED_Intersect_ID_dict[ED] = string
@@ -589,11 +592,11 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 		start_ind = 0
 
 		#keep only unique street names, but preserve order in description
-		descript = f7(descript)
+		descript_stripped,rem_list = f7(copy.copy(descript))
 		
 		#find an exactly matching starting intersection
-		while start_ind <= len(descript) - 1:
-			start_streets = [descript[start_ind], descript[(start_ind+1)%len(descript)]]
+		while start_ind <= len(descript_stripped) - 1:
+			start_streets = [descript_stripped[start_ind], descript_stripped[(start_ind+1)%len(descript_stripped)]]
 			if debug:print("start_streets: "+str(start_streets))
 			intersect = get_intersect_by_stnames(start_streets)
 			if intersect == [] :
@@ -601,18 +604,19 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 			else :
 				break
 		if intersect == [] :
-			if debug:print("Could not find any exactly matching intersections out of "+str(descript))
+			if debug:print("Could not find any exactly matching intersections out of "+str(descript_stripped))
 		else :
 			#breadth-first search through block/intersection dicts to find
 			#path to intersection with next street in the description
 
 			#change descript to be just the NAMEs of the streets
-			descript = ED_NAME_description_dict[ED]
-			#keep only unique street names, but preserve order in description
-			descript = f7(descript)
-			if debug:print(str(ED)+": "+str(descript))
+			descript_orig = copy.copy(ED_NAME_description_dict[ED])
+			#remove streets at the indices that were previously removed
+			for i in rem_list :
+				del descript_orig[i]
+			if debug:print(str(ED)+": "+str(descript_orig))
 
-			success, string = find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = True,debug=debug)
+			success, string = find_descript_segments(descript_orig,intersect,start_ind,start_streets,fuzzy = True,debug=debug)
 			if success :
 				if debug:print("FUZZY WORKED FOR "+str(ED)+"!!!!!!!!!!!!!!!!!!!!!")
 				output.write(str(ED)+": "+string+"\n")
@@ -1465,14 +1469,8 @@ def get_ed_guesses(city, state, fullname_var):
 	return info
 
 
-# City info
-#city = "Dayton"
-#state = "OH"
-
 # Full street name variable
 fullname_var = "FULLNAME"
-
-#info = get_ed_guesses(city, state, fullname_var)
 
 # To be included in the city_info_list, must have:
 #	a. [CITY][STATE]_1940_stgrid_diradd.shp
