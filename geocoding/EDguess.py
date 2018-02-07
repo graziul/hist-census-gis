@@ -986,23 +986,23 @@ def find_mode(l) :
 
 # given a intersect->info dict for a particular block, return what ED the block should be in
 def aggregate_blk_inter_data(inter_dict) :
-	possible_eds = []
-	for k,v in inter_dict.items() :
-		if isinstance(v[1],int) :
-			possible_eds += [v[1]]
-		if isinstance(v[1],list) :
-			try :
-				possible_eds += [int(x) for x in v[1]]
-			except :
-				continue
-	mode = find_mode(possible_eds)
-	if mode == -999 :
-		#print(inter_dict)
-		return 0
-	if len(mode) == 1 :
-		return mode[0]
-	else :
-		return '|'.join([str(x) for x in mode])  
+    possible_eds = []
+    for k,v in inter_dict.items() :
+        if not isinstance(v[1],list) :
+            possible_eds += [v[1]]
+        if isinstance(v[1],list) :
+            try :
+                possible_eds += v[1]
+            except :
+                continue
+    mode = find_mode(possible_eds)
+    if mode == -999 :
+        print(inter_dict)
+        return 0
+    if len(mode) == 1 :
+        return mode[0]
+    else :
+        return '|'.join([str(x) for x in mode])  
 
 # Main Program Loop - also outputs statistics and results to .txt files
 def RunAnalysisInt(city_name) :
@@ -1077,7 +1077,7 @@ def RunAnalysisInt(city_name) :
 
 			if proceed :
 				if "City Limits" in STList :
-					Intersect_Info_DICT[i] = ['b',[int(x) for x in EDs]]
+					Intersect_Info_DICT[i] = ['b',EDs]
 				elif EDs == None or EDs == [] : #Steve Morse contradicts map
 					Intersect_Info_DICT[i] = ['mc',STList]
 					#print("no ED data: "+str(STList))
@@ -1086,7 +1086,7 @@ def RunAnalysisInt(city_name) :
 					BLOCKs = Intersect_BLOCK_DICT[i]
 					
 					if(len(EDs)==1 and len(BLOCKs)>3) :
-						Intersect_Info_DICT[i] = ['i',int(EDs[0])] #internal
+						Intersect_Info_DICT[i] = ['i',EDs[0]] #internal
 					else :
 						if(len(EDs)==1 and len(BLOCKs)==3) : # 3-way intersections #
 							# resolve ambiguity using addresses
@@ -1094,20 +1094,20 @@ def RunAnalysisInt(city_name) :
 								_,ambig_st = find_unique_st(discrete_st_list) #ambig_st is the non-unique st in the intersection
 								ED_bound_test = is_ED_boundary(ambig_st[0],EDs[0])
 								if ED_bound_test == "nfm" : #st_ed from map+morse not found in micro
-									Intersect_Info_DICT[i] = ['nfm',int(EDs[0])]
+									Intersect_Info_DICT[i] = ['nfm',EDs[0]]
 								elif ED_bound_test == "na" :
-									Intersect_Info_DICT[i] = ['na',int(EDs[0])]
+									Intersect_Info_DICT[i] = ['na',EDs[0]]
 								elif ED_bound_test == "yes" :
-									Intersect_Info_DICT[i] = ['b',int(EDs[0])] #boundary
+									Intersect_Info_DICT[i] = ['b',EDs[0]] #boundary
 								else :
-									Intersect_Info_DICT[i] = ['i',int(EDs[0])] #internal
+									Intersect_Info_DICT[i] = ['i',EDs[0]] #internal
 							except ValueError :
 								if debug : print("couldn't find a unique st out of "+str(discrete_st_list))
 								Intersect_Info_DICT[i] = ['a', 0] #ambiguous
 						elif len(EDs)>1 :
-							Intersect_Info_DICT[i] = ['e',[int(x) for x in EDs]] #external (could include boundary intersections) - associated with more than one ED
+							Intersect_Info_DICT[i] = ['e',EDs] #external (could include boundary intersections) - associated with more than one ED
 						elif len(EDs)==1 :
-							Intersect_Info_DICT[i] = ['i',int(EDs[0])] #internal, 2-way
+							Intersect_Info_DICT[i] = ['i',EDs[0]] #internal, 2-way
 						else :
 							print("something is up with intersection "+str(i))
 							assert (False == True)
