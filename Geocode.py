@@ -84,7 +84,7 @@ fix_st_grid_names(city_spaces=city_spaces,
 # Step 4: Use ED map and contemporary geocode to fix microdata block numbers
 #
 
-# First, update addresses and contemporary geocode
+# Step 4a: Update addresses and contemporary geocode
 
 # Create 1930 addresses (now uses updated addresses in df_micro)
 create_1930_addresses(city_name=city, 
@@ -92,7 +92,7 @@ create_1930_addresses(city_name=city,
 	paths=paths, 
 	df=df_micro)
 
-# Second, get updated contemporary geocode (using updated adresses from df_micro)
+# Step 4b: Get updated contemporary geocode (using updated adresses from df_micro)
 initial_geocode(geo_path=dir_path+'/GIS_edited/', 
 	city_name=city, 
 	state_abbr=state,
@@ -105,13 +105,13 @@ dofile = script_path + "/utils/ConvertCsvToDta.do"
 cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
 subprocess.call(cmd) 
 
-# Get block numbers
+# Step 4c: Get block numbers
 
 identify_1930_blocks_geocode(city_name, paths)
 identify_1930_blocks_microdata(city_name, state_abbr, micro_street_var, paths)
 
 
-# Third, fix microdata block numbers using updated geocode and microdata (requires block map)
+# Step 4d: Fix microdata block numbers using updated geocode and microdata (requires block map)
 
 df_micro2 = fix_micro_blocks_using_ed_map(city_name=city, 
 	state_abbr=state, 
