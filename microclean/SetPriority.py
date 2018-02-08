@@ -153,7 +153,7 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	num_streets_exact_stgrid, num_streets_noexact_stgrid, \
 	exact_matching_time = exact_info 
 	#Calculate exact matching variables
-	prop_exact_matches_sm = float(num_exact_matches_sm)/num_records
+	#prop_exact_matches_sm = float(num_exact_matches_sm)/num_records
 	prop_exact_matches_stgrid = float(num_exact_matches_stgrid)/num_records
 
 	#Parse fuzzy matching info
@@ -189,6 +189,7 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	num_hn_outliers1 = 	df['hn_outlier1'].sum()  
 	num_hn_outliers2 = 	df['hn_outlier2'].sum() 
 
+	'''
 	num_resid_check_st = len(df[df['check_st'] & ~df['check_hn']])
 	prop_resid_check_st = float(num_resid_check_st)/num_records
 
@@ -197,6 +198,7 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 
 	num_resid_check_st_hn = len(df[df['check_st'] & df['check_hn']])
 	prop_resid_check_st_hn = float(num_resid_check_st_hn)/num_records
+	'''
 
 	num_street_changes_total = num_street_changes1 + num_street_changes2
 	prop_street_changes_total = float(num_street_changes_total)/num_records
@@ -208,28 +210,23 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	num_blank_street_fixed_total = num_blank_street_fixed1 + num_blank_street_fixed2
 	prop_blank_street_fixed_total = float(num_blank_street_fixed_total)/num_records
 
+	'''
 	num_resid_st = len(df[df['check_st']]) 
 	prop_resid_st = float(num_resid_st)/num_records
-
+	
 	num_resid_hn_total = num_resid_check_hn + num_resid_check_st_hn
 	prop_resid_hn_total = prop_resid_check_hn + prop_resid_check_st_hn
 
 	num_resid_total = num_resid_check_st + num_resid_check_st_hn + num_resid_check_hn
 	prop_resid_total = prop_resid_check_st + prop_resid_check_st_hn + prop_resid_check_hn
+	'''
 
 	header = [year, city, state, num_records]
 
 	#Old solution: Back out first blank fixing since it occurs before exact matching
 	#New solution: Ignore first blank fixing since it occurs before exact matching
-	STprop = [prop_exact_matches_sm, prop_exact_matches_stgrid, 
-		prop_fuzzy_matches, prop_blank_street_fixed2, prop_resid_st]
-	STnum = [city, state, num_exact_matches_sm, num_exact_matches_stgrid, 
-		num_fuzzy_matches, num_blank_street_fixed2, num_resid_st]
-	HNprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_hn_total]
-	HNnum = [city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_hn_total]
-	Rprop = [city, state, prop_resid_check_hn, prop_resid_check_st_hn, prop_resid_check_st, prop_resid_total]
-	Rnum = [city, state, num_resid_check_hn, num_resid_check_st_hn, num_resid_check_st, num_resid_total]
-	num_seqs = len(np.unique(df['enum_seq1']))
+	STprop = [prop_exact_matches_stgrid, prop_fuzzy_matches, prop_blank_street_fixed2]
+	STnum = [city, state, num_exact_matches_stgrid, num_fuzzy_matches, num_blank_street_fixed2]
 	ED = [city, state, problem_EDs_present]
 	FixBlank = [city, state, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
 		num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2]
@@ -237,6 +234,6 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 		blank_fix_time, priority_time, total_time]
 
 	sp = ['']
-	info = header + STprop + sp + STnum + sp + HNprop + sp + HNnum + sp + Rprop + sp + Rnum + sp + ED + sp + FixBlank + sp + Time
+	info = header + STprop + sp + STnum + sp + ED + sp + FixBlank + sp + Time
 
 	return info
