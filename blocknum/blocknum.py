@@ -420,7 +420,7 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 	else:
 		points30 = geo_path + city_name + "_1930_Points.shp"
 
- 	attach_pblk_id(geo_path, city_name, points30)
+	attach_pblk_id(geo_path, city_name, points30)
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
@@ -1022,10 +1022,10 @@ def renumber_grid(city_name, state_abbr, paths, df=None, geocode=False):
 	arcpy.Intersect_analysis (in_features=[block_shp_file, stgrid_file], 
 		out_feature_class=pblk_grid_file, 
 		join_attributes="ALL")
- 	# Used spatial join before, but results in fewer cases (some streets not on block boundaries?)
- 	#arcpy.SpatialJoin_analysis(target_features=block_shp_file, join_features=stgrid_file, out_feature_class=pblk_grid_file, 
-    #	join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
- 	#	match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
+	# Used spatial join before, but results in fewer cases (some streets not on block boundaries?)
+	#arcpy.SpatialJoin_analysis(target_features=block_shp_file, join_features=stgrid_file, out_feature_class=pblk_grid_file, 
+	#	join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
+	#	match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
 	df_pblk_grid = dbf2DF(pblk_grid_file.replace(".shp",".dbf"),upper=False)
 
 	# Create dictionary linking grid_id to pblk_id

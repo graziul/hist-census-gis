@@ -726,40 +726,6 @@ def morse_standardize(st) :
 	st = re.sub("^Mt ","Mount ",st)
 	return st
 
-def load_steve_morse(city, state, year, file_path):
-
-	#NOTE: This dictionary must be built independently of this script
-	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year), str(year)), 'rb'))
-	sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
-
-	#Flatten dictionary
-	temp = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
-
-	#Capture all Steve Morse streets in one list
-	sm_all_streets = temp.keys()
-
-	#
-	# Build a Steve Morse (sm) ED-to-Street (ed_st) dictionary (dict)
-	#
-
-	sm_ed_st_dict = {}
-	#Initialize a list of street names without an ED in Steve Morse
-	sm_ed_st_dict[''] = []
-	for st, eds in temp.items():
-		#If street name has no associated EDs (i.e. street name not found in Steve Morse) 
-		#then add to dictionary entry for no ED
-		if eds is None:
-			sm_ed_st_dict[''].append(st)
-		else:
-			#For every ED associated with a street name...
-			for ed in eds:
-				#Initalize an empty list if ED has no list of street names yet
-				sm_ed_st_dict[ed] = sm_ed_st_dict.setdefault(ed, [])
-				#Add street name to the list of streets
-				sm_ed_st_dict[ed].append(st)
-
-	return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
-
 def get_cray_z_scores(arr) :
 	debug = False
 	if not None in arr :
@@ -990,23 +956,23 @@ def find_mode(l) :
 
 # given a intersect->info dict for a particular block, return what ED the block should be in
 def aggregate_blk_inter_data(inter_dict) :
-    possible_eds = []
-    for k,v in inter_dict.items() :
-        if not isinstance(v[1],list) :
-            possible_eds += [v[1]]
-        if isinstance(v[1],list) :
-            try :
-                possible_eds += v[1]
-            except :
-                continue
-    mode = find_mode(possible_eds)
-    if mode == -999 :
-        print(inter_dict)
-        return 0
-    if len(mode) == 1 :
-        return mode[0]
-    else :
-        return '|'.join([str(x) for x in mode])  
+	possible_eds = []
+	for k,v in inter_dict.items() :
+		if not isinstance(v[1],list):
+			possible_eds += [v[1]]
+		if isinstance(v[1],list) :
+			try :
+				possible_eds += int(v[1])
+			except :
+				continue
+	mode = find_mode(possible_eds)
+	if mode == -999 :
+		#print(inter_dict)
+		return '0'
+	if len(mode) == 1 :
+		return mode[0]
+	else :
+		return '|'.join([str(x) for x in mode])  
 
 # Main Program Loop - also outputs statistics and results to .txt files
 def RunAnalysisInt(city_name) :
@@ -1460,14 +1426,7 @@ def get_ed_guesses(city, state, fullname_var):
 			row[1] = df_ed_guess_dict[str(row[0])]['ed_inter']
 			up_cursor.updateRow(row)
 
-
-	# Create a tabular summary of number guessed by confidence in guess
-	info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
-	info['city'] = city
-	info['state'] = state
-
-	return info
-
+	print("Finished %s" % (city))
 
 # Full street name variable
 fullname_var = "FULLNAME"
@@ -1491,16 +1450,36 @@ city_info_list = [
 	['Yonkers','NY']  	
 	]
 
-info = []
 num_finished = 0
 for city_info in city_info_list:
 	city, state = city_info
 	try:
-		info.append(get_ed_guesses(city, state, fullname_var))
+		get_ed_guesses(city, state, fullname_var))
 		num_finished += 1
 	except:
 		continue
 print("%s of %s cities processed" % (str(num_finished), str(len(city_info_list))))
-df = pd.concat(info)
+
+# Save information
+
+def get_ed_guess_stats(city_info):
+	city, state = city_info
+	city = city.replace(' ','')
+	# Load dbf data
+	ed_guess_file = "S:/Projects/1940Census/" + city + '/GIS_edited/' + city + state + '_ED_guess_map.shp'
+	df_ed_guess = dbf2DF(ed_guess_file)
+	# Create a tabular summary of number guessed by confidence in guess
+	info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
+	info['city'] = city
+	info['state'] = state
+	return info
+
+info_list = []
+for city_info in city_info_list:
+	try:
+		info_list.append(get_ed_guess_stats(city_info))
+	except:
+		continue
+df = pd.concat(info_list)
 df_to_write = pd.pivot_table(df, values='pblk_id', index=['city','state'], columns=['ed_conf'])
 df_to_write.to_csv('S:/Users/Chris/ed_guess_info.csv')
