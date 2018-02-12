@@ -14,7 +14,6 @@ import pickle
 import pandas as pd
 import numpy as np
 import arcpy
-from collections import defaultdict
 from fuzzywuzzy import fuzz
 from blocknum.blocknum import *
 arcpy.env.overwriteOutput = True
@@ -331,8 +330,11 @@ def get_block_by_intersections(i1,i2) :
 # looks for duplicate adjacent elements and deletes one
 # iterate backwards to avoid problems with iterating and modifying list simultaneously...!
 def f7(seq):
-	ind = len(seq) - 2
 	rem_list = []
+	if seq[0] == seq[-1]:
+		del seq[len(seq)-1]
+		rem_list = [len(seq)]
+	ind = len(seq) - 2
 	while ind >= 0 :
 		if seq[ind] == seq[ind+1] :
 			del seq[ind+1]
@@ -361,7 +363,7 @@ def get_predecessors(pre_dict,v) :
 	orig_v = v
 	l = []
 	while pre_dict[v] and pre_dict[v] != orig_v :
-		if len(l) > 200:
+		if len(l) > 100:
 			return l
 		else:
 			l.append(pre_dict[v])
@@ -508,9 +510,9 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 	global ST_Intersect_dict
 	global BLOCK_Intersect_dict
 	global BLOCK_NAME_dict
-	Intersect_ST_dict = defaultdict(list) # lookup intersection -> which STs (phrases)
+	Intersect_ST_dict = {} # lookup intersection -> which STs (phrases)
 	Intersect_BLOCK_dict = {} # lookup intersection -> which BLOCKs
-	Intersect_NAME_dict = defaultdict(list) # lookup intersection -> which STs (NAMEs)
+	Intersect_NAME_dict = {}  # lookup intersection -> which STs (NAMEs)
 	ST_Intersect_dict = {} # lookup ST -> which intersections
 	BLOCK_Intersect_dict = {} # lookup BLOCK ID -> which intersections
 	BLOCK_NAME_dict = {} # lookup BLOCK ID -> NAME of segment
@@ -593,13 +595,12 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 
 		#keep only unique street names, but preserve order in description
 		descript_stripped,rem_list = f7(copy.copy(descript))
-		
 		#find an exactly matching starting intersection
 		while start_ind <= len(descript_stripped) - 1:
 			start_streets = [descript_stripped[start_ind], descript_stripped[(start_ind+1)%len(descript_stripped)]]
 			if debug:print("start_streets: "+str(start_streets))
 			intersect = get_intersect_by_stnames(start_streets)
-			if intersect == [] :
+			if intersect == [] or start_streets[0] == start_streets[1]:
 				start_ind += 1
 			else :
 				break
@@ -1454,7 +1455,7 @@ num_finished = 0
 for city_info in city_info_list:
 	city, state = city_info
 	try:
-		get_ed_guesses(city, state, fullname_var))
+		get_ed_guesses(city, state, fullname_var)
 		num_finished += 1
 	except:
 		continue
