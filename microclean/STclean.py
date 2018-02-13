@@ -114,7 +114,10 @@ def rename_variables(df, year):
 				return ''
 	'''
 	if year == 1940:
-		df['street_raw'] = df['indexed_street']
+		# New 1940 data (Summer 2016)
+		df['street_raw'] = df['street']		
+		# Old 1940 data
+		#df['street_raw'] = df['indexed_street']
 	if year == 1930:
 		df['street_raw'] = df['self_residence_place_streetaddre'].str.lower()
 	if year == 1920:
@@ -124,9 +127,10 @@ def rename_variables(df, year):
 
 	# ED
 	if year == 1940:
- #       df['ed'] = df['derived_enumdist']
- 		df['ed'] = df['indexed_enumeration_district']
- #       df['ed'] = df['ed'].str.split('-').str[1]
+ 		# New 1940 data (Summer 2016)
+ 		df['ed'] = df['derived_enumdist']
+ 		# Old 1940 data
+		#df['ed'] = df['indexed_enumeration_district']
 	if year == 1930:
 		df['ed'] = df['indexed_enumeration_district']
 	if year == 1920:
@@ -162,7 +166,10 @@ def rename_variables(df, year):
 				return ''
 	'''
 	if year == 1940:
-		df['hn_raw'] = df['general_house_number']
+		# New 1940 data (Summer 2016)
+		df['hn_raw'] = df['housenum']
+		# Old 1940 data
+		#df['hn_raw'] = df['general_house_number']
 	if year == 1930:
 		df['hn_raw'] = df['general_house_number_in_cities_o']
 	if year == 1920:
@@ -175,13 +182,16 @@ def rename_variables(df, year):
    
 	# Image ID
 	if year==1940:
-		df['image_id'] = df['stableurl']
+		# New 1940 data (Summer 2016)
+		df['image_id'] = None
+		# Old 1940 data
+		#df['image_id'] = df['stableurl']
 	if year==1930:
 		df['image_id'] = df['imageid']
 
 	# Line number
 	if year==1940:
-		df['line_num'] = df['general_line_number']
+		df['line_num'] = df['linep']
 	if year==1930:
 		df['line_num'] = df['general_line_number'].apply(make_int)
 
@@ -203,7 +213,10 @@ def rename_variables(df, year):
 
 	# Institution (name)
 	if year==1940:
-		df['institution'] = df['general_institution']
+		# New 1940 data (Summer 2016)
+		df['institution'] = None
+		# Old 1940 data
+		#df['institution'] = df['general_institution']
 	if year==1930:
 		df['institution'] = df['general_institution']
 
@@ -215,18 +228,25 @@ def rename_variables(df, year):
 
 	# Household ID
 	if year==1940:
-		df['hhid_raw'] = df['hhid']
-		df['hhid'] = df['hhid_numeric']
+		# New 1940 data (Summer 2016)
+		df['hhid'] = df['serial']		
+		# Old 1940 data
+		#df['hhid_raw'] = df['hhid']
+		#df['hhid'] = df['hhid_numeric']
 	if year==1930:
 		df['hhid'] = df['general_HOUSEHOLD_ID']
 
 	# PID
 	if year==1940:
-		df['pid'] = None
+		df['pid'] = df['histid']
 	if year==1930:
 		df['pid'] = df['pid']
 
 	# Name
+	if year==1940:
+		# New 1940 data (Summer 2016)
+		df['name_last'] = df['namelast']
+		df['name_first'] = df['namefrst']
 	if year==1930:
 		df['name_last'] = df['self_empty_name_surname']
 		df['name_first'] = df['self_empty_name_given']
@@ -263,51 +283,52 @@ def remove_duplicates(df):
 	cprint('%s line number blanks removed' % (len1-len2), file=AnsiToWin32(sys.stdout))
 
 	# Remove if pages are duplicates (using sequences of age/gender)
-	image_id = df[['image_id', 'self_residence_info_age', 'self_empty_info_gender']]
-	image_id_chunks = image_id.groupby('image_id')
-	image_id_chunks_dict = {name:np.array(group[['self_residence_info_age', 'self_empty_info_gender']].values).tolist() for name, group in image_id_chunks}
-	repeat = {k:v for k, v in image_id_chunks_dict.items() if v in removekey(image_id_chunks_dict, k).values() and len(v) > 2}
+	if ~df['image_id'].isnull().all():
+		image_id = df[['image_id', 'self_residence_info_age', 'self_empty_info_gender']]
+		image_id_chunks = image_id.groupby('image_id')
+		image_id_chunks_dict = {name:np.array(group[['self_residence_info_age', 'self_empty_info_gender']].values).tolist() for name, group in image_id_chunks}
+		repeat = {k:v for k, v in image_id_chunks_dict.items() if v in removekey(image_id_chunks_dict, k).values() and len(v) > 2}
 
-	# Identify and remove image_id where all age/gender values are blank ('')
-	blank = []
-	for k, v in repeat.items():
-		if set([i for s in v for i in s]) == {''}:
-			blank.append(k)
-			repeat = removekey(repeat, k)
+		# Identify and remove image_id where all age/gender values are blank ('')
+		blank = []
+		for k, v in repeat.items():
+			if set([i for s in v for i in s]) == {''}:
+				blank.append(k)
+				repeat = removekey(repeat, k)
 
-	# Identify unique sequences of age/gender that are repeated
-	sequence_list = unique_sequences(repeat.values())
+		# Identify unique sequences of age/gender that are repeated
+		sequence_list = unique_sequences(repeat.values())
 
-	# Create list of image_id sharing the same age/gender sequence 
-	repeat_list = []
-	df_list = []
-	for i in range(len(sequence_list)):
-		repeat_list.append([k for k, v in repeat.items() if v == sequence_list[i]])
-		df_list.append(df[df['image_id'].isin(repeat_list[i])])
+		# Create list of image_id sharing the same age/gender sequence 
+		repeat_list = []
+		df_list = []
+		for i in range(len(sequence_list)):
+			repeat_list.append([k for k, v in repeat.items() if v == sequence_list[i]])
+			df_list.append(df[df['image_id'].isin(repeat_list[i])])
 
-	# Pick the page with the fewest blanks in the data
-	drop_imageids = []
-	for df_temp in df_list:
-		image_ids = np.unique(df_temp['image_id'])
-		blanks_dict = {}
-		for image in image_ids:
-			blanks_dict[image] = df_temp[df_temp['image_id']==image].apply(num_blank).sum()
-		min_blanks = min(blanks_dict.values())
-		max_blanks = max(blanks_dict.values())
-		if min_blanks == max_blanks:
-			drop_imageids.append(blanks_dict.keys()[1:])
-		else:
-			#Have to make sure only one image_id is saved since multiple may have max_blanks
-			temp = [k for k, v in blanks_dict.items() if v != max_blanks]
-			if temp is list:
-				temp = temp[0]
-			drop_imageids.append(temp)
-	drop_imageids = [i for s in drop_imageids for i in s]
+		# Pick the page with the fewest blanks in the data
+		drop_imageids = []
+		for df_temp in df_list:
+			image_ids = np.unique(df_temp['image_id'])
+			blanks_dict = {}
+			for image in image_ids:
+				blanks_dict[image] = df_temp[df_temp['image_id']==image].apply(num_blank).sum()
+			min_blanks = min(blanks_dict.values())
+			max_blanks = max(blanks_dict.values())
+			if min_blanks == max_blanks:
+				drop_imageids.append(blanks_dict.keys()[1:])
+			else:
+				#Have to make sure only one image_id is saved since multiple may have max_blanks
+				temp = [k for k, v in blanks_dict.items() if v != max_blanks]
+				if temp is list:
+					temp = temp[0]
+				drop_imageids.append(temp)
+		drop_imageids = [i for s in drop_imageids for i in s]
 
-	len1 = len(df)
-	df = df[~df['image_id'].isin(drop_imageids)]
-	len2 = len(df)
-	cprint('%s cases removed due to duplicate pages\n' % (len1-len2), file=AnsiToWin32(sys.stdout))
+		len1 = len(df)
+		df = df[~df['image_id'].isin(drop_imageids)]
+		len2 = len(df)
+		cprint('%s cases removed due to duplicate pages\n' % (len1-len2), file=AnsiToWin32(sys.stdout))
 
 	end = time.time()
 	search_time = round(float(end-start)/60, 1)
@@ -476,7 +497,7 @@ def get_streets_from_1940_street_grid(city, state, file_path):
 	return streets
 
 #Function to load 1940, Contemporary, and Chicago group 1930 street grid data (joined with Chicago group 1930 EDs)
-def get_stgrid_with_EDs(city, state, map_type, file_path): 
+def get_stgrid_with_EDs(city, state, map_type, file_path, ed_year=1940): 
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',
@@ -492,17 +513,17 @@ def get_stgrid_with_EDs(city, state, map_type, file_path):
 
 	#Map from 1940 street grid (student edited to 1940 black/white map - in future may be 1930)
 	if map_type == "1940":
-		file_name_st_grid = st_grid_path + c + state + '_1940_stgrid_ED_sj.dbf'
+		file_name_st_grid = st_grid_path + c + state + '_1940_stgrid_%s_ED_sj.dbf' % (str(ed_year))
 		street = 'FULLNAME'
 
 	#Map from Tiger/Line 2012 (clipped to approximate city boundary)
 	if map_type == "Contemp":
-		file_name_st_grid = st_grid_path + c + state + '_Contemp_stgrid_ED_sj.dbf'
+		file_name_st_grid = st_grid_path + c + state + '_Contemp_stgrid_%s_ED_sj.dbf' % (str(ed_year))
 		street = 'FULL2012'
 
 	#Map from Chicago group (only very certain cities)
 	if map_type == "Chicago":
-		file_name_st_grid = st_grid_path + c + state + '_1930_stgrid_ED_sj.dbf'
+		file_name_st_grid = st_grid_path + c + state + '_1930_stgrid_ED_%s_sj.dbf' % (str(ed_year))
 		street = 'FULLNAME'
 
 	df = dbf2DF(file_name_st_grid) 
@@ -581,7 +602,7 @@ def find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info):
 	return df, exact_info_stgrid
 
 #Function to run all exact matching and return results to Clean.py
-def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, st_grid_st_list):
+def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, source):
 
 	cprint("\nExact matching algorithm for %s \n" % (street), attrs=['underline'], file=AnsiToWin32(sys.stdout))
 
@@ -597,13 +618,22 @@ def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, st_grid_
 	num_streets = len(df.groupby([street]).count())
 	basic_info = [post,num_records,num_streets]
 
-	# Check for exact matches between microdata and Steve Morse
-	#df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
-	df['exact_match_sm_bool'+post] = False
-	exact_info_sm = []
-
-	# Check for exact matches between microdata and 1940 street grid 
-	df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
+	if source == 'sm':
+		# Check for exact matches between microdata and Steve Morse
+		df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
+		df['exact_match_stgrid_bool'+post] = False
+		exact_info_stgrid = [0, 0, 0, 0]
+	elif source == 'stgrid':
+		st_grid_st_list = get_streets_from_1940_street_grid(city,state,file_path)
+		# Check for exact matches between microdata and 1940 street grid 
+		df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
+		df['exact_match_sm_bool'+post] = False
+		exact_info_sm = [0, 0, 0, 0]
+	elif source == 'both':
+		# Check for exact matches between microdata and Steve Morse
+		df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
+		# Check for exact matches between microdata and 1940 street grid 
+		df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
 
 	# Create final exact match variable
 	df['exact_match_bool'+post] = np.where(df['exact_match_sm_bool'+post] | df['exact_match_stgrid_bool'+post]==True,True,False)
@@ -626,7 +656,7 @@ def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, st_grid_
 	cprint("Exact matching for %s took %s\n" % (city, exact_matching_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
 
 	# Generate dashboard info
-	exact_info = [num_records, num_streets] + exact_info_sm + exact_info_stgrid + [exact_matching_time]
+	exact_info = exact_info_sm + [num_records, num_streets] + exact_info_stgrid + [exact_matching_time]
 
 	return df, exact_info
 
@@ -773,7 +803,7 @@ def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, f
 	#Initialize current match to exact matches that were found
 	df['current_match'+post] = ''
 	df['current_match_bool'+post] = df['exact_match_bool']
-	df.loc[df['current_match_bool'+post],'current_match'+post] = df['street_precleaned'+post+'HN']
+	df.loc[df['current_match_bool'+post],'current_match'+post] = df[street]
 
 	if ed_map:
 		
@@ -793,12 +823,13 @@ def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, f
 		else:
 			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid 
 
-	# Get Steve Morse fuzzy matches
-	df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, city, street, sm_all_streets, sm_ed_st_dict, "sm", resid)
+		# Get Steve Morse fuzzy matches
+		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, city, street, sm_all_streets, sm_ed_st_dict, "sm", resid)
 
-	if ed_map:
 		fuzzy_info = fuzzy_info + fuzzy_info_sm 
+
 	else:
+		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, city, street, sm_all_streets, sm_ed_st_dict, "sm")
 		fuzzy_info = fuzzy_info_sm
 
 	return df, fuzzy_info

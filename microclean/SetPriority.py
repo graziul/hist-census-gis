@@ -118,24 +118,29 @@ def set_priority(df):
 
 	return df, priority_info
 
-def create_overall_match_variables(df,street_post_fuzzy=None):
+def create_overall_match_variables(df, year):
 
 	#Tabulate the fuzzy matches
  	df['fuzzy_match_bool'] = np.where(df['current_match_bool'] & ~df['exact_match_bool'],True,False)
  	#Make sure to include blank fixes (and changes due to house number sequences)
-	df['fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
-	df['fuzzy_match_boolHN'] = np.where(df['fuzzy_match_bool'] | df['fuzzy_match_blank_fix'],True,False)
+	if year != 1940:
+		df['fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
+		df['fuzzy_match_boolHN'] = np.where(df['fuzzy_match_bool'] | df['fuzzy_match_blank_fix'],True,False)
 
 	#Incorporate street names from blank fixing into current_match
-	df.loc[df['fuzzy_match_blank_fix'],'current_match'] = df['street_post_fuzzyHN']
-	df.loc[df['fuzzy_match_blank_fix'],'current_match_bool'] = True
+	if year != 1940:
+		df.loc[df['fuzzy_match_blank_fix'],'current_match'] = df['street_post_fuzzyHN']
+		df.loc[df['fuzzy_match_blank_fix'],'current_match_bool'] = True
 
 	#Create overall_match
 	df['overall_match'] = df['current_match']
 	df['overall_match_bool'] = df['current_match_bool']
 
 	df.loc[df['overall_match_bool'],'overall_match'] = df['current_match']
-	df.loc[df['fuzzy_match_boolHN'],'overall_match_type'] = 'Fuzzy'
+	if year != 1940:
+		df.loc[df['fuzzy_match_boolHN'],'overall_match_type'] = 'Fuzzy'
+	else:
+		df.loc[df['fuzzy_match_bool'],'overall_match_type'] = 'Fuzzy'
 	df.loc[df['exact_match_bool'],'overall_match_type'] = 'Exact'
 
 	del df['current_match']
@@ -143,51 +148,73 @@ def create_overall_match_variables(df,street_post_fuzzy=None):
 
 	return df
 
-def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, times):
+def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1=None, fix_blanks_info2=None):
 
 	#Parse exact matching info
-	#num_exact_matches_sm, num_noexact_matches_sm, \
-	#num_streets_exact_sm, num_streets_noexact_sm, \
+	num_exact_matches_sm, num_noexact_matches_sm, \
+	num_streets_exact_sm, num_streets_noexact_sm, \
 	num_records, num_streets, \
 	num_exact_matches_stgrid, num_noexact_matches_stgrid, \
 	num_streets_exact_stgrid, num_streets_noexact_stgrid, \
 	exact_matching_time = exact_info 
 	#Calculate exact matching variables
-	#prop_exact_matches_sm = float(num_exact_matches_sm)/num_records
-	prop_exact_matches_stgrid = float(num_exact_matches_stgrid)/num_records
+	try:
+		prop_exact_matches_sm = float(num_exact_matches_sm)/num_records
+	except:
+		prop_exact_matches_sm = 0
+	try:
+		prop_exact_matches_stgrid = float(num_exact_matches_stgrid)/num_records
+	except:
+		prop_exact_matches_stgrid = 0
+	prop_exact_matches = prop_exact_matches_sm + prop_exact_matches_stgrid
+	num_exact_matches = num_exact_matches_sm + num_exact_matches_stgrid
 
 	#Parse fuzzy matching info
-	num_fuzzy_matches, fuzzy_matching_time, problem_EDs = fuzzy_info
+	num_fuzzy_matches, fuzzy_matching_time = fuzzy_info
 	#Calculate fuzzy matching variables
 	prop_fuzzy_matches = float(num_fuzzy_matches)/num_records
 
-	num_street_changes1, num_blank_street_names1, \
-	num_blank_street_singletons1, per_singletons1, \
-	num_blank_street_fixed1, per_blank_street_fixed1, \
-	blank_fix_time1 = fix_blanks_info1
+	if year != 1940:
+		num_street_changes1, num_blank_street_names1, \
+		num_blank_street_singletons1, per_singletons1, \
+		num_blank_street_fixed1, per_blank_street_fixed1, \
+		blank_fix_time1 = fix_blanks_info1
 
-	num_street_changes2, num_blank_street_names2, \
-	num_blank_street_singletons2, per_singletons2, \
-	num_blank_street_fixed2, per_blank_street_fixed2, \
-	blank_fix_time2 = fix_blanks_info2
+		num_street_changes2, num_blank_street_names2, \
+		num_blank_street_singletons2, per_singletons2, \
+		num_blank_street_fixed2, per_blank_street_fixed2, \
+		blank_fix_time2 = fix_blanks_info2
+
+		blank_fix_time = blank_fix_time1 + blank_fix_time2
+
+		num_hn_outliers1 = 	df['hn_outlier1'].sum()  
+		num_hn_outliers2 = 	df['hn_outlier2'].sum() 
+
+		num_street_changes_total = num_street_changes1 + num_street_changes2
+		prop_street_changes_total = float(num_street_changes_total)/num_records
+
+		#Have to back this out of num/prop_exact_match 
+		prop_blank_street_fixed1 =	float(num_blank_street_fixed1)/num_records
+		prop_blank_street_fixed2 =	float(num_blank_street_fixed2)/num_records
+
+		num_blank_street_fixed_total = num_blank_street_fixed1 + num_blank_street_fixed2
+		prop_blank_street_fixed_total = float(num_blank_street_fixed_total)/num_records
+
 
 	_, _, _, preclean_time = preclean_info
 
 	load_time,total_time = times
 
-	blank_fix_time = blank_fix_time1 + blank_fix_time2
-
+	'''
 	problem_EDs = list(set(problem_EDs))
 	print("\nProblem EDs: %s" % (problem_EDs))
 
 	problem_EDs_present = False
 	if len(problem_EDs) > 0:
 		problem_EDs_present = True
+	'''
 
 	num_overall_matches = df['overall_match_bool'].sum()
-
-	num_hn_outliers1 = 	df['hn_outlier1'].sum()  
-	num_hn_outliers2 = 	df['hn_outlier2'].sum() 
 
 	'''
 	num_resid_check_st = len(df[df['check_st'] & ~df['check_hn']])
@@ -199,16 +226,6 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	num_resid_check_st_hn = len(df[df['check_st'] & df['check_hn']])
 	prop_resid_check_st_hn = float(num_resid_check_st_hn)/num_records
 	'''
-
-	num_street_changes_total = num_street_changes1 + num_street_changes2
-	prop_street_changes_total = float(num_street_changes_total)/num_records
-
-	#Have to back this out of num/prop_exact_match 
-	prop_blank_street_fixed1 =	float(num_blank_street_fixed1)/num_records
-	prop_blank_street_fixed2 =	float(num_blank_street_fixed2)/num_records
-
-	num_blank_street_fixed_total = num_blank_street_fixed1 + num_blank_street_fixed2
-	prop_blank_street_fixed_total = float(num_blank_street_fixed_total)/num_records
 
 	'''
 	num_resid_st = len(df[df['check_st']]) 
@@ -222,18 +239,28 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	'''
 
 	header = [year, city, state, num_records]
+	sp = ['']
 
 	#Old solution: Back out first blank fixing since it occurs before exact matching
 	#New solution: Ignore first blank fixing since it occurs before exact matching
-	STprop = [prop_exact_matches_stgrid, prop_fuzzy_matches, prop_blank_street_fixed2]
-	STnum = [city, state, num_exact_matches_stgrid, num_fuzzy_matches, num_blank_street_fixed2]
-	ED = [city, state, problem_EDs_present]
-	FixBlank = [city, state, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
-		num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2]
-	Time = [city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
-		blank_fix_time, priority_time, total_time]
+	if year != 1940:
+		STprop = [prop_exact_matches_stgrid, prop_fuzzy_matches, prop_blank_street_fixed2]
+		STnum = [city, state, num_exact_matches_stgrid, num_fuzzy_matches, num_blank_street_fixed2]
+		ED = [city, state, problem_EDs_present]
+		FixBlank = [city, state, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
+			num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2]
+		Time = [city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
+			blank_fix_time, priority_time, total_time]
 
-	sp = ['']
-	info = header + STprop + sp + STnum + sp + ED + sp + FixBlank + sp + Time
+		info = header + STprop + sp + STnum + sp + ED + sp + FixBlank + sp + Time
+
+	else:
+		num_resid = num_records - num_exact_matches - num_fuzzy_matches
+		prop_resid = float(num_resid)/num_records
+		STprop = [prop_exact_matches, prop_fuzzy_matches, prop_resid]
+		STnum = [city, state, num_exact_matches, num_fuzzy_matches, num_resid]
+		Time = [city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, total_time]
+
+		info = header + STprop + sp + STnum + sp + Time
 
 	return info

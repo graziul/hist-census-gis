@@ -16,6 +16,8 @@ version = 7
 # V7
 #   - Using grid street names for exact name matching and first fuzzy name matching (SM used for second)
 #	- Removed assignment of manual cleaning priority from the process
+#	- Implemented funky ordering/source for street name matching
+#	- Implemented functionality for 1940 (Note: No house number sequence blank fixing)
 #
 # V6
 #	- Added fuzzy matching against 1940 grid, 1930 Chicago group grid, and contemporary grid (using ED maps)
@@ -73,8 +75,8 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
- #	init()
- #	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
+ 	init()
+ 	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -93,47 +95,58 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
 
 	# Step 2b: Use formatted street names to get house number sequences
-	street_var = 'street_precleaned'
-	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
-	df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
+	if year != 1940:
+		street_var = 'street_precleaned'
+		HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
+		df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
 
 	# Step 2c: Use house number sequences to fill in blank street names
-	df, fix_blanks_info1 = fix_blank_st(df, city, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
+	if year != 1940:
+		df, fix_blanks_info1 = fix_blank_st(df, city, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
 
 	#
 	# Step 3: Identify exact matches
 	#
 
-	# Step 3a: Import street names from 1940 street grid  
-	st_grid_st_list = get_streets_from_1940_street_grid(city,state,file_path)
+	if year == 1940:
+		preclean_var = 'street_precleaned'
+	else:
+		preclean_var = 'street_precleanedHN'
 
-	# Step 3b: Identify exact matches based on 1930 Steve Morse and 1940 street grid
-	df, exact_info = find_exact_matches(df, city, 'street_precleanedHN', sm_all_streets, sm_st_ed_dict, st_grid_st_list)
+	# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
+	df, exact_info = find_exact_matches(df, city, preclean_var, sm_all_streets, sm_st_ed_dict, source='sm')
 
 	#
 	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
 	#
 
+	ed_map = False
+
 	# Step 4a: Search for fuzzy matches
-	ed_map = True
-	df, fuzzy_info = find_fuzzy_matches(df, city, state, 'street_precleanedHN', sm_all_streets, sm_ed_st_dict, file_path, ed_map)
+	df, fuzzy_info = find_fuzzy_matches(df, city, state, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map)
+	street_var = 'street_post_fuzzy'
+	df[street_var] = df[preclean_var]
+	df.loc[df['current_match_bool'],street_var] = df['current_match']
 
 	# Step 4b: Use fuzzy matches to get house number sequences
-	street_var = 'street_post_fuzzy'
-	df[street_var] = df['street_precleanedHN']
-	df.loc[df['current_match_bool'],street_var] = df['current_match']
-	HN_SEQ = {}
-	HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
-	df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
+	if year != 1940:
+		HN_SEQ = {}
+		HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
+		df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
 
 	# Step 4c: Use house number sequences to fill in blank street names
-	df, fix_blanks_info2 = fix_blank_st(df, city, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
+	if year != 1940:
+		df, fix_blanks_info2 = fix_blank_st(df, city, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
 
 	#	
 	# Step 5: Create overall match and all check variables
 	#
 
-	df = create_overall_match_variables(df)
+	if year == 1940:
+		post_var = 'street_post_fuzzy'
+	else:
+		post_var = 'street_post_fuzzyHN'
+	df = create_overall_match_variables(df, year)
 	cprint("Overall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n",'green',attrs=['bold'],file=AnsiToWin32(sys.stdout))
 
 	#
@@ -156,21 +169,24 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 
 	#Generate dashbaord info
 	times = [load_time, total_time]
-	info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, fix_blanks_info1, fix_blanks_info2, times)
+	if year != 1940:
+		info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1, fix_blanks_info2)
+	else:
+		info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times)
 
 	return info 
 
 # Get city list
 file_path = '/home/s4-data/LatestCities' 
-#city_info_file = file_path + '/CityInfo.csv' 
-city_info_file = file_path + '/CityInfo_with_map.csv' 
+city_info_file = file_path + '/CityInfo.csv' 
+#city_info_file = file_path + '/CityInfo_with_map.csv' 
 city_info_df = pd.read_csv(city_info_file)
 city_info_df['city_name'] = city_info_df['city_name'].str.replace('.','')
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 
 # Get year and add it to city list information
 #year = int(sys.argv[1])
-year = 1930
+year = 1940
 for i in city_info_list:                
 	i.append(year)
 
@@ -180,37 +196,47 @@ temp = pool.map(clean_microdata, city_info_list)
 pool.close()
 
 # Build dashboard for decade and save
+
 city_state = ['City','State']
 header_names = ['Year'] + city_state + ['NumCases']
-STprop_names = ['propExactMatchesSM','propExactMatchesStGrid','propFuzzyMatches','propBlankSTfixed','propResidSt']
-STnum_names = city_state + ['ExactMatchesSM','propExactMatchesStGrid','FuzzyMatches','BlankSTfixed','ResidSt']
-HNprop_names = city_state + ['propCheckHn','propCheckStHn','propCheckHnTotal']
-HNnum_names = city_state + ['CheckHn','CheckStHn','CheckHnTotal']
-Rprop_names = city_state + ['propCheckHn','propCheckStHn','propCheckSt','propCheckTotal']
-Rnum_names = city_state + ['CheckHn','CheckStHn','CheckSt','CheckTotal']
-ED_names = city_state + ['ProblemEDs']
-FixBlank_names = city_state + ['HnOutliers1','StreetNameBlanks1','BlankSingletons1','PerSingletons1',
-	'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2']
-Time_names = city_state + ['LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime',
-	'BlankFixTime','PriorityTime','TotalTime']
 
-sp = ['']
-names = header_names + STprop_names + sp + STnum_names + sp + HNprop_names + sp + HNnum_names + sp + Rprop_names + sp + Rnum_names + sp + Priority_names + sp + perPriority_names + sp + seqPriority_names + sp + perseqPriority_names + sp + ED_names + sp + FixBlank_names + sp + Time_names
+if year != 1940:
+	STprop_names = ['propExactMatchesStGrid','propFuzzyMatches','propBlankSTfixed']
+	STnum_names = city_state + ['numExactMatchesStGrid','numFuzzyMatches','numBlankSTfixed']
+	ED_names = city_state + ['ProblemEDs']
+	FixBlank_names = city_state + ['HnOutliers1','StreetNameBlanks1','BlankSingletons1','PerSingletons1',
+		'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2']
+	Time_names = city_state + ['LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime',
+		'BlankFixTime','PriorityTime','TotalTime']
 
-df = pd.DataFrame(temp,columns=names)
+	sp = ['']
+	names = header_names + STprop_names + sp + STnum_names + sp + ED_names + sp + FixBlank_names + sp + Time_names
 
-dfSTprop = df.ix[:,1:10].sort_values(by='propResidSt').reset_index()
-dfSTnum = df.ix[:,10:18].sort_values(by='ResidSt').reset_index()
-dfHNprop = df.ix[:,18:24].sort_values(by='propCheckHnTotal').reset_index()
-dfHNnum = df.ix[:,24:30].sort_values(by='CheckHnTotal').reset_index()
-dfRprop =df.ix[:,30:37].sort_values(by='propCheckTotal').reset_index()
-dfRnum = df.ix[:,37:44].sort_values(by='CheckTotal').reset_index()
-dfED = df.ix[:,44:48].sort_values(by=city_state,ascending=False).reset_index()
-dfFixBlank = df.ix[:,48:59].reset_index()
-dfTime = df.ix[:,59:70].sort_values(by='TotalTime').reset_index()
+	df = pd.DataFrame(temp,columns=names)
 
-dashboard = pd.concat([dfSTprop, dfSTnum, dfHNprop, dfHNnum, dfRprop, dfRnum, dfperPriority, dfPriority, dfseqPriority, dfperseqPriority, dfED, dfFixBlank, dfTime],axis=1)
-del dashboard['index']
+	dfSTprop = df.iloc[:,1:8].sort_values(by='prop_exact_matches_stgrid').reset_index()
+	dfSTnum = df.iloc[:,8:14].sort_values(by='ResidSt').reset_index()
+	dfED = df.iloc[:,14:18].sort_values(by=city_state,ascending=False).reset_index()
+	dfFixBlank = df.iloc[:,18:29].reset_index()
+	dfTime = df.iloc[:,29:40].sort_values(by='TotalTime').reset_index()
 
+	dashboard = pd.concat([dfSTprop, dfSTnum, dfHNprop, dfHNnum, dfRprop, dfRnum, dfperPriority, dfPriority, dfseqPriority, dfperseqPriority, dfED, dfFixBlank, dfTime],axis=1)
+else:
+	STprop_names = ['propExactMatches','propFuzzyMatches','propResid']
+	STnum_names = city_state + ['numExactMatches','numFuzzyMatches','numResid']
+	Time_names = city_state + ['LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime','TotalTime']
+
+	sp = ['']
+	names = header_names + STprop_names + sp + STnum_names + sp + Time_names
+
+	df = pd.DataFrame(temp,columns=names)
+
+	dfSTprop = df.iloc[:,1:8].sort_values(by='propExactMatches').reset_index()
+	dfSTnum = df.iloc[:,8:14].sort_values(by='numResid').reset_index()
+	dfTime = df.iloc[:,15:25].sort_values(by='TotalTime').reset_index()
+
+	dashboard = pd.concat([dfSTprop, dfSTnum, dfTime],axis=1)
+
+dashboard['version'] = version
 csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(year),str(year),datestr)
-dashboard.to_csv(csv_file)
+dashboard.to_csv(csv_file,index=False)
