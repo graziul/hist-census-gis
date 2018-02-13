@@ -19,6 +19,9 @@ import numpy as np
 import subprocess
 import fuzzyset
 import math
+import paramiko
+import win32api, win32con
+from shutil import copyfile
 from microclean.STstandardize import *
 
 #
@@ -2206,3 +2209,43 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 
 	save_dbf_st(df_uns2, grid_uns2, field_map=True)
 
+#
+# Functions for intersecting ED map with street grids and uploading to Rhea/CS1 Unix server
+#
+
+def intersect_ed_stgrid(ed_year, map_type):
+
+
+def upload_to_unix(file_path, file_name, target_path, user, pw):
+	ssh = paramiko.SSHClient()
+	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	ssh.load_system_host_keys
+	#ssh.load_host_keys('C:\\Users\\cgraziul')
+	ssh.connect('rhea.pstc.brown.edu',username=user,password=pw)
+	sftp = ssh.open_sftp()
+	map_files = [x for x in os.listdir(file_path) if x.split('.')[0]==file_name]
+	#Try to find directory, create it if it doesn't exist
+	try:
+		sftp.listdir(target_path)
+	except IOError:
+		sftp.mkdir(target_path)
+	for item in map_files:
+		file_name = '%s/%s' % (target_path, item)
+		if os.path.isfile(os.path.join(file_path, item)):
+			#Try to remove old file if it exist
+			try: 
+				sftp.remove(file_name)
+			except IOError:
+				pass
+			sftp.put(os.path.join(file_path, item), file_name)
+	sftp.close()
+	ssh.close()
+
+def upload_ed_stgrid(ed_year, map_type, user, pw):
+	file_path = 
+	file_name = 
+	upload_to_unix(file_path, file_name, targeT_path, user, pw)
+
+for map_type in ['1940','Contemp']:
+	ed_year = 1940
+	upload_ed_stgrid(ed_year, map_type, XX, YY)
