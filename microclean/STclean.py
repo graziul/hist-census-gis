@@ -128,7 +128,10 @@ def rename_variables(df, year):
 	# ED
 	if year == 1940:
  		# New 1940 data (Summer 2016)
- 		df['ed'] = df['derived_enumdist']
+ 		try:
+	 		df['ed'] = df['derived_enumdist']
+ 		except:
+ 			df['ed'] = df['us1940b_0083']
  		# Old 1940 data
 		#df['ed'] = df['indexed_enumeration_district']
 	if year == 1930:
@@ -167,7 +170,10 @@ def rename_variables(df, year):
 	'''
 	if year == 1940:
 		# New 1940 data (Summer 2016)
-		df['hn_raw'] = df['housenum']
+		try:
+			df['hn_raw'] = df['housenum']
+		except:
+			df['hn_raw'] = df['us1940b_0078']
 		# Old 1940 data
 		#df['hn_raw'] = df['general_house_number']
 	if year == 1930:
