@@ -183,15 +183,39 @@ city_info_file = file_path + '/CityInfo.csv'
 city_info_df = pd.read_csv(city_info_file)
 city_info_df['city_name'] = city_info_df['city_name'].str.replace('.','')
 city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
+# 1940 issues: Only Brooklyn in 5 boroughs, no Norfolk for unknown reasons
+exclude = ['Manhattan','Bronx','Queens','Staten Island','Norfolk']
+city_info_list = [i for i in city_info_list if i[0] not in exclude]
 
 # Get year and add it to city list information
 #year = int(sys.argv[1])
 year = 1940
-for i in city_info_list:                
+for i in city_info_list:
 	i.append(year)
 
+# Check if all raw files exist
+missing_raw = []
+for i in city_info_list:
+	city, state, year = i
+
+	if city == "StatenIsland":
+		c = "Richmond"
+	else:
+		c = city.replace(' ','')
+
+	file_name = c + state.upper()
+	file = file_path + '/%s/%s.dta' % (str(year), file_name)
+	if os.path.exists(file):
+		continue
+	else:
+		missing_raw.append([city,state])
+if len(missing_raw) > 0:
+	for i in missing_raw:
+		print("Missing %s, %s" % (i[0], i[1]))
+	raise ValueError
+
 # Farm out cleaning across multiple instances of Python
-pool = Pool(processes=4, maxtasksperchild=1)
+pool = Pool(processes=8, maxtasksperchild=1)
 temp = pool.map(clean_microdata, city_info_list)
 pool.close()
 
