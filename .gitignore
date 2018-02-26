@@ -24,3 +24,7 @@ microclean/STclean.pyc
 microclean/STstandardize.pyc
 geo-utils/Python/FixDirAndBlockNumsUsingMap.py
 geo-utils/Python/FixDirAndBlockNumsUsingMap.py
+geo-utils/Python/consecutive_segments.py
+*.pyc
+microclean/STstandardize.pyc
+*.jpg

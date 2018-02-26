@@ -346,20 +346,21 @@ def set_blocknum_confidence(city_name, paths):
 #
 
 # This function replaces Matt's R script but produces exactly the same file
-def create_1930_addresses(city_name, state_abbr, paths, df=None):
+def create_addresses(city_name, state_abbr, paths, year, df=None):
 	r_path, script_path, dir_path = paths
 	# Load microdata file if not passed to function
 	if type(df) == 'NoneType' or df == None:
-		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
+		microdata_file = dir_path + "/StataFiles_Other/" + str(year) + "/" + city_name + state_abbr + "_StudAuto.dta"
 		df = load_large_dta(microdata_file)
-	# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
-	df.loc[:,('Mblk')] = df['block']
+	if year == 1930:
+		# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
+		df.loc[:,('Mblk')] = df['block']
 	# Choose the best available street name variable (st_best_guess includes student cleaning)
 	# NOTE: When student cleaning is unavailable we should probably fill in overall_match_bool==FALSE
 	#	    with street_precleanedHN, but this has not been done yet to my knowledge.
 	if 'st_best_guess' in df.columns.values:
 		street_var = 'st_best_guess'
-	if 'overall_match' in df.columns.values:
+	elif 'overall_match' in df.columns.values:
 		street_var = 'overall_match'
 	# Change '.' to blank string
 	df.loc[:,'fullname'] = df[street_var]
@@ -368,14 +369,19 @@ def create_1930_addresses(city_name, state_abbr, paths, df=None):
 	if 'fullname' not in df.columns.values:
 		print("No street name variable selected")
 		raise
-	# Select variables for file
-	vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn']
-	df_add = df.loc[:,vars_of_interest]
-	# Create ED-block
-	df_add['ed_int'] = df_add['ed'].astype(int)
-	df_add['ed_block'] = df_add['ed_int'].astype(str) + '-' + df_add['Mblk'].astype(str)
-	del df_add['ed_int']
 	
+	# Select variables for file
+	if year == 1930:
+		vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn']
+		# Create ED-block
+		df['ed_int'] = df['ed'].astype(int)
+		df['ed_block'] = df['ed_int'].astype(str) + '-' + df['Mblk'].astype(str)
+		del df_add['ed_int']
+	elif year == 1940:
+		vars_of_interest = ['index','fullname', 'ed','type','hn']
+
+	df_add = df.loc[:,vars_of_interest]
+
 	# Change missing and 0 to blank string
 	df_add.loc[(np.isnan(df_add['hn']))|(df_add['hn']==0),'hn'] = '-1'
 	df_add.loc[:,'hn'] = df_add['hn'].astype(int)
@@ -427,7 +433,7 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
-def street(geo_path, city_name, state_abbr, hn_ranges):
+def street(geo_path, city_name, state_abbr, hn_ranges, year):
 
 	min_l, max_l, min_r, max_r = hn_ranges
 
@@ -473,13 +479,15 @@ def street(geo_path, city_name, state_abbr, hn_ranges):
 		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
 
 	#Create Paths to be used throughout Process
+	#
+	#NOTE: By defualt we are starting with 1940 cleaned grids then saving them as 19X0 grids!	
 	grid_1940 = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
-	grid = geo_path + city_name + state_abbr + "_1930_stgrid_edit.shp"
-	dissolve_grid = geo_path + city_name + "_1930_stgrid_Dissolve.shp"
+	grid = geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit.shp"
+	dissolve_grid = geo_path + city_name + "_" + str(year) + "_stgrid_Dissolve.shp"
 	temp = geo_path + city_name + "_temp"+rand_post+".shp"
-	split_grid = geo_path + city_name + "_1930_stgrid_Split.shp"
-	grid_uns =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns.shp"
-	grid_uns2 =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	split_grid = geo_path + city_name + "_" + str(year) + "_stgrid_Split.shp"
+	grid_uns =  geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns.shp"
+	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns2.shp"
 
 	#Create copy of "diradd" file to use as grid
 	arcpy.CopyFeatures_management(grid_1940, grid)
@@ -833,9 +841,10 @@ def fix_dup_address_ranges(shp,hn_ranges,debug_flag=False):
 	return "\nFixed duplicate address ranges"
 
 # Creates physical blocks shapefile 
-def physical_blocks(geo_path, city_name):
-	pblocks = geo_path + city_name + "_1930_Pblk.shp"
-	split_grid = geo_path + city_name + "_1930_stgrid_Split.shp"
+def physical_blocks(geo_path, city_name, year):
+
+	pblocks = geo_path + city_name + "_" + str(year) + "_Pblk.shp"
+	split_grid = geo_path + city_name + "_" + str(year) + "_stgrid_Split.shp"
 
 	#if int(start_from) = 1930:
 	#arcpy.AddField_management(grid, 'FULLNAME', 'TEXT')
@@ -849,16 +858,16 @@ def physical_blocks(geo_path, city_name):
 	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
 
 # Performs initial geocode on contemporary grid
-def initial_geocode(geo_path, city_name, state_abbr, hn_ranges):
+def initial_geocode(geo_path, city_name, state_abbr, hn_ranges, year):
 
 	min_l, max_l, min_r, max_r = hn_ranges
 
 	# Files
 	add_locator = geo_path + city_name + "_addloc"
-	addresses = geo_path + city_name + "_1930_Addresses.csv"
+	addresses = geo_path + city_name + "_" + str(year) + "_Addresses.csv"
 	address_fields="Street address; City city; State state"
-	points30 = geo_path + city_name + "_1930_Points.shp"
-	reference_data = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp 'Primary Table'"
+	points30 = geo_path + city_name + "_" + str(year) + "_Points.shp"
+	reference_data = geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns2.shp 'Primary Table'"
 
 	field_map="'Feature ID' FID VISIBLE NONE; \
 	'*From Left' %s VISIBLE NONE; \
@@ -905,12 +914,12 @@ def initial_geocode(geo_path, city_name, state_abbr, hn_ranges):
 	print("The script has finished executing the 'GeocodeAddress' tool and has begun executing the 'SpatialJoin' tool")
 
 # Attach physical block IDs to geocoded points 
-def attach_pblk_id(geo_path, city_name, points30):
+def attach_pblk_id(geo_path, city_name, points, year):
 	# Files
-	pblk_points = geo_path + city_name + "_1930_Pblk_Points.shp"
-	pblocks = geo_path + city_name + "_1930_Pblk.shp"
+	pblk_points = geo_path + city_name + "_" + str(year) + "_Pblk_Points.shp"
+	pblocks = geo_path + city_name + "_" + str(year) + "_Pblk.shp"
 	#Attach Pblk ids to points
-	arcpy.SpatialJoin_analysis(points30, pblocks, pblk_points, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
+	arcpy.SpatialJoin_analysis(points, pblocks, pblk_points, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
 	print("The script has finished executing the 'SpatialJoin' tool")
 
 #
@@ -1826,11 +1835,11 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	geo_path = dir_path + '/GIS_edited/'
 
 	# Files
-	grid_uns2 =  geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns2.shp"
 	grid_uns2_backup = grid_uns2.replace('.shp','prefix.shp')
 	if city_name == "StLouis":
-		ed_shp = geo_path + city_name + "_1930_ED.shp"
-	st_grid_ed_shp = geo_path + city_name + state_abbr + '_1930_stgrid_ED_intersect.shp'
+		ed_shp = geo_path + city_name + "_" + str(year) + "_ED.shp"
+	st_grid_ed_shp = geo_path + city_name + state_abbr + '_" + str(year) + "_stgrid_ED_intersect.shp'
 
 	arcpy.CopyFeatures_management(grid_uns2, grid_uns2_backup)
 	#arcpy.CopyFeatures_management(grid_uns2_backup, grid_uns2)
@@ -2246,6 +2255,6 @@ def upload_ed_stgrid(ed_year, map_type, user, pw):
 	file_name = 
 	upload_to_unix(file_path, file_name, targeT_path, user, pw)
 
-for map_type in ['1940','Contemp']:
-	ed_year = 1940
-	upload_ed_stgrid(ed_year, map_type, XX, YY)
+	for map_type in ['1940','Contemp']:
+		ed_year = 1940
+		upload_ed_stgrid(ed_year, map_type, XX, YY)

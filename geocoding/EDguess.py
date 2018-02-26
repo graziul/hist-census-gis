@@ -1193,7 +1193,7 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 	global Intersect_Info_DICT
 	Intersect_Info_DICT = {} # lookup intersection -> list of information
 
-	Micro_TXT = open(geo_path + city + '_1930_Addresses.csv')
+	Micro_TXT = open(geo_path + city + '_' + str(decade) + '_Addresses.csv')
 
 	sm_path = r"S:\Projects\1940Census\SMlists"
 	os.chdir(sm_path+"\\"+str(decade))
@@ -1203,10 +1203,10 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 	SM_ED_TXT = open(csv_name+".csv",'r')
 	SM_ED_TXT1 = open(csv_name+"_ED.csv",'r')
 
-	if ~os.path.isfile(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_1930_stgrid_edit_Uns2_Intersections.shp'):
-		prepare_map_intersections(city + state + '_1930_stgrid_edit_Uns2.shp', fullname_var, paths)
+	if ~os.path.isfile(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'):
+		prepare_map_intersections(city + state + '_' + str(decade) + '_stgrid_edit_Uns2.shp', fullname_var, paths)
 
-	Intersect_TXT = open(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_1930_stgrid_edit_Uns2_Intersections.txt')
+	Intersect_TXT = open(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.txt')
 	SMLines = csv.reader(SM_ED_TXT)
 	next(SMLines, None)  # skip header
 	SMLines1 = csv.reader(SM_ED_TXT1)
@@ -1238,14 +1238,19 @@ def identify_1930_eds(city_name, paths):
 
 def select_best_ed_guess(x):
 	
-	_, ed_desc, ed_inter, ed_geocode = x
-	
+	try:
+		_, ed_desc, ed_inter, ed_geocode = x
+		have_desc = True
+	except:
+		_, ed_inter, ed_geocode = x
+		have_desc = False
 	# Split if multiple EDs
-	if '|' in str(ed_desc):
-		ed_desc = ed_desc.split('|')
-		ed_desc = [int(i) for i in ed_desc]
-	else:
-		ed_desc = [int(ed_desc)]
+	if have_desc:
+		if '|' in str(ed_desc):
+			ed_desc = ed_desc.split('|')
+			ed_desc = [int(i) for i in ed_desc]
+		else:
+			ed_desc = [int(ed_desc)]
 	if '|' in str(ed_inter):
 		ed_inter = ed_inter.split('|')
 		ed_inter = [int(i) for i in ed_inter]
@@ -1258,7 +1263,10 @@ def select_best_ed_guess(x):
 		ed_geocode = [int(ed_geocode)]
 
 	# List of EDs guessed
-	ed_list = list(set(ed_desc + ed_inter + ed_geocode))
+	if have_desc:
+		ed_list = list(set(ed_desc + ed_inter + ed_geocode))
+	else:
+		ed_list = list(set(ed_inter + ed_geocode))
 	ed_list = [i for i in ed_list if i != 0]
 
 	# List of ED guesses by confidence
@@ -1273,21 +1281,34 @@ def select_best_ed_guess(x):
 	# Otherwise, try to find a unique guess
 	else:
 		for ed in ed_list:
-			# If all three agree, highest confidence
-			if ed in ed_desc and ed in ed_inter and ed in ed_geocode:
-				ed_guess_list.append([ed, 1])
-			# If any two agree, second highest confidence
-			elif (ed in ed_desc and ed in ed_inter) or (ed in ed_desc and ed in ed_geocode) or (ed in ed_inter and ed in ed_geocode):
-				ed_guess_list.append([ed, 2])
-			# If ed_desc not missing, third highest confidence
-			elif ed in ed_desc:
-				ed_guess_list.append([ed, 3])
-			# If ed_inter not missing, fourth highest confidence
-			elif ed in ed_inter:
-				ed_guess_list.append([ed, 4])
-			# If ed_geocode not missing, fifth highest confidence
-			elif ed in ed_geocode:
-				ed_guess_list.append([ed, 5])
+			# If we have ED guesses based on descriptions
+			if have_desc:
+				# If all three agree, highest confidence
+				if ed in ed_desc and ed in ed_inter and ed in ed_geocode:
+					ed_guess_list.append([ed, 1])
+				# If any two agree, second highest confidence
+				elif (ed in ed_desc and ed in ed_inter) or (ed in ed_desc and ed in ed_geocode) or (ed in ed_inter and ed in ed_geocode):
+					ed_guess_list.append([ed, 2])
+				# If ed_desc not missing, third highest confidence
+				elif ed in ed_desc:
+					ed_guess_list.append([ed, 3])
+				# If ed_inter not missing, fourth highest confidence
+				elif ed in ed_inter:
+					ed_guess_list.append([ed, 4])
+				# If ed_geocode not missing, fifth highest confidence
+				elif ed in ed_geocode:
+					ed_guess_list.append([ed, 5])
+			# Otherwise...
+			else:
+				# If both agree, highest confidence
+				if ed in ed_inter and ed in ed_geocode:
+					ed_guess_list.append([ed, 1])
+				# If ed_inter not missing, fourth highest confidence
+				elif ed in ed_inter:
+					ed_guess_list.append([ed, 2])
+				# If ed_geocode not missing, fifth highest confidence
+				elif ed in ed_geocode:
+					ed_guess_list.append([ed, 3])
 
 	df_ed_guess = pd.DataFrame(ed_guess_list, columns=['ed','conf'])
 	num_guesses = df_ed_guess.groupby(['conf'], as_index=False).size().to_dict()
@@ -1315,7 +1336,7 @@ def select_best_ed_guess(x):
 ##
 
 # Head script for running everything - produces ED guess map and statistics
-def get_ed_guesses(city, state, fullname_var):
+def get_ed_guesses(city, state, fullname_var, decade=1930):
 
 	city = city.replace(' ','')
 
@@ -1327,35 +1348,36 @@ def get_ed_guesses(city, state, fullname_var):
 	geo_path = dir_path + '/GIS_edited/'
 
 	# Step 1: create address file, street grid, physical block, and initial geocode shapefiles 
-	create_1930_addresses(city, state, paths)
-	create_blocks_and_block_points(city, state, paths)
+	create_addresses(city, state, paths, decade)
+	create_blocks_and_block_points(city, state, paths, decade)
 
-	# Step 2: Run Amory's ED descriptions script (unmodified from Amory's script)
-	ed_desc_algo(city, state, fullname_var, paths)
+	# Step 2: Run Amory's intersections script
+	ed_inter_algo(city, state, fullname_var, paths, decade)
 
-	# Step 3: Run Amory's intersections script
-	ed_inter_algo(city, state, fullname_var, paths)
-
-	# Step 4: Run Matt's script (based on initial geocoding)
+	# Step 3: Run Matt's script (based on initial geocoding)
 	identify_1930_eds(city, paths)
 
-	# Step 5: Create new shapefile including all three then...
+	# Step 4: If using descriptions, run, create new shapefile including all three then...
 	#	a. Identify best guesses
 	#	b. Assign confidence to guesses
 
-	# Create a copy of file created by Matt's script (contains guesses from all three methods)
-	last_step = geo_path + city + '_1930_ED_Choice_map.shp'
-	ed_desc_map = geo_path + city + '_ED_desc.shp'
-	ed_guess_file = geo_path + city + state + '_ED_guess_map.shp'
+	last_step = geo_path + city + '_' + str(decade) + '_ED_Choice_map.shp'
+	ed_guess_file = geo_path + city + state + '_' + str(decade) + '_ED_guess_map.shp'
 
-	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
-
-	arcpy.SpatialJoin_analysis(target_features=last_step, 
-		join_features=ed_desc_map, 
-		out_feature_class=ed_guess_file, 
-		join_operation="JOIN_ONE_TO_ONE", 
-		join_type="KEEP_ALL",
-		match_option="HAVE_THEIR_CENTER_IN")
+	if decade == 1930:
+		# Run Amory's descriptions algorithm
+		ed_desc_algo(city, state, fullname_var, paths)
+		# Create a copy of file created by Matt's script (contains guesses from all three methods)
+		ed_desc_map = geo_path + city + '_' + str(decade) + '_ED_desc.shp'
+		# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
+		arcpy.SpatialJoin_analysis(target_features=last_step, 
+			join_features=ed_desc_map, 
+			out_feature_class=ed_guess_file, 
+			join_operation="JOIN_ONE_TO_ONE", 
+			join_type="KEEP_ALL",
+			match_option="HAVE_THEIR_CENTER_IN")
+	elif decade == 1940:
+		arcpy.CopyFeatures_management(last_step, ed_guess_file)
 
 	# Select relevant variables and extract best ED guesses
 	df = dbf2DF(ed_guess_file)
@@ -1364,7 +1386,6 @@ def get_ed_guesses(city, state, fullname_var):
 			return '0'
 		else:
 			return ed
-	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1).astype(int)
 	def get_ed_geocode(eds):
 		eds = [ed for ed in eds if ed != '0']
 		if len(eds) == 0:
@@ -1374,22 +1395,34 @@ def get_ed_guesses(city, state, fullname_var):
 		else:
 			return '|'.join(eds)
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].astype(int).astype(str).apply(lambda x: get_ed_geocode(x), axis=1)
-	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
+	if year == 1930:
+		relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
+		df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1).astype(int)
+	elif year == 1940:
+		relevant_vars = ['pblk_id','ed_inter','ed_geocode']
 	df_ed_guess = df[relevant_vars]
 	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
 
 	# Relabel confidence variable descriptively 
 	label_conf = {}
-	label_conf[-1] = "-1. No guess"
-	label_conf[1] = "1. Three agree"
-	label_conf[2] = "2. Two agree"
-	label_conf[3] = "3. Descriptions only"
-	label_conf[4] = "4. Intersections only"
-	label_conf[5] = "5. Geocoding only"
+
+	if year == 1930:
+		label_conf[-1] = "-1. No guess"
+		label_conf[1] = "1. Three agree"
+		label_conf[2] = "2. Two agree"
+		label_conf[3] = "3. Descriptions only"
+		label_conf[4] = "4. Intersections only"
+		label_conf[5] = "5. Geocoding only"
+	elif year == 1940:
+		label_conf[-1] = "-1. No guess"
+		label_conf[1] = "1. Both agree"
+		label_conf[2] = "2. Intersections only"
+		label_conf[3] = "3. Geocoding only"
+
 	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)
 	
 	# Save dbf (have to use field mapping to preserve TEXT data format)
-	def save_dbf_ed(df, geo_path, shapefile_name):
+	def save_dbf_ed(df, geo_path, shapefile_name, decade):
 		file_temp = shapefile_name.split('/')[-1]
 		rand_post = str(random.randint(1,100001))
 		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
@@ -1401,12 +1434,19 @@ def get_ed_guesses(city, state, fullname_var):
 
 		# Add a specific field mapping for a special case
 		file = csv_file
-		field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
-		ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
-		ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
-		ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
-		ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
-		ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file)
+		if decade == 1930:
+			field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+			ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
+			ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
+			ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
+			ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
+			ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file)
+		else:
+			field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+			ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
+			ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
+			ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
+			ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file)
 
 		arcpy.TableToTable_conversion(in_rows=csv_file, 
 			out_path=geo_path, 
@@ -1420,6 +1460,7 @@ def get_ed_guesses(city, state, fullname_var):
 
 	save_dbf_ed(df_ed_guess, geo_path, ed_guess_file)
 
+	# Ridiculous but necessary because saving to .dbf converts data type for unknown reasons
 	df_ed_guess.index = df_ed_guess['pblk_id']
 	df_ed_guess_dict = df_ed_guess.to_dict('index')
 	with arcpy.da.UpdateCursor(ed_guess_file, ['pblk_id','ed_inter']) as up_cursor:
