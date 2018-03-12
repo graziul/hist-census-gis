@@ -3,19 +3,14 @@
 #
 
 from __future__ import print_function
-import os
-import re
-import math
-import copy
 import csv
 import xlrd
-import sys
-import pickle
-import pandas as pd
-import numpy as np
+from arcpy import management
 import arcpy
 from fuzzywuzzy import fuzz
 from blocknum.blocknum import *
+from codecs import open
+
 arcpy.env.overwriteOutput = True
 
 ##
@@ -194,14 +189,14 @@ def prepare_map_intersections(stgrid_file, fullname_var, paths) :
 		Add_Field_Names_to_Output="ADD_FIELD_NAMES")
 
 # Draw ED maps (descriptions, intersections)
-def draw_EDs(city, state, paths, new_var_name, is_desc) :
+def draw_EDs(city, state, paths, new_var_name, is_desc, decade) :
 
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
-	intermed_path = geo_path + "/IntersectionsIntermediateFiles/"
+	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
 
-	targ = intermed_path + city + state + "_1930_stgrid_edit_Uns2_spatial_join.shp"
-	targ1 = geo_path + city + "_1930_Pblk.shp"
+	targ = intermed_path + city + state + "_" + str(decade) + "_stgrid_edit_Uns2_spatial_join.shp"
+	targ1 = geo_path + city + "_" + str(decade) + "_Pblk.shp"
 
 	inter = arcpy.Intersect_analysis(in_features=[targ,targ1],
 		out_feature_class=intermed_path + "intersectToGetEDs.shp",
@@ -220,8 +215,8 @@ def draw_EDs(city, state, paths, new_var_name, is_desc) :
 
 	# If using Amory's ED description method do this
 	if is_desc:
-		output_shp = geo_path+city+"_ED_desc.shp"
-		arcpy.CreateFeatureclass_management(geo_path,city+"_ED_desc.shp")
+		output_shp = geo_path+city+"_"+str(decade)+"_ED_desc.shp"
+		arcpy.CreateFeatureclass_management(geo_path,city+"_"+str(decade)+"_ED_desc.shp")
 		blk_file = intermed_path+"fullname_dissolve_split.shp"
 		arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
 		arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
@@ -262,8 +257,7 @@ def draw_EDs(city, state, paths, new_var_name, is_desc) :
 				if row[1] == None :
 					row[1] = 0
 				up_cursor.updateRow(row)
-		return polyblk_inter_dict
-
+	
 #
 # Amory's ED descriptions script
 #
@@ -283,6 +277,7 @@ def draw_EDs(city, state, paths, new_var_name, is_desc) :
 
 #Returns just the NAME component of the street phrase, if any#
 #If second argument is True, return a list of all components 
+'''
 def isolate_st_name(st,whole_phrase = False) :
 	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
 		return ''
@@ -301,6 +296,44 @@ def isolate_st_name(st,whole_phrase = False) :
 		
 	if whole_phrase :
 		return [DIR,st,TYPE]
+	else :
+		return st
+'''
+
+#Returns just the NAME component of the street phrase, if any If second argument is True, return a list of all components 
+def isolate_st_name(st,whole_phrase = False) :
+	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
+		return ''
+	else :
+		TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|Rive?r?|Ocean|Bay|Canal|Sound|[Ll]ine|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+		if(TYPE) :
+			TYPE = TYPE.group(0)
+			st = re.sub(TYPE+"$", "",st)
+			TYPE = TYPE.strip()
+		DIR = re.search("^[NSEW]+ ",st)
+		if(DIR) :
+			DIR = DIR.group(0)
+			st = re.sub("^"+DIR, "",st)
+			DIR = DIR.strip()
+		st = st.strip()
+		
+	if whole_phrase :
+		return [DIR,st,TYPE]
+	else :
+		return st
+
+# fuzzy matches a given fullname st string against the list of all streets from grid
+def fuzzy_match_list(st) :
+	best = ""
+	best_r = 0
+	for sm in st_lines :
+		r = fuzz.ratio(sm,st)
+		if r > best_r :
+			best = sm
+			best_r = r
+	name = isolate_st_name(st)
+	if (len(name)<=4 and best_r > 86) or (len(name)>4 and best_r >= 80) :
+		return best
 	else :
 		return st
 
@@ -627,7 +660,564 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 
 	if debug:print("discovered_problem: "+str(discovered_problem))
 
-def ed_desc_algo(city, state, fullname_var, paths):
+def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
+
+	def preserve_chars(s) :
+		special_chars = u'\xa5'
+		string = ""
+		for char in s :
+			if not char in special_chars :
+				string += char.encode('ascii',errors='ignore')
+			else :
+				string += char
+		return string
+
+	def standardize_street_40_desc(st):
+		
+		runAgain = False
+		st = st.rstrip('\n')
+		orig_st = st
+
+		if re.search("R[\.,]R[\.,]?$",st) :
+			return "Railway"
+
+		st = st.lower()
+
+		###Remove Punctuation, extraneous words at end of stname###
+		st = re.sub(r'[\.,\*!]',' ',st)
+		st = re.sub(' +',' ',st)
+		st = st.strip()
+		st = re.sub('\\\\','',st)
+		st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
+		#consider extended a diff stname#
+		#st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
+
+		#Check if st is empty or blank and return empty to [st,DIR,NAME,TYPE]
+		if st == '' or st == ' ':
+			return ""
+		
+		###stname part analysis###
+		DIR = ''
+		NAME = ''
+		TYPE = ''
+
+	 
+		# Combinations of directions at end of stname (has to be run first)
+		if re.search(r'[ \-]+([Nn][\.\-]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)$',st):
+			st = "NE "+re.sub(r'[ \-]+([Nn][\.\-]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth[\s]+?[Ee]ast)$','',st)
+			DIR = 'NE'
+		if re.search(r'[ \-]+([Nn][\.\-]?[\s]?[WwV\xa5][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)$',st):
+			st = "NW "+re.sub(r'[ \-]+([Nn][\.\-]?[\s]?[WwV\xa5][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)$','',st)
+			DIR = 'NW'
+		if re.search(r'[ \-]+([Ss][\.\-]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)$',st):
+			st = "SE "+re.sub(r'[ \-]+([Ss][\.\-]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)$','',st)
+			DIR = 'SE'
+		if re.search(r'[ \-]+([Ss][\.\-]?[\s]?[WwV\xa5][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)$',st):
+			st = "SW "+re.sub(r'[ \-]+([Ss][\.\-]?[\s]?[WwV\xa5][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)$','',st)
+			DIR = 'SW'
+	   
+		#First check if DIR is at end of stname. make sure that it's the DIR and not actually the NAME (e.g. "North Ave" or "Avenue E")#
+		if re.search(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$',st) and not re.match('^[Nn][Oo][Rr][Tt][Hh]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Nn]$',st) :
+			st = "N "+re.sub(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$','',st)
+			DIR = 'N'
+		if re.search(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$',st) and not re.search('^[Ss][Oo][Uu][Tt][Hh]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ss]$',st) :
+			st = "S "+re.sub(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$','',st)
+			DIR = 'S'
+		if re.search(r'[ \-]+([Ww][Ee][Ss][Tt]|[Ww\xa5])$',st) and not re.search('^[Ww][Ee][Ss][Tt]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ww]$',st) :
+			st = "W "+re.sub(r'[ \-]+([Ww][Ee][Ss][Tt]|[Ww])$','',st)
+			DIR = 'W'
+		if re.search(r'[ \-]+([Ee][Aa][Ss][Tt]|[Ee])$',st) and not re.search('^[Ee][Aa][Ss][Tt]$|[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ee]$',st) :
+			st = "E "+re.sub(r'[ \-]+([Ee][Aa][Ss][Tt]|[Ee])$','',st)
+			DIR = 'E'
+
+		#See if a st TYPE can be identified#
+		st = re.sub(r'[ \-]+([Ss][Tt][Rr]?[Ee]?[Ee]?[Tt]?[SsEe]?|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
+		#st = re.sub(r'[ \-]+[Ss]tr?e?e?t?[ \-]',' St ',st) # Fix things like "4th Street Place"
+		st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][Vvw][Eeo&]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|[aA]veenue|[Aa]vn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
+		match = re.search("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+([a-zA-Z])$",st)
+		if match :
+			 st = re.sub("([a-zA-Z])$","",st)
+			 st = re.sub("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+",match.group(2)+" Ave",st)
+		st = re.sub(r'[ \-]+([Bb]\'?[Ll][Vv]\'?[Dd]|Bl\'?v\'?d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb][Oo][Uu][Ll][EeAa]?[Vv]?[Aa]?[Rr]?[Dd]?)$',' Blvd',st)
+		st = re.sub(r'[ \-]+([Rr][Dd]|[Rr][Oo][Aa][Dd])$',' Road',st)
+		st = re.sub(r'[ \-]+[Dd][Rr][Ii]?[Vv]?[Ee]?$',' Drive',st)
+		st = re.sub(r'[ \-]+([Cc][Oo][Uu]?[Rr][Tt]|[Cc][Tt])$',' Ct',st)
+		st = re.sub(r'[ \-]+([Pp][Ll][Aa]?[Cc]?[Ee]?)$',' Pl',st)
+		st = re.sub(r'[ \-]+([Ss][Qq][Uu]?[Aa]?[Rr]?[Ee]?)$',' Sq',st)
+		st = re.sub(r'[ \-]+[Cc]ircle$',' Cir',st)
+		st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kwa?y|[Pp]ky|[Pp]arkwy|[Pp]rakway|[Pp]rkwy|[Pp]wy)$',' Pkwy',st)
+		st = re.sub(r'[ \-]+[Ww][Aa][Yy]$',' Way',st)
+		st = re.sub(r'[ \-]+[Aa][Ll][Ll]?[Ee]?[Yy]?$',' Aly',st)
+		st = re.sub(r'[ \-]+[Tt][Ee][Rr]+[EeAa]?[Cc]?[Ee]?$',' Ter',st)
+		st = re.sub(r'[ \-]+([Ll][Aa][Nn][Ee]|[Ll][Nn])$',' Ln',st)
+		st = re.sub(r'[ \-]+([Pp]lzaz|[Pp][Ll][Aa][Zz][Aa])$',' Plaza',st)
+		st = re.sub(r'[ \-]+([Hh]ighway)$',' Hwy',st)
+		st = re.sub(r'[ \-]+([Hh]eights?)$',' Heights',st)
+
+		# "Park" is not considered a valid TYPE because it should probably actually be part of NAME #
+		match = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Heights|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+		if match :
+			TYPE = match.group(1)
+
+		#Combinations of directions at beginning of name
+		
+		match = re.search(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+',st)
+		if match :
+			if st == match.group(0)+TYPE :
+				NAME = 'Northeast'
+			else :
+				st = "NE "+re.sub(r'^([Nn][Oo\.]?[\s]?[Ee][\.]?|[Nn]ortheast|[Nn]orth\s+?[Ee]ast)[ \-]+','',st)
+				DIR = 'NE'
+		match = re.search(r'^([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+',st)
+		if match :
+			if st == match.group(0)+TYPE :
+				NAME = 'Northwest'
+			else :
+				st = "NW "+re.sub(r'^([Nn][Oo\.]?[\s]?[Ww][\.]?|[Nn]orthwest|[Nn]orth\s+?[Ww]est)[ \-]+','',st)
+				DIR = 'NW'
+		match = re.search(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+',st)
+		if match :
+			if st == match.group(0)+TYPE :
+				NAME = 'Southeast'
+			else :
+				st = "SE "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ee][\.]?|[Ss]outheast|[Ss]outh\s+?[Ee]ast)[ \-]+','',st)
+				DIR = 'SE'
+		match = re.search(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+',st)
+		if match :
+			if st == match.group(0)+TYPE :
+				NAME = 'Southwest'
+			else :
+				st = "SW "+re.sub(r'^([Ss][Oo\.]?[\s]?[Ww][\.]?|[Ss]outhwest|[Ss]outh\s+?[Ww]est)[ \-]+','',st)
+				DIR = 'SW'
+			
+		#See if there is a st DIR. again, make sure that it's the DIR and not actually the NAME (e.g. North Ave, E St [not East St])
+		if(DIR=='') :
+			match =  re.search(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+',st)
+			if match :
+				if st==match.group(0)+TYPE :
+					if len(match.group(1))>1 :
+						NAME = 'North'
+					else : NAME = 'N'
+				else :
+					st = "N "+re.sub(r'^([nN]|[Nn]\.|[Nn]o|[nN]o\.|[Nn][Oo][Rr][Tt]?[Hh]?)[ \-]+','',st)
+					DIR = 'N'
+			match =  re.search(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+',st)
+			if match :
+				if st==match.group(0)+TYPE :
+					if len(match.group(1))>1:
+						NAME = 'South'
+					else : NAME = 'S'
+				else :
+					st = "S "+re.sub(r'^([sS]|[Ss]\.|[Ss]o|[Ss]o\.|[Ss][Oo][Uu][Tt]?[Hh]?)[ \-]+','',st)
+					DIR = 'S'
+			match =  re.search(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+',st)
+			if match :
+				if st==match.group(0)+TYPE :
+					if len(match.group(1))>1 :
+						NAME = 'West'
+					else : NAME = 'W'
+				else :
+					st = "W "+re.sub(r'^([wW]|[Ww]\.|[Ww][Ee][Ss]?[Tt]?[\.]?)[ \-]+','',st)
+					DIR = 'W'
+			match =  re.search(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+',st)
+			if match :
+				if st==match.group(0)+TYPE :
+					if len(match.group(1))>1 :
+						NAME = 'East'
+					else : NAME = 'E'
+				else :
+					st = "E "+re.sub(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+','',st)
+					DIR = 'E'
+					
+		#get the st NAME and standardize it
+				
+		match = re.search('^'+DIR+'(.+)'+TYPE+'$',st)
+		if NAME=='' :
+			#If NAME is not 'North', 'West', etc...
+			if match :
+				NAME = match.group(1).strip()
+				
+				#convert written-out numbers to digits
+				#TODO: Make these work for all exceptions (go thru text file with find)
+				#if re.search("[Tt]enth|Eleven(th)?|[Tt]wel[f]?th|[Tt]hirteen(th)?|Fourt[h]?een(th)?|[Ff]ift[h]?een(th)?|[Ss]event[h]?een(th)?|[Ss]event[h]?een(th)?|[eE]ighteen(th)?|[Nn]inet[h]?een(th)?|[Tt]wentieth|[Tt]hirtieth|[Ff]o[u]?rtieth|[Ff]iftieth|[Ss]ixtieth|[Ss]eventieth|[Ee]ightieth|[Nn]inetieth|Twenty[ \-]?|Thirty[ \-]?|Forty[ \-]?|Fifty[ \-]?|Sixty[ \-]?|Seventy[ \-]?|Eighty[ \-]?|Ninety[ \-]?|[Ff]irst|[Ss]econd|[Tt]hird|[Ff]ourth|[Ff]ifth|[Ss]ixth|[Ss]eventh|[Ee]ighth|[Nn]inth",st) :
+				NAME = re.sub("^[Tt]enth","10th",NAME)
+				NAME = re.sub("^[Ee]leven(th)?","11th",NAME)
+				NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
+				NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
+				NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
+				NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
+				NAME = re.sub("^[Ss]ixt[h]?een(th)?","16th",NAME)
+				NAME = re.sub("^[Ss]event[h]?een(th)?","17th",NAME)
+				NAME = re.sub("^[eE]ighteen(th)?","18th",NAME)
+				NAME = re.sub("^[Nn]inet[h]?e+n(th)?","19th",NAME)
+				NAME = re.sub("^[Tt]went[iy]eth","20th",NAME)
+				NAME = re.sub("^[Tt]hirt[iy]eth","30th",NAME)
+				NAME = re.sub("^[Ff]o[u]?rt[iy]eth","40th",NAME)
+				NAME = re.sub("^[Ff]ift[iy]eth", "50th",NAME)
+				NAME = re.sub("^[Ss]ixt[iy]eth", "60th",NAME)
+				NAME = re.sub("^[Ss]event[iy]eth", "70th",NAME)
+				NAME = re.sub("^[Ee]ight[iy]eth", "80th",NAME)
+				NAME = re.sub("^[Nn]inet[iy]eth", "90th",NAME)
+
+				NAME = re.sub("[Tt]wenty[ \-]*","2",NAME)
+				NAME = re.sub("[Tt]hirty[ \-]*","3",NAME)
+				NAME = re.sub("[Ff]orty[ \-]*","4",NAME)
+				NAME = re.sub("[Ff]ifty[ \-]*","5",NAME)
+				NAME = re.sub("[Ss]ixty[ \-]*","6",NAME)
+				NAME = re.sub("[Ss]eventy[ \-]*","7",NAME)
+				NAME = re.sub("[Ee]ighty[ \-]*","8",NAME)
+				NAME = re.sub("[Nn]inety[ \-]*","9",NAME)
+				
+				if re.search("(^|[0-9]+.*)([Ff]irst|[Oo]ne)$",NAME) : NAME = re.sub("([Ff]irst|[Oo]ne)$","1st",NAME)
+				if re.search("(^|[0-9]+.*)([Ss]econd|[Tt]wo)$",NAME) : NAME = re.sub("([Ss]econd|[Tt]wo)$","2nd",NAME)
+				if re.search("(^|[0-9]+.*)([Tt]hird|[Tt]hree)$",NAME) : NAME = re.sub("([Tt]hird|[Tt]hree)$","3rd",NAME)
+				if re.search("(^|[0-9]+.*)[Ff]our(th)?$",NAME) : NAME = re.sub("[Ff]our(th)?$","4th",NAME)
+				if re.search("(^|[0-9]+.*)([Ff]ifth|[Ff]ive)$",NAME) : NAME = re.sub("([Ff]ifth|[Ff]ive)$","5th",NAME)
+				if re.search("(^|[0-9]+.*)[Ss]ix(th)?$",NAME) : NAME = re.sub("[Ss]ix(th)?$","6th",NAME)
+				if re.search("(^|[0-9]+.*)[Ss]even(th)?$",NAME) : NAME = re.sub("[Ss]even(th)?$","7th",NAME)
+				if re.search("(^|[0-9]+.*)[Ee]igh?th?$",NAME) : NAME = re.sub("[Ee]igh?th?$","8th",NAME)
+				if re.search("(^|[0-9]+.*)[Nn]in(th|e)+$",NAME) : NAME = re.sub("[Nn]in(th|e)+$","9th",NAME)
+				
+				if re.search("[0-9]+",NAME) :
+					if re.search("^[0-9]+$",NAME) : #if NAME is only numbers (no suffix), add the correct suffix
+						foo = True
+						suffixes = {'11':'11th','12':'12th','13':'13th','1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','6':'6th','7':'7th','8':'8th','9':'9th','0':'0th'}
+						num = re.search("[0-9]+$",NAME).group(0)
+						suff = ''
+						# if num is not found in suffixes dict, remove leftmost digit until it is found... 113 -> 13 -> 13th;    24 -> 4 -> 4th
+						while(suff=='') :
+							try :
+								suff = suffixes[num]
+							except KeyError :
+								num = num[1:]
+								if len(num) == 0 :
+									break
+						if not suff == '' :
+							NAME = re.sub(num+'$',suff,NAME)
+					else :
+						# Fix incorrect suffixes e.g. "73d St" -> "73rd St"
+						if re.search("[23]d$",NAME) :
+							NAME = re.sub("3d","3rd",NAME)
+							NAME = re.sub("2d","2nd",NAME)
+						if re.search("1 [Ss]t|2 nd|3 rd|1[1-3] th|[04-9] th",NAME) :
+							try :
+								suff = re.search("[0-9] ([Sa-z][a-z])",NAME).group(1)
+							except :
+								print("NAME: "+NAME+", suff: "+suff+", st: "+st)
+							NAME = re.sub(" "+suff,suff,NAME)
+						# TODO: identify corner cases with numbers e.g. "51 and S- Hermit"
+					
+					# This \/ is a bit overzealous...! #
+					hnum = re.search("^([0-9]+[ \-]+).+",NAME) #housenum in stname?
+					if hnum : 
+						#False
+						NAME = re.sub(hnum.group(1),"",NAME) #remove housenum. May want to update housenum field, maybe not though.
+						runAgain = True
+				else :
+					NAME = NAME.title()
+				
+			else :
+				assert(False)
+			# Standardize "St ____ Ave" -> "Saint ____ Ave" #
+			NAME = re.sub("^([Ss][Tt]\.?|[Ss][Aa][Ii][Nn][Tt])[ \-]","Saint ",NAME)
+		st = re.sub(re.escape(match.group(1).strip()),NAME,st).strip()
+		try :
+			assert st == (DIR+' '+NAME+' '+TYPE).strip()
+		except AssertionError :
+			print("Something went a bit wrong while trying to pre-standardize stnames.")
+			print("orig was: "+orig_st)
+			print("st is: \""+st+"\"")
+			print("components: ["+(DIR+','+NAME+','+TYPE).strip()+"]")
+
+		if re.search("[Cc]ity [Ll]imits?",st) :
+			return "City Limits"
+		
+		TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|Rive?r?|Ocean|Bay|Canal|Sound|[Ll]ine|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+
+		if not TYPE :
+			st = st+" St"
+		return st
+
+	def blk_fuzz_ratio(blk_st_list,stname_list) :
+		r_sum = 0
+		for blk_st in blk_st_list :
+		#find best match for each blk_st
+			best = ''
+			best_r = 0
+			for stname in stname_list :
+				r = fuzz.ratio(blk_st,stname)
+				if r > best_r :
+					best_r = r
+					best = stname
+			r_sum += best_r
+		r_avg = r_sum / max(len(blk_st_list),len(stname_list))
+		return r_avg
+
+	def find_blk_by_stnames(stname_list,use_fuzz=False) :
+		try :
+			return fullname_blk_dict[tuple(stname_list)]
+		except KeyError :
+			if not use_fuzz :
+				return None
+			else :
+				#find fuzzy match block
+				best_r_avg = 0
+				best_blk = None
+				for blk,blk_st_list in blk_fullname_dict.items() :
+					r_sum = 0
+					#keep track of which SM streets have been matched???
+					#match_list = copy.deepcopy(stname_list)
+					r_avg = blk_fuzz_ratio(blk_st_list,stname_list)
+					if r_avg > best_r_avg :
+						best_r_avg = r_avg
+						best_blk = blk
+				if best_r_avg >= 80 :
+					return best_blk
+
+	city = city.replace(' ','')
+	city_state = city+state
+	r_path, script_path, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/"
+
+	stgrid_file = geo_path+city_state+"_"+str(decade)+"_stgrid_edit_Uns2.shp"
+	if not os.path.isfile(stgrid_file) :
+		print("Missing stgrid file")
+		break
+
+	arcpy.ExportXYv_stats(Input_Feature_Class =stgrid_file, 
+		Value_Field=fullname_var, Delimiter="COMMA",
+		Output_ASCII_File =dir_path+"/Textfile/"+city+"_attr.txt", 
+		Add_Field_Names_to_Output="NO_FIELD_NAMES")
+
+	with open(dir_path+"/Textfile/"+city+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
+		blk_lines = blk_txt_file.readlines()
+	with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
+		ed_lines = ed_txt_file.readlines()
+	with open(dir_path+"/Textfile/"+city+"_attr.txt",'r') as st_list_file :
+		st_lines = st_list_file.readlines()
+
+	for i in range(0,len(st_lines)) :
+		st_lines[i] = st_lines[i].split(',')[2].strip()
+	st_lines = list(np.unique(st_lines))
+
+	line_blk_dict = {} #lookup line number -> blk descript
+	ed_line_dict = {} #lookup ed -> which line numbers
+
+	print("Creating lookup dictionaries based on block/ED data from Steve Morse...")
+
+	for line in blk_lines :
+		line = line.strip()
+		if line == "" or line == "\n" :
+			continue
+		
+		line_num = re.search("\(\*([0-9]+)\*\):? ",line)
+		try :
+			descript = re.sub(re.escape(line_num.group(0)),"",line)
+			line_blk_dict[int(line_num.group(1))] = descript.strip()
+		except AttributeError:
+			print(line)
+			assert False
+
+	prev_line_num = ""
+	prev_descript = ""
+	for ind,line in enumerate(ed_lines) :
+		line = line.strip()
+		if line == "" or line == "\n" :
+			continue
+
+		line_num = re.search("\(\*([0-9]+)\*\): ",line)
+		try :
+			descript = re.sub(re.escape(line_num.group(0)),"",line)
+		except :
+			print(repr(line))
+			assert False
+
+		if prev_line_num == "" :
+			prev_line_num = int(line_num.group(1))
+			prev_descript = descript
+			continue
+		try :
+			ed = re.search("^[\-0-9A-Za-z]+",prev_descript).group(0).lower()
+		except :
+			print(prev_descript)
+			print(ind)
+			assert False
+		line_num = int(line_num.group(1))
+
+		Dict_append(ed_line_dict, ed, (prev_line_num+1,line_num-1))
+
+		prev_line_num = line_num
+		prev_descript = descript
+
+	#finish adding last ED to dict
+	Dict_append(ed_line_dict, re.search("^[\-0-9A-Za-z]+",prev_descript).group(0).lower(), (prev_line_num+1,max(line_blk_dict.keys())))
+
+	ed_blk_dict = {} #lookup ed -> which block numbers
+	blk_desc_dict = {} #lookup ed+block identifier -> description for block
+
+	print("Creating lookup dictionaries for block number and block description...")
+
+	for ed, blk_list in ed_line_dict.items() :
+		for blk in blk_list :
+			for line in range(blk[0],blk[1]) :
+				try :
+					line_blk_dict[line]
+				except KeyError :
+					continue
+				blk_line = line_blk_dict[line]
+				if re.search("Block|Image",blk_line) :
+						continue
+				blk_num = re.search("^([0-9A-Za-z]+)[\-\— ]+",blk_line)
+				if blk_num :
+					desc = re.sub(re.escape(blk_num.group(0)),"",blk_line)
+					blk_num = blk_num.group(1)
+					Dict_append(ed_blk_dict,ed,blk_num)
+					blk_desc_dict[ed+'_'+blk_num] = desc
+
+	output = open(geo_path+"ed_blk_desc.txt","w+")
+
+	for ind,(blk,desc) in enumerate(blk_desc_dict.items()) :
+		st_list = ""
+		for st in desc.split(", ") :
+			diff = False
+			foo = st
+			if st.encode('ascii',errors='ignore') != st :
+				diff = True
+			st = preserve_chars(st)
+			st_add = standardize_street_40_desc(st)
+			#if use_fuzz :
+			#    st_add = fuzzy_match_list(st_add)
+			if diff:
+				print(str(ind)+": before: "+foo+", after: "+st_add)
+			st_list += st_add+", "
+		st_list = st_list[:-2]
+		try :
+			output.write((str(ind)+", "+blk+", "+st_list+"\n").encode('utf8'))
+		except UnicodeEncodeError:
+			#print(str(ind)+", "+blk+", "+st_list)
+			assert False
+
+	output.close()
+
+	# HERE BEGINS CODE FOR MATCHING DESCRIPTION BLOCKS TO STGRID BLOCKS #
+
+	print("Matching block descriptions to physical blocks based on street grid...")
+
+	#spatial join target=pblk file, join=Uns2, share_a_LINE_SEGMENT, join the grid_ids of all street segments for each block
+	#format the joined grid ID field so it is like: (1047,1048,1081,168,197,218,219)
+
+	grid_id_var = "grid_id"
+	grid_id_str_var = "grid_id_s"
+
+	sj_targ = geo_path + city_state[:-2] + "_"+str(decade)+"_Pblk.shp"
+	if not os.path.isfile(sj_targ) :
+		print("Missing Pblk file")
+		break
+
+	arcpy.AddField_management (stgrid_file, 'grid_id_s', "TEXT", 200)
+	arcpy.CalculateField_management (stgrid_file, 'grid_id_s', 'str(!'+grid_id_var+'!)+","', 
+		expression_type="PYTHON_9.3")
+
+	arcpy.MakeFeatureLayer_management(stgrid_file, "st_lyr")
+	arcpy.MakeFeatureLayer_management(sj_targ, "pblk_lyr")
+
+	arcpy.SpatialJoin_analysis(target_features="pblk_lyr", 
+		join_features="st_lyr", 
+		out_feature_class=os.path.join(arcpy.env.scratchGDB,city_state+"_desc_SpatialJoin"), 
+		join_operation="JOIN_ONE_TO_ONE", 
+		join_type="KEEP_ALL",
+		field_mapping="""pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,pblk_lyr,pblk_id,-1,-1;
+		grid_id_s "grid_id_s" true true false 500 Text 0 0 ,Join,#,st_lyr,grid_id_s,-1,-1""", 
+		match_option="SHARE_A_LINE_SEGMENT_WITH")
+
+	with open(geo_path + 'ed_blk_desc.txt','r') as blk_desc_file :
+		blk_desc = blk_desc_file.readlines()
+
+	for ind,line in enumerate(blk_desc) :
+		blk_desc[ind] = line.strip()    
+
+	join_file = os.path.join(arcpy.env.scratchGDB,city_state[:-2]+"_"+str(decade)+"_ED_desc")
+
+	blk_desc_dict = {} # lookup SM ed_blk identifier -> SM description of block
+	blk_gridID_dict = {} # lookup pblk_id -> string of grid_ids of streets comprising boundary of block
+	blk_fullname_dict = {} # lookup pblk_id -> list of fullnames of streets comprising boundary of block
+	fullname_blk_dict = {} # lookup alphabetical, unique tuple of streets comprising boundary of block -> pblk_id of block
+	pblk_ed_blk_dict = {} # lookup pblk_id -> SM ed_blk identifier
+
+	for line in blk_desc :
+		line = line.split(', ')
+		try :
+			blk = line[1].split('-')[1]
+		except :
+			if line[1] :
+				blk = line[1]
+			else :
+				continue
+		blk_desc_dict[blk] = list(np.unique(line[2:]))
+
+	def foo_format(s) :
+		return '('+s[:-1]+')'
+
+	with arcpy.da.SearchCursor(join_file,['pblk_id',grid_id_str_var]) as b_cursor :
+		for b_row in b_cursor :
+			blk = b_row[0]
+			seg_str = foo_format(b_row[1])
+			blk_gridID_dict[blk] = seg_str
+			arcpy.SelectLayerByAttribute_management("st_lyr", 'NEW_SELECTION', '"'+grid_id_var+'" IN '+seg_str)
+			with arcpy.da.SearchCursor("st_lyr",[grid_id_var,fullname_var]) as s_cursor :
+				stname_list = []
+				for s_row in s_cursor :
+					stname_list.append(str(s_row[1]))
+				stname_list = list(np.unique(stname_list))
+				blk_fullname_dict[blk] = stname_list
+				fullname_blk_dict[tuple(stname_list)] = blk
+
+	#dicts to keep track of which blocks need to be fuzzy-matched
+	fuzz_blk_fullname_dict = copy.deepcopy(blk_fullname_dict)
+	fuzz_blk_desc_dict = copy.deepcopy(blk_desc_dict)
+	#find exact block matches
+	print("Finding exact block matches...")
+	for ed_blk, stname_list in blk_desc_dict.items() :
+		pblk = find_blk_by_stnames(stname_list)
+		if pblk :
+			pblk_ed_blk_dict[pblk] = ed_blk
+			try :
+				fuzz_blk_fullname_dict.pop(pblk)
+			except KeyError :
+				print("Key "+str(pblk)+" already removed before matching "+str(stname_list))
+			fuzz_blk_desc_dict.pop(ed_blk)
+
+	#find fuzzy block matches
+	print("Finding fuzzy block matches...")
+	for ed_blk, stname_list in fuzz_blk_desc_dict.items() :
+		pblk = find_blk_by_stnames(stname_list,use_fuzz=True)
+		if pblk :
+			if pblk in pblk_ed_blk_dict :
+				prev_r = blk_fuzz_ratio(blk_fullname_dict[pblk],blk_desc_dict[pblk_ed_blk_dict[pblk]])
+				cur_r = blk_fuzz_ratio(blk_fullname_dict[pblk],stname_list)
+				if cur_r > prev_r :
+					print("pblk "+str(pblk)+str(blk_fullname_dict[pblk])+" already matched w/ "+str(pblk_ed_blk_dict[pblk])+"("+str(prev_r)+")"+str(blk_desc_dict[pblk_ed_blk_dict[pblk]])+", now "+str(ed_blk)+"("+str(cur_r)+")"+str(stname_list))
+					pblk_ed_blk_dict[pblk] = ed_blk
+			else :
+				pblk_ed_blk_dict[pblk] = ed_blk
+
+	#resolve duplicate block matches
+	print("Removing duplicate block matches...")
+	arcpy.AddField_management(join_file, "ed_desc", "TEXT", "", "", 20)
+	arcpy.AddField_management(join_file, "cblk_id", "TEXT", "", "", 20)
+	with arcpy.da.UpdateCursor(join_file,['pblk_id','ed_desc','cblk_id']) as b_cursor :
+		for row in b_cursor :
+			try :
+				ed_blk = pblk_ed_blk_dict[row[0]]
+				row[1] = ed_blk.split('_')[0]
+				row[2] = ed_blk.split('_')[1]
+				b_cursor.updateRow(row)
+			except KeyError :
+				continue
+
+	arcpy.FeatureClassToShapefile_conversion(join_file, geo_path)        
+
+def ed_desc_algo(city, state, fullname_var, paths, decade):
 
 	city = city.replace(' ','')
 	r_path, script_path, dir_path = paths
@@ -636,11 +1226,11 @@ def ed_desc_algo(city, state, fullname_var, paths):
 	global discovered_problem
 	discovered_problem = 0
 
-	shp_targ = geo_path + city + state + "_1930_stgrid_edit_Uns2.shp"
+	shp_targ = geo_path + city + state + '_' + str(year) + "_stgrid_edit_Uns2.shp"
 	# LOAD SM DESCRIPTIONS....
 	if os.path.isfile(shp_targ) :
 		#pass
-		prepare_map_intersections(city + state +'_1930_stgrid_edit_Uns2.shp', fullname_var, paths)
+		prepare_map_intersections(city + state +'_' + str(year) + '_stgrid_edit_Uns2.shp', fullname_var, paths)
 	else :
 		print(city+": Error finding stgrid")
 		return
@@ -662,7 +1252,7 @@ def ed_desc_algo(city, state, fullname_var, paths):
 		print(city+": Error finding stgrid ("+str(st_grid_exists)+") and/or descriptions ("+str(descriptions_exist)+")")
 	
 	print("Creating ED Map for %s (Descriptions algorithm)" % (city))
-	draw_EDs(city, state, paths, "ED_desc", True)
+	draw_EDs(city, state, paths, "ED_desc", True, decade)
 
 #
 # Amory's intersection script
@@ -702,7 +1292,7 @@ def ed_desc_algo(city, state, fullname_var, paths):
 def csv_from_excel(excel_file, csv_name):
 	workbook = xlrd.open_workbook(excel_file)
 	all_worksheets = workbook.sheet_names()
-	for i,worksheet_name in enumerate(all_worksheets[:-1]) : #exclude last worksheet (1940 stnames)
+	for i,worksheet_name in enumerate(all_worksheets[0:2]) : #Use only first two worksheets
 		worksheet = workbook.sheet_by_name(worksheet_name)
 		if i==0 :
 			namename = csv_name
@@ -1152,7 +1742,7 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 
 	city = city.replace(' ','')
 	r_path, script_path, dir_path = paths
-	geo_path = dir_path + "/GIS_edited/"
+	geo_path = dir_path + '/GIS_edited/'
 
 	global SMLines
 	global SMLines1
@@ -1174,7 +1764,7 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 	global Intersect_BLOCK_DICT
 	global ST_Intersect_DICT
 	global BLOCK_Intersect_DICT
-	Intersect_ST_DICT = defaultdict(list) # lookup intersection -> which STs (names)
+	Intersect_ST_DICT = {} # lookup intersection -> which STs (names)
 	Intersect_BLOCK_DICT = {} # lookup intersection -> which BLOCKs
 	ST_Intersect_DICT = {} # lookup ST -> which intersections
 	BLOCK_Intersect_DICT = {} # lookup BLOCK ID -> which intersections
@@ -1216,17 +1806,17 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 	RunAnalysisInt(city)
 
 	print("Creating ED Map for %s (Intersections algorithm)" % (city))
-	draw_EDs(city, state, paths, "ED_inter", False)
+	draw_EDs(city, state, paths, "ED_inter", False, decade)
 		
 #
 # Matt's initial geocoding script (written in R)
 #
 
 # See "/blocknum/R/Identify 1930 EDs.R" for details
-def identify_1930_eds(city_name, paths):
+def identify_eds(city_name, paths, decade):
 	r_path, script_path, file_path = paths
-	print("Identifying 1930 EDs\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	print("Identifying " + str(decade) + " EDs\n")
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error identifying 1930 EDs for "+city_name+"\n")
 	else:
@@ -1238,77 +1828,68 @@ def identify_1930_eds(city_name, paths):
 
 def select_best_ed_guess(x):
 	
-	try:
-		_, ed_desc, ed_inter, ed_geocode = x
-		have_desc = True
-	except:
-		_, ed_inter, ed_geocode = x
-		have_desc = False
+	_, ed_desc, ed_inter, ed_geocode = x
 	# Split if multiple EDs
-	if have_desc:
-		if '|' in str(ed_desc):
-			ed_desc = ed_desc.split('|')
-			ed_desc = [int(i) for i in ed_desc]
-		else:
-			ed_desc = [int(ed_desc)]
+	if '|' in str(ed_desc):
+		ed_desc = ed_desc.split('|')
+		ed_desc = [i for i in ed_desc]
+	else:
+		ed_desc = [ed_desc]
 	if '|' in str(ed_inter):
 		ed_inter = ed_inter.split('|')
-		ed_inter = [int(i) for i in ed_inter]
+		ed_inter = [i for i in ed_inter]
 	else:
-		ed_inter = [int(ed_inter)]
+		ed_inter = [ed_inter]
 	if '|' in str(ed_inter):
 		ed_geocode = ed_geocode.split('|')
-		ed_geocode = [int(i) for i in ed_geocode]
+		ed_geocode = [i for i in ed_geocode]
 	else:
-		ed_geocode = [int(ed_geocode)]
+		ed_geocode = [ed_geocode]
 
 	# List of EDs guessed
-	if have_desc:
-		ed_list = list(set(ed_desc + ed_inter + ed_geocode))
-	else:
-		ed_list = list(set(ed_inter + ed_geocode))
-	ed_list = [i for i in ed_list if i != 0]
+	ed_list = list(set(ed_desc + ed_inter + ed_geocode))
+	ed_list = [i for i in ed_list if i != '0']
 
 	# List of ED guesses by confidence
 	ed_guess_list = []
-	
 	# Initialize guess to be missing, confidence -1 
-	ed_guess_conf = [-1, 0]
+	ed_guess_conf = [-1, '0']
 	
+	def check_ed_num(ed_n, ed_list):
+		for ed in ed_list:
+			if ed_n == ed.replace(r'[a-zA-Z]+',''):
+				return True
+		return False
+
 	# If no guesses, return missing
 	if len(ed_list) == 0:
 		return ed_guess_conf
 	# Otherwise, try to find a unique guess
 	else:
 		for ed in ed_list:
-			# If we have ED guesses based on descriptions
-			if have_desc:
-				# If all three agree, highest confidence
-				if ed in ed_desc and ed in ed_inter and ed in ed_geocode:
-					ed_guess_list.append([ed, 1])
-				# If any two agree, second highest confidence
-				elif (ed in ed_desc and ed in ed_inter) or (ed in ed_desc and ed in ed_geocode) or (ed in ed_inter and ed in ed_geocode):
-					ed_guess_list.append([ed, 2])
-				# If ed_desc not missing, third highest confidence
-				elif ed in ed_desc:
-					ed_guess_list.append([ed, 3])
-				# If ed_inter not missing, fourth highest confidence
-				elif ed in ed_inter:
-					ed_guess_list.append([ed, 4])
-				# If ed_geocode not missing, fifth highest confidence
-				elif ed in ed_geocode:
-					ed_guess_list.append([ed, 5])
-			# Otherwise...
-			else:
-				# If both agree, highest confidence
-				if ed in ed_inter and ed in ed_geocode:
-					ed_guess_list.append([ed, 1])
-				# If ed_inter not missing, fourth highest confidence
-				elif ed in ed_inter:
-					ed_guess_list.append([ed, 2])
-				# If ed_geocode not missing, fifth highest confidence
-				elif ed in ed_geocode:
-					ed_guess_list.append([ed, 3])
+			ed_n = ed.replace(r'[a-zA-Z]+','')
+			in_desc = check_ed_num(ed_n, ed_desc)
+			in_inter = check_ed_num(ed_n, ed_inter)
+			in_geocode = check_ed_num(ed_n, ed_geocode)
+			# If all three agree, highest confidence
+			if in_desc and in_inter and in_geocode:
+				ed_guess_list.append([ed, 1])
+			# If any two agree, second highest confidence
+			elif (in_desc and in_inter) or (in_desc and in_geocode) or (in_inter and in_geocode):
+				ed_guess_list.append([ed, 2])
+			# If ed_desc not missing, third highest confidence
+			elif in_desc:
+				ed_guess_list.append([ed, 3])
+			# If ed_inter not missing, fourth highest confidence
+			elif in_inter:
+				ed_guess_list.append([ed, 4])
+			# If ed_geocode not missing, fifth highest confidence
+			elif in_geocode:
+				ed_guess_list.append([ed, 5])
+	
+	# If didn't find a guess, return guess to be missing, confidence -1
+	if len(ed_guess_list) == 0:
+		return ed_guess_conf
 
 	df_ed_guess = pd.DataFrame(ed_guess_list, columns=['ed','conf'])
 	num_guesses = df_ed_guess.groupby(['conf'], as_index=False).size().to_dict()
@@ -1321,6 +1902,7 @@ def select_best_ed_guess(x):
 	elif len(df_ed_guess[df_ed_guess['count']>1]) > 0:
 		df_two_plus_ed_guess = df_ed_guess[df_ed_guess['count']>1]
 		for ed in df_two_plus_ed_guess['ed'].tolist():
+			# If we have description guesses, do this... (revisit)
 			if ed in ed_desc:
 				if (ed in ed_inter) or (ed in ed_geocode):
 					ed_guess_conf = [2, ed]
@@ -1341,7 +1923,11 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 	city = city.replace(' ','')
 
 	# Paths
-	dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+	city_state = city + state
+	if city_state == "KansasCityKS":
+		dir_path = "S:/Projects/1940Census/Kansas"
+	else:
+		dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
 	r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
 	script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
 	paths = [r_path, script_path, dir_path]
@@ -1355,35 +1941,37 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 	ed_inter_algo(city, state, fullname_var, paths, decade)
 
 	# Step 3: Run Matt's script (based on initial geocoding)
-	identify_1930_eds(city, paths)
+	identify_eds(city, paths, decade)
 
 	# Step 4: If using descriptions, run, create new shapefile including all three then...
-	#	a. Identify best guesses
-	#	b. Assign confidence to guesses
-
+	#   a. Identify best guesses
+	#   b. Assign confidence to guesses
 	last_step = geo_path + city + '_' + str(decade) + '_ED_Choice_map.shp'
 	ed_guess_file = geo_path + city + state + '_' + str(decade) + '_ED_guess_map.shp'
 
 	if decade == 1930:
 		# Run Amory's descriptions algorithm
 		ed_desc_algo(city, state, fullname_var, paths)
-		# Create a copy of file created by Matt's script (contains guesses from all three methods)
-		ed_desc_map = geo_path + city + '_' + str(decade) + '_ED_desc.shp'
-		# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
-		arcpy.SpatialJoin_analysis(target_features=last_step, 
-			join_features=ed_desc_map, 
-			out_feature_class=ed_guess_file, 
-			join_operation="JOIN_ONE_TO_ONE", 
-			join_type="KEEP_ALL",
-			match_option="HAVE_THEIR_CENTER_IN")
 	elif decade == 1940:
-		arcpy.CopyFeatures_management(last_step, ed_guess_file)
+		# Run Amory's 1940 descriptions algorithm
+		# ed_desc_algo40(city, state, fullname_var, paths)
+	ed_desc_map = geo_path + city + '_' + str(decade) + '_ED_desc.shp'
+	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
+	arcpy.SpatialJoin_analysis(target_features=last_step, 
+		join_features=ed_desc_map, 
+		out_feature_class=ed_guess_file, 
+		join_operation="JOIN_ONE_TO_ONE", 
+		join_type="KEEP_ALL",
+		match_option="HAVE_THEIR_CENTER_IN")
 
 	# Select relevant variables and extract best ED guesses
 	df = dbf2DF(ed_guess_file)
 	def replace_blanks(ed):
 		if ed == '':
 			return '0'
+		for c in ed:
+			if c.islower():
+				ed = ed.replace(c,c.upper())
 		else:
 			return ed
 	def get_ed_geocode(eds):
@@ -1395,29 +1983,21 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 		else:
 			return '|'.join(eds)
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].astype(int).astype(str).apply(lambda x: get_ed_geocode(x), axis=1)
-	if year == 1930:
-		relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
-		df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1).astype(int)
-	elif year == 1940:
-		relevant_vars = ['pblk_id','ed_inter','ed_geocode']
+	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
+	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1)
+	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str)
 	df_ed_guess = df[relevant_vars]
 	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
 
 	# Relabel confidence variable descriptively 
 	label_conf = {}
 
-	if year == 1930:
-		label_conf[-1] = "-1. No guess"
-		label_conf[1] = "1. Three agree"
-		label_conf[2] = "2. Two agree"
-		label_conf[3] = "3. Descriptions only"
-		label_conf[4] = "4. Intersections only"
-		label_conf[5] = "5. Geocoding only"
-	elif year == 1940:
-		label_conf[-1] = "-1. No guess"
-		label_conf[1] = "1. Both agree"
-		label_conf[2] = "2. Intersections only"
-		label_conf[3] = "3. Geocoding only"
+	label_conf[-1] = "-1. No guess"
+	label_conf[1] = "1. Three agree"
+	label_conf[2] = "2. Two agree"
+	label_conf[3] = "3. Descriptions only"
+	label_conf[4] = "4. Intersections only"
+	label_conf[5] = "5. Geocoding only"
 
 	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)
 	
@@ -1434,19 +2014,12 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 
 		# Add a specific field mapping for a special case
 		file = csv_file
-		if decade == 1930:
-			field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
-			ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
-			ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
-			ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
-			ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
-			ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file)
-		else:
-			field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
-			ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
-			ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
-			ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
-			ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file)
+		field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+		ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
+		ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
+		ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
+		ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
+		ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file)
 
 		arcpy.TableToTable_conversion(in_rows=csv_file, 
 			out_path=geo_path, 
@@ -1458,7 +2031,7 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
 		os.remove(csv_file)
 
-	save_dbf_ed(df_ed_guess, geo_path, ed_guess_file)
+	save_dbf_ed(df_ed_guess, geo_path, ed_guess_file, decade)
 
 	# Ridiculous but necessary because saving to .dbf converts data type for unknown reasons
 	df_ed_guess.index = df_ed_guess['pblk_id']
@@ -1471,32 +2044,37 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 	print("Finished %s" % (city))
 
 # Full street name variable
-fullname_var = "FULLNAME"
+#fullname_var = "FULLNAME"
+#city = "Chicago"
+#state = "IL"
+#decade = 1940
+
 
 # To be included in the city_info_list, must have:
-#	a. [CITY][STATE]_1940_stgrid_diradd.shp
-#	b. [CITY][STATE]_StudAuto.dta
+#   a. [CITY][STATE]_1940_stgrid_diradd.shp
+#   b. [CITY][STATE]_StudAuto.dta
 
 city_info_list = [
-	['Albany','NY'],	
-	['Dayton','OH'], 	
+	['Albany','NY'],    
+	['Dayton','OH'],    
 	['Houston','TX'],
 	['Miami','FL'],
 	['New Haven','CT'], 
-	['Newark','NJ'], 	
+	['Newark','NJ'],    
 	['Rochester','NY'], 
 	['San Diego','CA'], 
 	['Seattle','WA'],
 	['St Paul','MN'],
 	['Worcester','MA'], 
-	['Yonkers','NY']  	
+	['Yonkers','NY']    
 	]
 
+decade = 1940
 num_finished = 0
 for city_info in city_info_list:
 	city, state = city_info
 	try:
-		get_ed_guesses(city, state, fullname_var)
+		get_ed_guesses(city, state, fullname_var, decade)
 		num_finished += 1
 	except:
 		continue
@@ -1504,11 +2082,11 @@ print("%s of %s cities processed" % (str(num_finished), str(len(city_info_list))
 
 # Save information
 
-def get_ed_guess_stats(city_info):
+def get_ed_guess_stats(city_info, decade):
 	city, state = city_info
 	city = city.replace(' ','')
 	# Load dbf data
-	ed_guess_file = "S:/Projects/1940Census/" + city + '/GIS_edited/' + city + state + '_ED_guess_map.shp'
+	ed_guess_file = "S:/Projects/1940Census/" + city + '/GIS_edited/' + city + state + '_' + str(decade) + '_ED_guess_map.shp'
 	df_ed_guess = dbf2DF(ed_guess_file)
 	# Create a tabular summary of number guessed by confidence in guess
 	info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
@@ -1519,9 +2097,9 @@ def get_ed_guess_stats(city_info):
 info_list = []
 for city_info in city_info_list:
 	try:
-		info_list.append(get_ed_guess_stats(city_info))
+		info_list.append(get_ed_guess_stats(city_info,decade))
 	except:
 		continue
 df = pd.concat(info_list)
 df_to_write = pd.pivot_table(df, values='pblk_id', index=['city','state'], columns=['ed_conf'])
-df_to_write.to_csv('S:/Users/Chris/ed_guess_info.csv')
+df_to_write.to_csv('S:/Users/Chris/ed_guess_info'+str(decade)+'.csv')
