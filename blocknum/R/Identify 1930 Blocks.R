@@ -20,6 +20,7 @@ args <- commandArgs(trailingOnly = TRUE)
 dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
 city_name <- args[2]
 city_name <- gsub(" ","",city_name)
+decade <- args[3]
 
 #Functions used:
 trim <- function( x ) {
@@ -45,7 +46,7 @@ shift<-function(x,shift_by){
 }
 
 #Bring in microdata points
-  Points<-read.dbf(paste(dir_path,city_name,"_1930_Pblk_Points.dbf",sep="")) # This was "Pblk_Points_2.dbf" but we're skipping Steps 6 and 7 currently
+  Points<-read.dbf(paste(dir_path,city_name,"_",decade,"_Pblk_Points.dbf",sep="")) # This was "Pblk_Points_2.dbf" but we're skipping Steps 6 and 7 currently
 #Make variable names lowercase
   names(Points)<-tolower(names(Points))
   names(Points)
@@ -156,7 +157,7 @@ shift<-function(x,shift_by){
     
 #Attach to Original Shapefile
     library(shapefiles)
-    BlockMap<-readOGR(paste(dir_path,city_name,"_1930_Pblk.shp",sep=""))
+    BlockMap<-readOGR(paste(dir_path,city_name,"_",decade,"_Pblk.shp",sep=""))
     names(BlockMap)<-tolower(names(BlockMap))
     detach("package:shapefiles", unload=TRUE)
 
@@ -178,7 +179,7 @@ shift<-function(x,shift_by){
 
 #Export Map
   dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
-  writeOGR(BlockMap, dsn=dir_path_export,layer=paste(city_name,"_1930_Block_Choice_Map",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
+  writeOGR(BlockMap, dsn=dir_path_export,layer=paste(city_name,"_",decade,"_Block_Choice_Map",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
   
 #########################################
   

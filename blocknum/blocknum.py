@@ -20,7 +20,7 @@ import subprocess
 import fuzzyset
 import math
 import paramiko
-import win32api, win32con
+#import win32api, win32con
 from shutil import copyfile
 from microclean.STstandardize import *
 
@@ -93,19 +93,19 @@ def save_dbf(df, shapefile, dir_path):
 #
 
 # Identifies EDs and can be run independently
-def identify_1930_eds(city_name, paths):
+def identify_eds(city_name, paths, decade):
 	r_path, script_path, file_path = paths
-	print("Identifying 1930 EDs\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 EDs.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	print("Identifying " + str(decade) + " EDs\n")
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
-		print("Error identifying 1930 EDs for "+city_name+"\n")
+		print("Error identifying " + str(decade) + " EDs for "+city_name+"\n")
 	else:
 		print("OK!\n")
 
 # Returns a list of streets for students to add
-def analyzing_microdata_and_grid(city_name, state_abbr, paths):
+def analyzing_microdata_and_grid(city_name, state_abbr, paths, decade):
 	print("Analyzing microdata and grids\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name,state_abbr, str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error analyzing microdata and grid for "+city_name+"\n")
 	else:
@@ -122,12 +122,12 @@ def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
 		print("OK!\n")
 
 # Identifies block numbers and can be run independently
-def identify_1930_blocks_geocode(city_name, paths):
+def identify_blocks_geocode(city_name, paths, decade):
 	r_path, script_path, file_path = paths
-	print("Identifying 1930 blocks\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 Blocks.R',file_path,city_name], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	print("Identifying " + str(decade) + " blocks\n")
+	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 Blocks.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
-		print("Error identifying 1930 blocks for "+city_name+"\n")
+		print("Error identifying " + str(decade) + " blocks for "+city_name+"\n")
 	else:
 		print("OK!\n")
 
@@ -136,20 +136,21 @@ def identify_1930_blocks_geocode(city_name, paths):
 #
 
 # Uses block descriptions from microdata to fill in block numbers
-def identify_1930_blocks_microdata(city_name, state_abbr, micro_street_var, paths):
+def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, decade, v=7):
 
 	r_path, script_path, dir_path = paths
 
 	geo_path = dir_path + "/GIS_edited/"
 
-	block_file = geo_path + city_name + "_1930_Block_Choice_Map.shp"
-	pblk_file = geo_path + city_name + "_1930_Pblk.shp"
-	stgrid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
-	pblk_grid_file = geo_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ.shp"
-	out_file = geo_path + city_name + "_1930_Block_Choice_Map2.shp"
+	block_file = geo_path + city_name + "_" + str(decade) + "_Block_Choice_Map.shp"
+	pblk_file = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	stgrid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	pblk_grid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_Pblk_Grid_SJ.shp"
+	out_file = geo_path + city_name + "_" + str(decade) + "_Block_Choice_Map2.shp"
 	pblk_grid_dict_file = geo_path + city_name + "_pblk_grid_dict.pkl"
 	pblk_st_dict_file = geo_path + city_name + "_pblk_st_dict.pkl"
-	microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
+	microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
+	microdata_file2 = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
 
 	print("Getting block description guesses\n")
 
@@ -160,7 +161,10 @@ def identify_1930_blocks_microdata(city_name, state_abbr, micro_street_var, path
 	#Load data
 	start = time.time()
 	
-	df_pre = load_large_dta(microdata_file)
+	try:
+		df_pre = load_large_dta(microdata_file)
+	except:
+		df_pre = pd.read_csv(microdata_file2)
 	df_pre = df_pre[['ed','block',street]]
 
 	end = time.time()
@@ -346,15 +350,24 @@ def set_blocknum_confidence(city_name, paths):
 #
 
 # This function replaces Matt's R script but produces exactly the same file
-def create_addresses(city_name, state_abbr, paths, year, df=None):
+def create_addresses(city_name, state_abbr, paths, decade, v=7, df=None):
 	r_path, script_path, dir_path = paths
 	# Load microdata file if not passed to function
 	if type(df) == 'NoneType' or df == None:
-		microdata_file = dir_path + "/StataFiles_Other/" + str(year) + "/" + city_name + state_abbr + "_StudAuto.dta"
-		df = load_large_dta(microdata_file)
-	if year == 1930:
+		try:
+			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
+			df = load_large_dta(microdata_file)
+		except:
+			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
+			df = pd.read_csv(microdata_file)
+	df.columns = map(str.lower, df.columns)
+	# Set index variable
+	df['index'] = df.index
+	if decade == 1930:
 		# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
-		df.loc[:,('Mblk')] = df['block']
+		df.loc[:,('mblk')] = df['block']
+	elif decade == 1940:
+		df['mblk'] = ''
 	# Choose the best available street name variable (st_best_guess includes student cleaning)
 	# NOTE: When student cleaning is unavailable we should probably fill in overall_match_bool==FALSE
 	#	    with street_precleanedHN, but this has not been done yet to my knowledge.
@@ -371,13 +384,13 @@ def create_addresses(city_name, state_abbr, paths, year, df=None):
 		raise
 	
 	# Select variables for file
-	if year == 1930:
-		vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn']
-		# Create ED-block
-		df['ed_int'] = df['ed'].astype(int)
-		df['ed_block'] = df['ed_int'].astype(str) + '-' + df['Mblk'].astype(str)
+	# Create ED-block
+	if decade == 1930:
+		vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn','ed_block']
+		df[:,('ed_int')] = df['ed'].astype(int)
+		df[:,('ed_block')] = df['ed_int'].astype(str) + '-' + df['mblk'].astype(str)
 		del df_add['ed_int']
-	elif year == 1940:
+	elif decade == 1940:
 		vars_of_interest = ['index','fullname', 'ed','type','hn']
 
 	df_add = df.loc[:,vars_of_interest]
@@ -390,15 +403,15 @@ def create_addresses(city_name, state_abbr, paths, year, df=None):
 	df_add.loc[:,'state'] = state_abbr
 	df_add.loc[:,'address'] = (df_add['hn'] + " " + df_add['fullname']).str.strip()
 	# Save address file	
-	addresses = dir_path + "/GIS_edited/" + city_name + "_1930_Addresses.csv"
-	df_add.to_csv(addresses)
+	addresses = dir_path + "/GIS_edited/" + city_name + "_" + str(decade) + "_Addresses.csv"
+	df_add.to_csv(addresses, index=False)
 
 #
 # Create Blocks and Block Points.py
 #
 
 # Head script calling individual functions
-def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=None):
+def create_blocks_and_block_points(city_name, state_abbr, paths, decade, geocode_file=None):
 	
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
@@ -414,26 +427,26 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, geocode_file=No
 
 	print("The script has started to work and is running the 'street' function")
 
-	problem_segments = street(geo_path, city_name, state_abbr, hn_ranges)
+	problem_segments = street(geo_path, city_name, state_abbr, hn_ranges, decade)
 	print("The script has finished executing the 'street' function and has now started executing 'physical_blocks' function")
 
-	physical_blocks(geo_path, city_name)
+	physical_blocks(geo_path, city_name, decade)
 	print("The script has finished executing the 'physical_blocks' function and has now started executing 'geocode' function")
 
-	initial_geocode(geo_path, city_name, state_abbr, hn_ranges)
+	initial_geocode(geo_path, city_name, state_abbr, hn_ranges, decade)
 	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
 
 	if different_geocode:
-		points30 = geocode_file
+		points = geocode_file
 		print("Different geocode")
 	else:
-		points30 = geo_path + city_name + "_1930_Points.shp"
+		points = geo_path + city_name + "_" + str(decade) + "_Points.shp"
 
-	attach_pblk_id(geo_path, city_name, points30)
+	attach_pblk_id(geo_path, city_name, points, decade)
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Code to import and "fix up" the street grid (calls Amory's code below)
-def street(geo_path, city_name, state_abbr, hn_ranges, year):
+def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 
 	min_l, max_l, min_r, max_r = hn_ranges
 
@@ -482,12 +495,12 @@ def street(geo_path, city_name, state_abbr, hn_ranges, year):
 	#
 	#NOTE: By defualt we are starting with 1940 cleaned grids then saving them as 19X0 grids!	
 	grid_1940 = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
-	grid = geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit.shp"
-	dissolve_grid = geo_path + city_name + "_" + str(year) + "_stgrid_Dissolve.shp"
+	grid = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit.shp"
+	dissolve_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Dissolve.shp"
 	temp = geo_path + city_name + "_temp"+rand_post+".shp"
-	split_grid = geo_path + city_name + "_" + str(year) + "_stgrid_Split.shp"
-	grid_uns =  geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns.shp"
-	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns2.shp"
+	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
+	grid_uns =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns.shp"
+	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 
 	#Create copy of "diradd" file to use as grid
 	arcpy.CopyFeatures_management(grid_1940, grid)
@@ -841,10 +854,10 @@ def fix_dup_address_ranges(shp,hn_ranges,debug_flag=False):
 	return "\nFixed duplicate address ranges"
 
 # Creates physical blocks shapefile 
-def physical_blocks(geo_path, city_name, year):
+def physical_blocks(geo_path, city_name, decade):
 
-	pblocks = geo_path + city_name + "_" + str(year) + "_Pblk.shp"
-	split_grid = geo_path + city_name + "_" + str(year) + "_stgrid_Split.shp"
+	pblocks = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
 
 	#if int(start_from) = 1930:
 	#arcpy.AddField_management(grid, 'FULLNAME', 'TEXT')
@@ -858,16 +871,26 @@ def physical_blocks(geo_path, city_name, year):
 	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
 
 # Performs initial geocode on contemporary grid
-def initial_geocode(geo_path, city_name, state_abbr, hn_ranges, year):
+def initial_geocode(geo_path, city_name, state_abbr, hn_ranges, decade):
 
 	min_l, max_l, min_r, max_r = hn_ranges
 
 	# Files
-	add_locator = geo_path + city_name + "_addloc"
-	addresses = geo_path + city_name + "_" + str(year) + "_Addresses.csv"
+	add_locator = geo_path + city_name + "_addloc_" + str(decade)
+	addresses = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
 	address_fields="Street address; City city; State state"
-	points30 = geo_path + city_name + "_" + str(year) + "_Points.shp"
-	reference_data = geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns2.shp 'Primary Table'"
+	points = geo_path + city_name + "_" + str(decade) + "_Points.shp"
+	reference_data = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp 'Primary Table'"
+
+	# Fix addresses for use in geocoding
+	arcpy.CreateFileGDB_management(geo_path,"temp.gdb")
+	df_addresses_csv = pd.read_csv(addresses)
+	df_addresses_dbf = df_addresses_csv.replace(np.nan,'',regex=True)
+	x = np.array(np.rec.fromrecords(df_addresses_dbf.values))
+	names = df_addresses_dbf.dtypes.index.tolist()
+	x.dtype.names = tuple(names)
+	arcpy.da.NumPyArrayToTable(x,geo_path + "temp.gdb/" + city_name + "_" + str(decade) + "_Addresses")
+	arcpy.env.workspace = geo_path + "temp.gdb"
 
 	field_map="'Feature ID' FID VISIBLE NONE; \
 	'*From Left' %s VISIBLE NONE; \
@@ -907,17 +930,27 @@ def initial_geocode(geo_path, city_name, state_abbr, hn_ranges, year):
 
 	print("The script is executing the 'CreateAddressLocator' tool")
 	#Create Address Locator
-	arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", in_reference_data=reference_data, in_field_map=field_map, out_address_locator=add_locator, config_keyword="")
+	arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", 
+		in_reference_data=reference_data, 
+		in_field_map=field_map, 
+		out_address_locator=add_locator, 
+		config_keyword="")
 	print("The script has finished executing the 'CreateAddressLocator' tool and has begun executing the 'GeocodeAddress' tool")
 	#Geocode Points
-	arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
+	arcpy.GeocodeAddresses_geocoding(in_table=city_name + "_" + str(decade) + "_Addresses", 
+		address_locator=add_locator, 
+		in_address_fields=address_fields, 
+		out_feature_class=points)
+	#Delete temporary.gdb
+	arcpy.Delete_management(geo_path + "temp.gdb/" + city_name + "_" + str(decade) + "_Addresses")
+	arcpy.Delete_management(geo_path + "temp.gdb")
 	print("The script has finished executing the 'GeocodeAddress' tool and has begun executing the 'SpatialJoin' tool")
 
 # Attach physical block IDs to geocoded points 
-def attach_pblk_id(geo_path, city_name, points, year):
+def attach_pblk_id(geo_path, city_name, points, decade):
 	# Files
-	pblk_points = geo_path + city_name + "_" + str(year) + "_Pblk_Points.shp"
-	pblocks = geo_path + city_name + "_" + str(year) + "_Pblk.shp"
+	pblk_points = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
+	pblocks = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 	#Attach Pblk ids to points
 	arcpy.SpatialJoin_analysis(points, pblocks, pblk_points, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
 	print("The script has finished executing the 'SpatialJoin' tool")
@@ -927,22 +960,22 @@ def attach_pblk_id(geo_path, city_name, points, year):
 #
 
 # Renumber grid using microdata
-def renumber_grid(city_name, state_abbr, paths, df=None, geocode=False):
+def renumber_grid(city_name, state_abbr, paths, decade, df=None, geocode=False):
 
 	#Paths
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	#Files
-	microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAutoDirBlockFixed.dta"
-	stgrid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
-	out_file = geo_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
-	block_shp_file = geo_path + city_name + "_1930_block_ED_checked.shp"
+	microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAutoDirBlockFixed.dta"
+	stgrid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	out_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_renumbered.shp"
+	block_shp_file = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
 	block_dbf_file = block_shp_file.replace(".shp",".dbf")
-	addresses = geo_path + city_name + "_1930_Addresses.csv"
-	points30 = geo_path + city_name + "_1930_Points_updated.shp"
+	addresses = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
+	points = geo_path + city_name + "_" + str(decade) + "_Points_updated.shp"
 	pblk_file = block_shp_file #Note: This is the manually edited block file
-	pblk_grid_file = geo_path + city_name + state_abbr + "_1930_Pblk_Grid_SJ2.shp"
+	pblk_grid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_Pblk_Grid_SJ2.shp"
 	add_locator = geo_path + city_name + "_addlocOld" 
 
 	# Load
@@ -1142,7 +1175,7 @@ def renumber_grid(city_name, state_abbr, paths, df=None, geocode=False):
 			config_keyword="")
 
 		#Geocode Points
-		arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points30)
+		arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points)
 
 #
 # consecutive_segments.py
@@ -1639,15 +1672,15 @@ def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 # FixDirAndBlockNumsUsingMap.py
 #
 
-def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_street_var, paths, df_micro):
+def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro):
 
 	r_path, script_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	# Files
-	grid = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
-	ed_1930 = geo_path + city_name + "_1930_ED.shp"
-	grid_ed_intersect = geo_path + city_name + state_abbr + "_1930_stgrid_ED_intersect.shp"
+	grid = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	ed = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+	grid_ed_intersect = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_ED_intersect.shp"
 
 	# Load files
 	df_grid = dbf2DF(grid.replace('.shp','.dbf'))
@@ -1662,7 +1695,7 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 	grid_filename = grid.split("/")[-1]
 	save_dbf(df_grid, grid_filename, grid_path)
 
-	arcpy.Intersect_analysis (in_features=[grid, ed_1930], 
+	arcpy.Intersect_analysis (in_features=[grid, ed], 
 		out_feature_class=grid_ed_intersect, 
 		join_attributes="ALL")
 
@@ -1744,7 +1777,7 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 
 	return df_micro
 
-def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
+def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro):
 
 	# Paths
 
@@ -1754,21 +1787,21 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 	# File names
 
 	rand_post = str(random.randint(1,100001))
-	ed_shp_file = geo_path + city_name + "_1930_ED.shp"
+	ed_shp_file = geo_path + city_name + "_" + str(decade) + "_ED.shp"
 	temp = geo_path + "temp"+rand_post+".shp"
 	add_locator_contemp = geo_path + city_name + "_addloc"
-	resid_add_dbf = geo_path + city_name + "_1930_Addresses_residual.dbf"
-	resid_add_csv = geo_path + city_name + "_1930_Addresses_residual.csv"
+	resid_add_dbf = geo_path + city_name + "_" + str(decade) + "_Addresses_residual.dbf"
+	resid_add_csv = geo_path + city_name + "_" + str(decade) + "_Addresses_residual.csv"
 	address_fields_contemp="Street address; City city; State state"
-	points30 = geo_path + city_name + "_1930_Points.shp"
-	points30_resid = geo_path + city_name + "_1930_ResidPoints.shp"
-	intersect_resid_ed = geo_path + city_name + "_1930_intersect_resid_ed.shp"
-	inrighted = geo_path + city_name + "_1930_ResidPoints_inRightED.shp"
-	intersect_correct_ed = geo_path + city_name + "_1930_intersect_correct_ed.shp"
-	block_shp_file = geo_path + city_name + "_1930_block_ED_checked.shp"
+	points = geo_path + city_name + "_" + str(decade) + "_Points.shp"
+	points_resid = geo_path + city_name + "_" + str(decade) + "_ResidPoints.shp"
+	intersect_resid_ed = geo_path + city_name + "_" + str(decade) + "_intersect_resid_ed.shp"
+	inrighted = geo_path + city_name + "_" + str(decade) + "_ResidPoints_inRightED.shp"
+	intersect_correct_ed = geo_path + city_name + "_" + str(decade) + "_intersect_correct_ed.shp"
+	block_shp_file = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
 
 	# Obtain residuals
-	arcpy.MakeFeatureLayer_management(points30, "geocodelyr")
+	arcpy.MakeFeatureLayer_management(points, "geocodelyr")
 	arcpy.SelectLayerByAttribute_management("geocodelyr", "NEW_SELECTION", """ "Status" <> 'M' """)
 	arcpy.CopyFeatures_management("geocodelyr",temp)
 	df = dbf2DF(temp.replace('.shp','.dbf'))
@@ -1787,10 +1820,10 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 			os.remove(f)
 
 	# Geocode residuals using street grid with contemporary HN ranges
-	arcpy.GeocodeAddresses_geocoding(resid_add_dbf, add_locator_contemp, address_fields_contemp, points30_resid)
+	arcpy.GeocodeAddresses_geocoding(resid_add_dbf, add_locator_contemp, address_fields_contemp, points_resid)
 
 	# Intersect geocoded points with ED map
-	arcpy.Intersect_analysis([ed_shp_file, points30_resid], intersect_resid_ed)
+	arcpy.Intersect_analysis([ed_shp_file, points_resid], intersect_resid_ed)
 
 	# Identify points in the correct ED
 	arcpy.MakeFeatureLayer_management(intersect_resid_ed, "geocodelyr1")
@@ -1826,7 +1859,7 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, df_micro):
 # FixStGridNames.py
 #
 
-def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, df_micro=None, year=1930):
+def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro=None, v=7):
 
 	city_name = city_spaces.replace(' ','')
 
@@ -1835,14 +1868,13 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	geo_path = dir_path + '/GIS_edited/'
 
 	# Files
-	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(year) + "_stgrid_edit_Uns2.shp"
+	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 	grid_uns2_backup = grid_uns2.replace('.shp','prefix.shp')
 	if city_name == "StLouis":
-		ed_shp = geo_path + city_name + "_" + str(year) + "_ED.shp"
-	st_grid_ed_shp = geo_path + city_name + state_abbr + '_" + str(year) + "_stgrid_ED_intersect.shp'
+		ed_shp = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+	st_grid_ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_ED_intersect.shp'
 
 	arcpy.CopyFeatures_management(grid_uns2, grid_uns2_backup)
-	#arcpy.CopyFeatures_management(grid_uns2_backup, grid_uns2)
 
 	#
 	# Step 1: Intersect street grid and ED map, return a Pandas dataframe of attribute data
@@ -1869,8 +1901,12 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 
 	# Load microdata
 	if type(df_micro) == 'NoneType':
-		microdata_file = dir_path + "/StataFiles_Other/1930/" + city_name + state_abbr + "_StudAuto.dta"
-		df_micro = load_large_dta(microdata_file)
+		try:
+			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
+			df_micro = load_large_dta(microdata_file)
+		except:
+			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
+			df_micro = pd.read_csv(microdata_file)
 
 	# Convert to string
 	df_micro[micro_street_var] = df_micro[micro_street_var].astype(str)
@@ -1886,10 +1922,10 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	#
 
 	# Function to load Steve Morse dictionary (same as STclean.py)
-	def load_steve_morse(city, state, year):
+	def load_steve_morse(city, state, decade):
 
 		#NOTE: This dictionary must be built independently of this script
-		sm_st_ed_dict_file = pickle.load(open('/'.join(dir_path.split('/')[:-1])+'/sm_st_ed_dict%s.pickle' % (str(year)), 'rb'))
+		sm_st_ed_dict_file = pickle.load(open('/'.join(dir_path.split('/')[:-1])+'/sm_st_ed_dict%s.pickle' % (str(decade)), 'rb'))
 		sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
 
 		#Flatten dictionary
@@ -1920,7 +1956,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 
 		return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
 
-	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state_abbr, year)
+	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state_abbr, decade)
 
 	#
 	# Step 4: Perform exact matching
@@ -2222,6 +2258,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 # Functions for intersecting ED map with street grids and uploading to Rhea/CS1 Unix server
 #
 
+'''
 def intersect_ed_stgrid(ed_year, map_type):
 
 
@@ -2258,3 +2295,4 @@ def upload_ed_stgrid(ed_year, map_type, user, pw):
 	for map_type in ['1940','Contemp']:
 		ed_year = 1940
 		upload_ed_stgrid(ed_year, map_type, XX, YY)
+'''

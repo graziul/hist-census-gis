@@ -20,13 +20,14 @@ args <- commandArgs(trailingOnly = TRUE)
 dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
 city_name <- args[2]
 state_abbr <- args[3]
+decade <- args[4]
 
 #Bring in Points
-  points_dbf_file<-paste(dir_path,city_name,"_1930_Points.dbf",sep="")
+  points_dbf_file<-paste(dir_path,city_name,"_",decade,"_Points.dbf",sep="")
   Points<-read.dbf(points_dbf_file)
 #Bring in Street Grid
-  grid_dbf_file<-paste(dir_path,city_name,state_abbr,"_1930_stgrid_edit_Uns2.dbf",sep="")
-  grid30<-read.dbf(grid_dbf_file)
+  grid_dbf_file<-paste(dir_path,city_name,state_abbr,"_",decade,"_stgrid_edit_Uns2.dbf",sep="")
+  grid_orig<-read.dbf(grid_dbf_file)
   
 #Street Name Change List from Steve Morse 
   #Bring In Street Name Change File
@@ -63,7 +64,7 @@ state_abbr <- args[3]
   write.csv(new, paste(dir_path,city_name,"_StName_Change.csv",sep=""))
 
 #Microdata file
-  mdata<-read.csv(paste(dir_path,city_name,"_1930_Addresses.csv",sep=""), stringsAsFactors = F)
+  mdata<-read.csv(paste(dir_path,city_name,"_",decade,"_Addresses.csv",sep=""), stringsAsFactors = F)
   #Count how many people are on each unique street
   mdata$Person<-car::recode(mdata$city,"\" \"=0; else=1")
   cnt<-tapply(mdata$Person, INDEX=list(mdata$fullname), FUN=sum)
@@ -93,8 +94,8 @@ state_abbr <- args[3]
   mdata<-merge(x=mdata, y=perptot[c("priority", "fullname")], by="fullname", all.x=T)
 
 #Make variable names lowercase
-  names(grid30)<-tolower(names(grid30))
-  names(grid30)
+  names(grid_orig)<-tolower(names(grid_orig))
+  names(grid_orig)
   names(mdata)<-tolower(names(mdata))
   names(mdata)
 
@@ -103,20 +104,20 @@ state_abbr <- args[3]
   #Grab all new street names after they were changed  
     newest<-new$New
   #Standard street grid name
-    st<-as.character(grid30$fullname)
+    st<-as.character(grid_orig$fullname)
   
-  grid30$old_st_name<-st %in% old
-  grid30$new_st_name<-st %in% newest
+  grid_orig$old_st_name<-st %in% old
+  grid_orig$new_st_name<-st %in% newest
   
-  table(grid30$old_st_name) 
-  table(grid30$new_st_name)
+  table(grid_orig$old_st_name) 
+  table(grid_orig$new_st_name)
 
   #Keep Unique MicroData Street Names
   m_st<-subset(mdata, !duplicated(mdata$fullname))
   myvars<-c("fullname", "ed", "ppst", "priority")
   m_st<-m_st[myvars]
   m_st1<-as.character(m_st$fullname)
-  grid<-subset(grid30, !duplicated(grid30$fullname))
+  grid<-subset(grid_orig, !duplicated(grid_orig$fullname))
   grid1<-as.character(grid$fullname)
   
   #Marking streets in the microdata and also in the grid

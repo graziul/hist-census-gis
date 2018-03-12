@@ -48,20 +48,20 @@ def is_touch(ED, neighbor):
 			return 0
 
 # Get adjacent EDs
-def get_adjacent_eds(geo_path, city_name, state_abbr):
+def get_adjacent_eds(geo_path, city_name, state_abbr, decade):
 	
 	# Files
 
 	# "vm" is the verified map (e.g., ED or block map)
-	vm = geo_path + city_name + "_1930_ED.shp"
+	vm = geo_path + city_name + "_" + str(decade) + "_ED.shp"
 	# Feature Class to Feature Class file
-	fc = city_name + state_abbr + "_1930_ED_Feature.shp"
+	fc = city_name + state_abbr + "_" + str(decade) + "_ED_Feature.shp"
 	# Spatial weights files:
-	swm_file = geo_path + city_name + state_abbr + "_1930_spatweight.swm"
-	swm_table = geo_path + city_name + state_abbr + "_1930_swmTab.dbf"
+	swm_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_spatweight.swm"
+	swm_table = geo_path + city_name + state_abbr + "_" + str(decade) + "_swmTab.dbf"
 	# Amory's formatted EDs dbf
-	fe = geo_path + city_name + state_abbr + "_1930_formattedEDs.dbf"
-	fe_file = city_name + state_abbr + "_1930_formattedEDs.dbf"
+	fe = geo_path + city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
+	fe_file = city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
 
 	print "creating the swm"
 	# Process: Feature Class to Feature Class
@@ -213,9 +213,9 @@ def geocode(geo_path,city_name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,c
 	print("The program has finished the geocoding process and 'Geocode' function is complete")
 
 # Validate function (adjacent EDs)
-def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, residual_file, slow=False):
+def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, decade, residual_file, slow=False):
 
-	fe = geo_path + city_name + state_abbr + "_1930_formattedEDs.dbf"
+	fe = geo_path + city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
 
 	# Process: Spatial Join
 	arcpy.SpatialJoin_analysis(target_features=gr, 
@@ -321,7 +321,7 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, res
 	os.remove(csv_file)
 
 # Combine geocodes
-def combine_geocodes(geo_path, city_name, state_abbr, list_of_shp, notcor, outfile):
+def combine_geocodes(geo_path, city_name, state_abbr, list_of_shp, notcor, outfile, decade):
 
 	post = outfile.split('/')[-1].split('.')[0].split('_GeocodeFinal')[1]
 
@@ -330,9 +330,9 @@ def combine_geocodes(geo_path, city_name, state_abbr, list_of_shp, notcor, outfi
 
 	# Create list of streets from ungeocoded points that are not in the grid
 	df_ungeocoded = dbf2DF(notcor)
-	grid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+	grid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 	df_grid = dbf2DF(grid_file)
-	get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, post)
+	get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, decade, post)
 
 def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
 	for shp in list_of_shp:
@@ -360,7 +360,7 @@ def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
 	df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
 	writer.save()
 
-def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, post=''):
+def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, decade, post=''):
 	# Get ungeocoded street-ED combinations (and count number of ungeocoded cases)
 	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
 	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
@@ -375,7 +375,7 @@ def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_
 	st_list = temp.loc[temp['select_street'],'fullname'].tolist()
 	df_ungeocoded_st_ed_tocheck_final = df_ungeocoded_st_ed_tocheck[df_ungeocoded_st_ed_tocheck['fullname'].isin(st_list)]
 	# Create a Pandas Excel writer using XlsxWriter as the engine.
-	file_name = geo_path + '/' + city_name + state_abbr + '_ungeocoded_not_in_grid'+post+'.xlsx'
+	file_name = geo_path + '/' + city_name + state_abbr + '_' + str(decade) + 'ungeocoded_not_in_grid'+post+'.xlsx'
 	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 	# Convert the dataframe to an XlsxWriter Excel object.
 	df_ungeocoded_st_ed_tocheck_final.to_excel(writer, sheet_name='Sheet1', index=False)
