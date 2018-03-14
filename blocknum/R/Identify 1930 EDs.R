@@ -53,7 +53,7 @@ trim <- function( x ) {
   
 #Adds a variable with the number 1 used to enumerate values throughout code
   EDs$one<-car::recode(EDs$ed,"\" \"=0; else=1")
-#  EDs$one<-as.numeric(levels(EDs$one))[EDs$one]
+  EDs$one<-as.numeric(levels(EDs$one))[EDs$one]
 
 #Remove pblk_id with '0';
   EDs<-EDs[which(EDs$pblk_id!=0),]
