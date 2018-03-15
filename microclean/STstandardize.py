@@ -11,9 +11,10 @@ import re
 
 def standardize_street(st):
     runAgain = False
+    #Special case: More characters after \n\r - solution is to split on \n and take what's before
+    st = st.split('\n')[0]
     st = st.rstrip('\n')
     orig_st = st
-    
     st = st.lower()
 
     ###Remove Punctuation, extraneous words at end of stname###
@@ -160,7 +161,7 @@ def standardize_street(st):
             else :
                 st = "E "+re.sub(r'^([eE]|[Ee][\.\,]|[Ee][Ee]?[Aa]?[Ss][Tt][\.]?|[Ee]a[Ss]?)[ \-]+','',st)
                 DIR = 'E'
-                
+               
     #get the st NAME and standardize it
             
     match = re.search('^'+DIR+'(.+)'+TYPE+'$',st)
@@ -249,6 +250,8 @@ def standardize_street(st):
                 NAME = NAME.title()
             
         else :
+            print('failed at "'+st,'"')
+            #return [st, DIR, NAME, TYPE]
             assert(False)
         # Standardize "St ____ Ave" -> "Saint ____ Ave" #
         NAME = re.sub("^([Ss][Tt]\.?|[Ss][Aa][Ii][Nn][Tt])[ \-]","Saint ",NAME)
