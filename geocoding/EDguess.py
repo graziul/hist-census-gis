@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 #
 # EDguess.py - combines multiple automated approaches to identifying EDs into one shapefile
 #
@@ -924,10 +926,11 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 		try :
 			assert st == (DIR+' '+NAME+' '+TYPE).strip()
 		except AssertionError :
-			print("Something went a bit wrong while trying to pre-standardize stnames.")
-			print("orig was: "+orig_st)
-			print("st is: \""+st+"\"")
-			print("components: ["+(DIR+','+NAME+','+TYPE).strip()+"]")
+			pass
+			#print("Something went a bit wrong while trying to pre-standardize stnames.")
+			#print("orig was: "+orig_st)
+			#print("st is: \""+st+"\"")
+			#print("components: ["+(DIR+','+NAME+','+TYPE).strip()+"]")
 
 		if re.search("[Cc]ity [Ll]imits?",st) :
 			return "City Limits"
@@ -982,17 +985,29 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 	stgrid_file = geo_path+city_state+"_"+str(decade)+"_stgrid_edit_Uns2.shp"
 	if not os.path.isfile(stgrid_file) :
 		print("Missing stgrid file")
-		break
+		raise 
 
 	arcpy.ExportXYv_stats(Input_Feature_Class =stgrid_file, 
 		Value_Field=fullname_var, Delimiter="COMMA",
 		Output_ASCII_File =dir_path+"/Textfile/"+city+"_attr.txt", 
 		Add_Field_Names_to_Output="NO_FIELD_NAMES")
 
-	with open(dir_path+"/Textfile/"+city+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
-		blk_lines = blk_txt_file.readlines()
-	with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
-		ed_lines = ed_txt_file.readlines()
+	try:
+		with open(dir_path+"/Textfile/"+city+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
+			blk_lines = blk_txt_file.readlines()
+	except:
+		print("\nNo Block_lines_edit.txt for %s!\n" % (city))
+		with open(dir_path+"/Textfile/"+city+"_Block_lines.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
+			blk_lines = blk_txt_file.readlines()
+
+	try:
+		with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
+			ed_lines = ed_txt_file.readlines()
+	except:
+		print("\nNo ED_lines_edit.txt for %s!\n" % (city))
+		with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
+			ed_lines = ed_txt_file.readlines()
+
 	with open(dir_path+"/Textfile/"+city+"_attr.txt",'r') as st_list_file :
 		st_lines = st_list_file.readlines()
 
@@ -1016,7 +1031,8 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 			line_blk_dict[int(line_num.group(1))] = descript.strip()
 		except AttributeError:
 			print(line)
-			assert False
+			#assert False
+			continue
 
 	prev_line_num = ""
 	prev_descript = ""
@@ -1030,7 +1046,8 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 			descript = re.sub(re.escape(line_num.group(0)),"",line)
 		except :
 			print(repr(line))
-			assert False
+			#assert False
+			continue
 
 		if prev_line_num == "" :
 			prev_line_num = int(line_num.group(1))
@@ -1041,7 +1058,8 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 		except :
 			print(prev_descript)
 			print(ind)
-			assert False
+			#assert False
+			continue
 		line_num = int(line_num.group(1))
 
 		Dict_append(ed_line_dict, ed, (prev_line_num+1,line_num-1))
@@ -1066,7 +1084,7 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 					continue
 				blk_line = line_blk_dict[line]
 				if re.search("Block|Image",blk_line) :
-						continue
+					continue
 				blk_num = re.search("^([0-9A-Za-z]+)[\-\— ]+",blk_line)
 				if blk_num :
 					desc = re.sub(re.escape(blk_num.group(0)),"",blk_line)
@@ -1095,7 +1113,8 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 			output.write((str(ind)+", "+blk+", "+st_list+"\n").encode('utf8'))
 		except UnicodeEncodeError:
 			#print(str(ind)+", "+blk+", "+st_list)
-			assert False
+			#assert False
+			continue
 
 	output.close()
 
@@ -1112,7 +1131,7 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 	sj_targ = geo_path + city_state[:-2] + "_"+str(decade)+"_Pblk.shp"
 	if not os.path.isfile(sj_targ) :
 		print("Missing Pblk file")
-		break
+		raise
 
 	arcpy.AddField_management (stgrid_file, 'grid_id_s', "TEXT", 200)
 	arcpy.CalculateField_management (stgrid_file, 'grid_id_s', 'str(!'+grid_id_var+'!)+","', 
@@ -1121,9 +1140,11 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 	arcpy.MakeFeatureLayer_management(stgrid_file, "st_lyr")
 	arcpy.MakeFeatureLayer_management(sj_targ, "pblk_lyr")
 
+	join_file = os.path.join(arcpy.env.scratchGDB,city_state+"_"+str(decade)+"_ED_desc")
+
 	arcpy.SpatialJoin_analysis(target_features="pblk_lyr", 
 		join_features="st_lyr", 
-		out_feature_class=os.path.join(arcpy.env.scratchGDB,city_state+"_desc_SpatialJoin"), 
+		out_feature_class=join_file, 
 		join_operation="JOIN_ONE_TO_ONE", 
 		join_type="KEEP_ALL",
 		field_mapping="""pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,pblk_lyr,pblk_id,-1,-1;
@@ -1135,8 +1156,6 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 
 	for ind,line in enumerate(blk_desc) :
 		blk_desc[ind] = line.strip()    
-
-	join_file = os.path.join(arcpy.env.scratchGDB,city_state[:-2]+"_"+str(decade)+"_ED_desc")
 
 	blk_desc_dict = {} # lookup SM ed_blk identifier -> SM description of block
 	blk_gridID_dict = {} # lookup pblk_id -> string of grid_ids of streets comprising boundary of block
@@ -1818,7 +1837,7 @@ def identify_eds(city_name, paths, decade):
 	print("Identifying " + str(decade) + " EDs\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
-		print("Error identifying 1930 EDs for "+city_name+"\n")
+		print("Error identifying "+str(decade)+" EDs for "+city_name+"\n")
 	else:
 		print("OK!\n")
 
@@ -1920,12 +1939,16 @@ def select_best_ed_guess(x):
 # Head script for running everything - produces ED guess map and statistics
 def get_ed_guesses(city, state, fullname_var, decade=1930):
 
+	print("\nCreating ED map for %s %s, %s using 3 methods\n" % (str(decade), city, state))
+
 	city = city.replace(' ','')
 
 	# Paths
 	city_state = city + state
 	if city_state == "KansasCityKS":
-		dir_path = "S:/Projects/1940Census/Kansas"
+		dir_path = "S:/Projects/1940Census/KansasCityKS"
+	elif city_state == "KansasCityMO":
+		dir_path = "S:/Projects/1940Census/KansasCityMO"
 	else:
 		dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
 	r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
@@ -1946,15 +1969,16 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 	# Step 4: If using descriptions, run, create new shapefile including all three then...
 	#   a. Identify best guesses
 	#   b. Assign confidence to guesses
+	
 	last_step = geo_path + city + '_' + str(decade) + '_ED_Choice_map.shp'
 	ed_guess_file = geo_path + city + state + '_' + str(decade) + '_ED_guess_map.shp'
 
 	if decade == 1930:
 		# Run Amory's descriptions algorithm
-		ed_desc_algo(city, state, fullname_var, paths)
+		ed_desc_algo(city, state, fullname_var, paths, decade)
 	elif decade == 1940:
 		# Run Amory's 1940 descriptions algorithm
-		# ed_desc_algo40(city, state, fullname_var, paths)
+		ed_desc_algo40(city, state, fullname_var, paths, decade)
 	ed_desc_map = geo_path + city + '_' + str(decade) + '_ED_desc.shp'
 	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
 	arcpy.SpatialJoin_analysis(target_features=last_step, 
@@ -2041,10 +2065,10 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 			row[1] = df_ed_guess_dict[str(row[0])]['ed_inter']
 			up_cursor.updateRow(row)
 
-	print("Finished %s" % (city))
+	print("\nFinished ED map for %s %s, %s\n" % (str(decade), city, state))
 
 # Full street name variable
-#fullname_var = "FULLNAME"
+fullname_var = "FULLNAME"
 #city = "Chicago"
 #state = "IL"
 #decade = 1940
@@ -2054,7 +2078,7 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 #   a. [CITY][STATE]_1940_stgrid_diradd.shp
 #   b. [CITY][STATE]_StudAuto.dta
 
-city_info_list = [
+city_info_list30 = [
 	['Albany','NY'],    
 	['Dayton','OH'],    
 	['Houston','TX'],
@@ -2068,6 +2092,52 @@ city_info_list = [
 	['Worcester','MA'], 
 	['Yonkers','NY']    
 	]
+
+city_info_list = [['Birmingham', 'AL'],   
+	['Boston', 'MA'],    
+	['Cincinnati', 'OH'],                                                                                                   
+	['Dayton','OH'],
+	['Denver', 'CO'],                                                                                                      
+	['Flint', 'MI'],                                                                                                        
+	['Indianapolis', 'IN'],                                                                                                 
+	['Minneapolis', 'MN'],                                                                                                  
+	['NewOrleans', 'LA'],                                                                                                   
+	['Pittsburgh', 'PA'],                                                                                                   
+	['Providence','RI'],
+   	['Syracuse', 'NY']] 
+
+'''                                                                                   
+	['Oakland', 'CA'],                                                                                                      
+	['Denver', 'CO'],                                                                                                      
+	['Bridgeport', 'CT'],                                                                                                   
+	['Hartford', 'CT'],                                                                                                     
+	['NewHaven', 'CT'],                                                                                                     
+	['Jacksonville', 'FL'],                                                                                                 
+	['Miami', 'FL'],                                                                                                        
+	['Indianapolis', 'IN'],                                                                                                 
+	['Louisville', 'KY'],                                                                                                   
+	['NewOrleans', 'LA'],                                                                                                   
+	['Boston', 'MA'],                                                                                                       
+	['Worcester', 'MA'],                                                                                                    
+	['Baltimore', 'MD'],                                                                                                    
+	['Flint', 'MI'],                                                                                                        
+	['Minneapolis', 'MN'],                                                                                                  
+	['StLouis', 'MO'],                                                                                                      
+	['Newark', 'NJ'],                                                                                                       
+	['Paterson', 'NJ'],                                                                                                     
+	['Trenton', 'NJ'],                                                                                                      
+	['Buffalo', 'NY'],                                                                                                      
+	['Syracuse', 'NY'],                                                                                                     
+	['Yonkers', 'NY'],                                                                                                      
+	['Akron', 'OH'],                                                                                                        
+	['Dayton', 'OH'],                                                                                                       
+	['Tulsa', 'OK'],                                                                                                        
+	['Pittsburgh', 'PA'],                                                                                                   
+	['Providence', 'RI'],                                                                                                   
+	['SanAntonio', 'TX'],                                                                                                   
+	['Richmond', 'VA'],                                                                                                    
+	['Milwaukee', 'WI']]   
+'''
 
 decade = 1940
 num_finished = 0
@@ -2103,3 +2173,49 @@ for city_info in city_info_list:
 df = pd.concat(info_list)
 df_to_write = pd.pivot_table(df, values='pblk_id', index=['city','state'], columns=['ed_conf'])
 df_to_write.to_csv('S:/Users/Chris/ed_guess_info'+str(decade)+'.csv')
+
+'''
+
+def check_edit_txt(city, state, missing, not_missing, num_missing, no_missing):
+
+	city = city.replace(' ','')
+
+	has_missing = 0
+	# Paths
+	city_state = city + state
+	if city_state == "KansasCityKS":
+		dir_path = "S:/Projects/1940Census/Kansas"
+	else:
+		dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+	print(dir_path)
+	if os.path.isfile(dir_path+"/Textfile/"+city+"_Block_lines_edit.txt"):
+		not_missing.append("%s has Block_lines_edit.txt!" % (city))
+	else:
+		missing.append("%s Missing Block_lines_edit.txt!" % (city))
+		has_missing += 1
+	if os.path.isfile(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt"):
+		not_missing.append("%s has ED_lines_edit.txt!" % (city))
+	else:
+		missing.append("%s missing ED_lines_edit.txt!" % (city))
+		has_missing += 1
+
+	if has_missing > 0:
+		num_missing += 1
+	else:
+		no_missing.append([city,state])
+	return missing, not_missing, num_missing, no_missing
+
+city_info_df = pd.read_csv('S:/Projects/1940Census/CityInfo.csv')
+city_info_list = city_info_df[['city_name', 'state_abbr']].values.tolist()
+
+no_missing = []
+missing = []
+not_missing = []
+num_missing = 0
+for city_state in city_info_list:
+	missing, not_missing, num_missing, no_missing = check_edit_txt(city_state[0],city_state[1],missing,not_missing, num_missing, no_missing)
+thefile = open('S:/Projects/1940Census/MissingEditFiles.txt', 'w')
+for i in missing:
+  thefile.write("%s\n" % i)
+thefile.close()
+'''
