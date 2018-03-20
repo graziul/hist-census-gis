@@ -80,6 +80,9 @@ def fix_dir(city):
 	citystate = city[0]
 	fips = city[1]
 
+	# Log stuff
+ 	sys.stdout = open(stedit_path + "/logs/DirRet_%s.log" % (citystate),'wb')
+
 	# Filenames
 	stedit_shp_file = stedit_path + citystate + "_1940_stgrid_edit.shp"
 	stedit_pol_shp_file = stedit_path + citystate + "_1940_stgrid_pol.shp"
@@ -105,24 +108,25 @@ def fix_dir(city):
 		try:
 			if citystate == "StLouisMO":
 				arcpy.CopyFeatures_management("S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_edit.shp", 
-				stedit_shp_file)
+					stedit_shp_file)
+			elif citystate == "SanAntonioTX":
+				arcpy.CopyFeatures_management("S:/Projects/1940Census/StreetGrids/SanAntonio_1940_edit_stkeep.shp",
+					stedit_shp_file)
 			else:
 				arcpy.CopyFeatures_management("S:/Projects/1940Census/StreetGrids/" + citystate + "_1940_stgrid_edit.shp", 
-				stedit_shp_file)
+					stedit_shp_file)
 			# Have to remove char from num
-			df_stedit_temp = dbf2DF(stedit_shp_file.replace('.shp','.dbf'),upper=False)	
+			df_stedit_temp = dbf2DF(stedit_shp_file)	
 			ranges = ['LTOADD','LFROMADD','RTOADD','RFROMADD']
 			for r in ranges:
 				try:
 					df_stedit_temp[r] = df_stedit_temp[r].str.replace(r'[aA-zZ]+','').replace('','0').astype(int)
 				except:
 					continue
-			save_dbf(df_stedit_temp, citystate + "_1940_stgrid_edit.shp", stedit_path)
 			# If Kansas City, MO need to rename street variable
 			if citystate == "KansasCityMO":
-				df_stedit_temp = dbf2DF(stedit_shp_file.replace('.shp','.dbf'),upper=False)	
 				df_stedit_temp = df_stedit_temp.rename(columns={'stndrdName': 'FULLNAME'})
-				save_dbf(df_stedit_temp, citystate + "_1940_stgrid_edit.shp", stedit_path)
+			save_dbf(df_stedit_temp, citystate + "_1940_stgrid_edit.shp", stedit_path)
 		except:
 			continue
 		else:
