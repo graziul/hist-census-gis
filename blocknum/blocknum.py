@@ -10,6 +10,7 @@ import re
 import time
 import pickle
 import random
+import fnmatch
 from multiprocessing.dummy import Pool 
 from _functools import partial
 from operator import itemgetter
@@ -73,20 +74,28 @@ def dbf2DF(dbfile, upper=False):
 
 # Function to save Pandas DF as DBF file 
 def save_dbf(df, shapefile, dir_path):
-	shapefile_name = dir_path + shapefile
-	rand_post = str(random.randint(1,100001))
-	csv_file = dir_path + "/temp_for_dbf"+rand_post+".csv"
+	os.chdir(dir_path)
+	shapefile_name = shapefile
+	def get_rand_part():
+		rand_post = str(random.randint(1,999999999999999))
+		rand_part = "temp_for_shp"+rand_post
+		return rand_part
+	rand_part = get_rand_part()
+	for f in os.listdir('.'):
+		if fnmatch.fnmatch(f, '*'+rand_part+'.*'):
+			rand_part = get_rand_part()
+	csv_file = rand_part + ".csv"
 	df.to_csv(csv_file,index=False)
 	try:
-		os.remove(dir_path + "/schema.ini")
+		os.remove("schema.ini")
 	except:
 		pass
-	arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp"+rand_post+".dbf")
+	arcpy.TableToTable_conversion(csv_file,dir_path,rand_part+".dbf")
 	os.remove(shapefile_name.replace('.shp','.dbf'))
 	os.remove(csv_file)
-	os.rename(dir_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
-	os.remove(dir_path+"/temp_for_shp"+rand_post+".dbf.xml")
-	os.remove(dir_path+"/temp_for_shp"+rand_post+".cpg")
+	os.rename(rand_part+".dbf",shapefile_name.replace('.shp','.dbf'))
+	#os.remove(rand_part+".dbf.xml")
+	#os.remove(rand_part+".cpg")
 
 #
 # Functions for calling R scripts 
@@ -96,7 +105,7 @@ def save_dbf(df, shapefile, dir_path):
 def identify_eds(city_name, paths, decade):
 	r_path, script_path, file_path = paths
 	print("Identifying " + str(decade) + " EDs\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error identifying " + str(decade) + " EDs for "+city_name+"\n")
 	else:
@@ -105,7 +114,7 @@ def identify_eds(city_name, paths, decade):
 # Returns a list of streets for students to add
 def analyzing_microdata_and_grid(city_name, state_abbr, paths, decade):
 	print("Analyzing microdata and grids\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Analyzing Microdata and Grid.R',file_path,city_name,state_abbr, str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Analyzing Microdata and Grid.R',file_path,city_name,state_abbr, str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error analyzing microdata and grid for "+city_name+"\n")
 	else:
@@ -115,7 +124,7 @@ def analyzing_microdata_and_grid(city_name, state_abbr, paths, decade):
 def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
 	r_path, script_path, file_path = paths
 	print("Adding ranges to new grid\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Add Ranges to New Grid.R',file_path,city_name,file_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Add Ranges to New Grid.R',file_path,city_name,file_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error adding ranges to new grid for "+city_name+"\n")
 	else:
@@ -125,7 +134,7 @@ def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
 def identify_blocks_geocode(city_name, paths, decade):
 	r_path, script_path, file_path = paths
 	print("Identifying " + str(decade) + " blocks\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'\\blocknum\\R\\Identify 1930 Blocks.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 Blocks.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error identifying " + str(decade) + " blocks for "+city_name+"\n")
 	else:
@@ -319,7 +328,7 @@ def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, de
 def run_ocr(city_name, paths):
 	r_path, script_path, file_path = paths
 	print("Runing Matlab script\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\RunOCR.py",file_path,script_path],stdout=open(os.devnull, 'wb'))
+	t = subprocess.call(["python",script_path+"/blocknum/Python/RunOCR.py",file_path,script_path],stdout=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error running Matlab OCR script for "+city_name+"\n")
 	else:
@@ -329,7 +338,7 @@ def run_ocr(city_name, paths):
 def integrate_ocr(city_name, file_name, paths):
 	r_path, script_path, file_path = paths
 	print("Integrating OCR block numbering results\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\MapOCRintegration.py",file_path,city_name,file_name])
+	t = subprocess.call(["python",script_path+"/blocknum/Python/MapOCRintegration.py",file_path,city_name,file_name])
 	if t != 0:
 		print("Error integrating OCR block numbering results for "+city_name+"\n")
 	else:
@@ -339,7 +348,7 @@ def integrate_ocr(city_name, file_name, paths):
 def set_blocknum_confidence(city_name, paths):
 	r_path, script_path, file_path = paths
 	print("Setting confidence\n")
-	t = subprocess.call(["python",script_path+"\\blocknum\\Python\\SetConfidence.py",file_path,city_name])
+	t = subprocess.call(["python",script_path+"/blocknum/Python/SetConfidence.py",file_path,city_name])
 	if t != 0:
 		print("Error setting confidence for for "+city_name+"\n")
 	else:
@@ -494,8 +503,8 @@ def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 	#Create Paths to be used throughout Process
 	#
 	#NOTE: By defualt we are starting with 1940 cleaned grids then saving them as 19X0 grids!	
-	grid_1940 = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
 	grid = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit.shp"
+	grid_orig = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
 	dissolve_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Dissolve.shp"
 	temp = geo_path + city_name + "_temp"+rand_post+".shp"
 	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
@@ -503,7 +512,11 @@ def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 
 	#Create copy of "diradd" file to use as grid
-	arcpy.CopyFeatures_management(grid_1940, grid)
+	if not os.path.isfile(grid):
+		if not os.path.isfile(grid_orig):
+			print("%s%s_1940_stgrid_diradd.shp not found" % (city_name, state_abbr))
+		else:
+			arcpy.CopyFeatures_management(grid_orig, grid)
 
 	#Can't <null> blank values, so when Dissolve Unsplit lines aggregates MIN replace with big number
 	codeblock_min = """def replace(x):
@@ -923,7 +936,7 @@ def initial_geocode(geo_path, city_name, state_abbr, hn_ranges, decade):
 	'Altname JoinID' <None> VISIBLE NONE" % (min_l, max_l, min_r, max_r)
 
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addloc")]
+	add_loc_files = [geo_path+'/'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addloc")]
 	for f in add_loc_files:
 			 if os.path.isfile(f):
 				 os.remove(f)
@@ -1130,7 +1143,7 @@ def renumber_grid(city_name, state_abbr, paths, decade, df=None, geocode=False):
 	del(cursor)
 
 	#Make sure address locator doesn't already exist - if it does, delete it
-	add_loc_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addlocOld.")]
+	add_loc_files = [geo_path+'/'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addlocOld.")]
 	for f in add_loc_files:
 		if os.path.isfile(f):
 			os.remove(f)
@@ -1814,7 +1827,7 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro
 	if os.path.isfile(resid_add_csv.replace('.csv','.dbf')):
 		os.remove(resid_add_csv.replace('.csv','.dbf'))
 	arcpy.TableToTable_conversion(resid_add_csv, '/'.join(resid_add_dbf.split('/')[:-1]), resid_add_dbf.split('/')[-1])
-	temp_files = [geo_path+'\\'+x for x in os.listdir(geo_path) if x.startswith("temp"+rand_post)]
+	temp_files = [geo_path+'/'+x for x in os.listdir(geo_path) if x.startswith("temp"+rand_post)]
 	for f in temp_files:
 		if os.path.isfile(f):
 			os.remove(f)
@@ -2266,7 +2279,7 @@ def upload_to_unix(file_path, file_name, target_path, user, pw):
 	ssh = paramiko.SSHClient()
 	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 	ssh.load_system_host_keys
-	#ssh.load_host_keys('C:\\Users\\cgraziul')
+	#ssh.load_host_keys('C:/Users/cgraziul')
 	ssh.connect('rhea.pstc.brown.edu',username=user,password=pw)
 	sftp = ssh.open_sftp()
 	map_files = [x for x in os.listdir(file_path) if x.split('.')[0]==file_name]
