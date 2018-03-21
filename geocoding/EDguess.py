@@ -1088,6 +1088,10 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 				blk_num = re.search("^([0-9A-Za-z]+)[\-\— ]+",blk_line)
 				if blk_num :
 					desc = re.sub(re.escape(blk_num.group(0)),"",blk_line)
+					if city in ["AtlantaGA","MiamiFL"] : #cities with direction listed at end of each line
+						desc_list = desc.split(', ')
+						if re.search("^.\..\.$",desc_list[-1]) :
+							desc = ', '.join(desc_list[:-1]) #excise the direction (for now)
 					blk_num = blk_num.group(1)
 					Dict_append(ed_blk_dict,ed,blk_num)
 					blk_desc_dict[ed+'_'+blk_num] = desc
