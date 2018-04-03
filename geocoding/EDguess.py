@@ -1017,6 +1017,7 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 
 	line_blk_dict = {} #lookup line number -> blk descript
 	ed_line_dict = {} #lookup ed -> which line numbers
+	ed_tract_dict = {} #lookup ed -> which tract/area/precinct
 
 	print("Creating lookup dictionaries based on block/ED data from Steve Morse...")
 
@@ -1063,12 +1064,23 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 		line_num = int(line_num.group(1))
 
 		Dict_append(ed_line_dict, ed, (prev_line_num+1,line_num-1))
+		
+		tract = re.search("\(((?:Area|Tract) \S+)",prev_descript)
+		try :
+			tract = tract.group(1)
+			ed_tract_dict[ed] = tract
+		except :
+			print "No tract found: "+prev_descript
 
 		prev_line_num = line_num
 		prev_descript = descript
 
-	#finish adding last ED to dict
-	Dict_append(ed_line_dict, re.search("^[\-0-9A-Za-z]+",prev_descript).group(0).lower(), (prev_line_num+1,max(line_blk_dict.keys())))
+	#finish adding last ED line to dicts
+	try :
+		Dict_append(ed_line_dict, re.search("^[\-0-9A-Za-z]+",prev_descript).group(0).lower(), (prev_line_num+1,max(line_blk_dict.keys())))
+		ed_tract_dict[re.search("^[\-0-9A-Za-z]+",prev_descript).group(0).lower()] = re.search("\(((?:Area|Tract) \S+)",prev_descript).group(1)
+	except :
+		print "Problem with last line in ED lines"
 
 	ed_blk_dict = {} #lookup ed -> which block numbers
 	blk_desc_dict = {} #lookup ed+block identifier -> description for block
@@ -1088,6 +1100,10 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 				blk_num = re.search("^([0-9A-Za-z]+)[\-\— ]+",blk_line)
 				if blk_num :
 					desc = re.sub(re.escape(blk_num.group(0)),"",blk_line)
+					if city in ["AtlantaGA","MiamiFL"] : #cities with direction listed at end of each line
+						desc_list = desc.split(', ')
+						if re.search("^.\..\.$",desc_list[-1]) :
+							desc = ', '.join(desc_list[:-1]) #excise the direction (for now)
 					blk_num = blk_num.group(1)
 					Dict_append(ed_blk_dict,ed,blk_num)
 					blk_desc_dict[ed+'_'+blk_num] = desc
