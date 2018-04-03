@@ -1759,6 +1759,7 @@ def RunAnalysisInt(city_name) :
 
 def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 
+	city_spaces = city
 	city = city.replace(' ','')
 	r_path, script_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
@@ -1806,7 +1807,7 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 
 	sm_path = r"S:\Projects\1940Census\SMlists"
 	os.chdir(sm_path+"\\"+str(decade))
-	csv_name = city+state+"_SM"
+	csv_name = city_spaces+state+"_SM"
 	csv_from_excel(csv_name+".xlsx",csv_name)
 
 	SM_ED_TXT = open(csv_name+".csv",'r')
@@ -1847,7 +1848,7 @@ def identify_eds(city_name, paths, decade):
 
 def select_best_ed_guess(x):
 	
-	_, ed_desc, ed_inter, ed_geocode = x
+	_, ed_desc, ed_inter, ed_geocode, _ = x
 	# Split if multiple EDs
 	if '|' in str(ed_desc):
 		ed_desc = ed_desc.split('|')
@@ -1937,10 +1938,11 @@ def select_best_ed_guess(x):
 ##
 
 # Head script for running everything - produces ED guess map and statistics
-def get_ed_guesses(city, state, fullname_var, decade=1930):
+def get_ed_guesses(city, state, fullname_var, decade=1940):
 
 	print("\nCreating ED map for %s %s, %s using 3 methods\n" % (str(decade), city, state))
 
+	city_spaces = city
 	city = city.replace(' ','')
 
 	# Paths
@@ -1961,7 +1963,7 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 	create_blocks_and_block_points(city, state, paths, decade)
 
 	# Step 2: Run Amory's intersections script
-	ed_inter_algo(city, state, fullname_var, paths, decade)
+	ed_inter_algo(city_spaces, state, fullname_var, paths, decade)
 
 	# Step 3: Run Matt's script (based on initial geocoding)
 	identify_eds(city, paths, decade)
@@ -1979,7 +1981,7 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 	elif decade == 1940:
 		# Run Amory's 1940 descriptions algorithm
 		ed_desc_algo40(city, state, fullname_var, paths, decade)
-	ed_desc_map = geo_path + city + '_' + str(decade) + '_ED_desc.shp'
+	ed_desc_map = geo_path + city + state + '_' + str(decade) + '_ED_desc.shp'
 	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
 	arcpy.SpatialJoin_analysis(target_features=last_step, 
 		join_features=ed_desc_map, 
@@ -2007,7 +2009,7 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 		else:
 			return '|'.join(eds)
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].astype(int).astype(str).apply(lambda x: get_ed_geocode(x), axis=1)
-	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode']
+	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode','cblk_id']
 	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1)
 	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str)
 	df_ed_guess = df[relevant_vars]
@@ -2042,8 +2044,9 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 		ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
 		ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
 		ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
+		cblk_id "cblk_id" true true false 10 Text 0 0 ,First,#,%s,cblk_id,-1,-1;
 		ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
-		ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file)
+		ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file, file)
 
 		arcpy.TableToTable_conversion(in_rows=csv_file, 
 			out_path=geo_path, 
@@ -2071,7 +2074,7 @@ def get_ed_guesses(city, state, fullname_var, decade=1930):
 fullname_var = "FULLNAME"
 #city = "Chicago"
 #state = "IL"
-#decade = 1940
+decade = 1940
 
 
 # To be included in the city_info_list, must have:
@@ -2092,19 +2095,6 @@ city_info_list30 = [
 	['Worcester','MA'], 
 	['Yonkers','NY']    
 	]
-
-city_info_list = [['Birmingham', 'AL'],   
-	['Boston', 'MA'],    
-	['Cincinnati', 'OH'],                                                                                                   
-	['Dayton','OH'],
-	['Denver', 'CO'],                                                                                                      
-	['Flint', 'MI'],                                                                                                        
-	['Indianapolis', 'IN'],                                                                                                 
-	['Minneapolis', 'MN'],                                                                                                  
-	['NewOrleans', 'LA'],                                                                                                   
-	['Pittsburgh', 'PA'],                                                                                                   
-	['Providence','RI'],
-   	['Syracuse', 'NY']] 
 
 '''                                                                                   
 	['Oakland', 'CA'],                                                                                                      
@@ -2155,14 +2145,179 @@ print("%s of %s cities processed" % (str(num_finished), str(len(city_info_list))
 def get_ed_guess_stats(city_info, decade):
 	city, state = city_info
 	city = city.replace(' ','')
+	city_state=city+state
+	if city_state == "KansasCityKS":
+		dir_path = "S:/Projects/1940Census/KansasCityKS"
+	elif city_state == "KansasCityMO":
+		dir_path = "S:/Projects/1940Census/KansasCityMO"
+	else:
+		dir_path = "S:/Projects/1940Census/" + city
 	# Load dbf data
-	ed_guess_file = "S:/Projects/1940Census/" + city + '/GIS_edited/' + city + state + '_' + str(decade) + '_ED_guess_map.shp'
+	ed_guess_file = dir_path + '/GIS_edited/' + city + state + '_' + str(decade) + '_ED_guess_map.shp'
 	df_ed_guess = dbf2DF(ed_guess_file)
+	df_ed_guess['b_guess'] = df_ed_guess['cblk_id'] != ''
 	# Create a tabular summary of number guessed by confidence in guess
-	info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
+	info1 = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
+	info2 = df_ed_guess.groupby(['b_guess'], as_index=False).count()[['b_guess','pblk_id']]
+	info = info1.append(info2)
+	info.loc[info['ed_conf'].isnull(),'ed_conf'] = info.loc[info['b_guess'].notnull(),'b_guess']
+	info['ed_conf'].replace({False:'No block guess',True:'Block guess'},inplace=True)
+	del info['b_guess']
 	info['city'] = city
 	info['state'] = state
 	return info
+
+def dumb_fix(city, state):
+	city_spaces = city
+	city = city.replace(' ','')
+
+	# Paths
+	city_state = city + state
+	if city_state == "KansasCityKS":
+		dir_path = "S:/Projects/1940Census/KansasCityKS"
+	elif city_state == "KansasCityMO":
+		dir_path = "S:/Projects/1940Census/KansasCityMO"
+	else:
+		dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+	r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
+	script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
+	paths = [r_path, script_path, dir_path]
+	geo_path = dir_path + '/GIS_edited/'
+
+	# Step 3: Run Matt's script (based on initial geocoding)
+	identify_eds(city, paths, decade)
+
+	last_step = geo_path + city + '_' + str(decade) + '_ED_Choice_map.shp'
+	ed_guess_file = geo_path + city + state + '_' + str(decade) + '_ED_guess_map.shp'
+
+	ed_desc_map = geo_path + city + state + '_' + str(decade) + '_ED_desc.shp'
+	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
+	arcpy.SpatialJoin_analysis(target_features=last_step, 
+		join_features=ed_desc_map, 
+		out_feature_class=ed_guess_file, 
+		join_operation="JOIN_ONE_TO_ONE", 
+		join_type="KEEP_ALL",
+		match_option="HAVE_THEIR_CENTER_IN")
+
+	# Select relevant variables and extract best ED guesses
+	df = dbf2DF(ed_guess_file)
+	def replace_blanks(ed):
+		if ed == '':
+			return '0'
+		for c in ed:
+			if c.islower():
+				ed = ed.replace(c,c.upper())
+		else:
+			return ed
+	def get_ed_geocode(eds):
+		eds = [ed for ed in eds if ed != '0']
+		if len(eds) == 0:
+			return '0'
+		elif len(eds) == 1:
+			return eds[0]
+		else:
+			return '|'.join(eds)
+	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].astype(int).astype(str).apply(lambda x: get_ed_geocode(x), axis=1)
+	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode','cblk_id']
+	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1)
+	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str)
+	df_ed_guess = df[relevant_vars]
+	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
+
+	# Relabel confidence variable descriptively 
+	label_conf = {}
+
+	label_conf[-1] = "-1. No guess"
+	label_conf[1] = "1. Three agree"
+	label_conf[2] = "2. Two agree"
+	label_conf[3] = "3. Descriptions only"
+	label_conf[4] = "4. Intersections only"
+	label_conf[5] = "5. Geocoding only"
+
+	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)
+	
+	# Save dbf (have to use field mapping to preserve TEXT data format)
+	def save_dbf_ed(df, geo_path, shapefile_name, decade):
+		file_temp = shapefile_name.split('/')[-1]
+		rand_post = str(random.randint(1,100001))
+		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
+		df.to_csv(csv_file,index=False)
+		try:
+			os.remove(geo_path + "/schema.ini")
+		except:
+			pass
+
+		# Add a specific field mapping for a special case
+		file = csv_file
+		field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+		ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
+		ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
+		ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
+		cblk_id "cblk_id" true true false 10 Text 0 0 ,First,#,%s,cblk_id,-1,-1;
+		ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
+		ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file, file)
+
+		arcpy.TableToTable_conversion(in_rows=csv_file, 
+			out_path=geo_path, 
+			out_name="temp_for_shp"+rand_post+".dbf",
+			field_mapping=field_map)
+		os.remove(shapefile_name.replace('.shp','.dbf'))
+		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
+		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
+		os.remove(csv_file)
+
+	save_dbf_ed(df_ed_guess, geo_path, ed_guess_file, decade)
+
+	# Ridiculous but necessary because saving to .dbf converts data type for unknown reasons
+	df_ed_guess.index = df_ed_guess['pblk_id']
+	df_ed_guess_dict = df_ed_guess.to_dict('index')
+	with arcpy.da.UpdateCursor(ed_guess_file, ['pblk_id','ed_inter']) as up_cursor:
+		for row in up_cursor :
+			row[1] = df_ed_guess_dict[str(row[0])]['ed_inter']
+			up_cursor.updateRow(row)
+
+	print("\nFinished ED map for %s %s, %s\n" % (str(decade), city, state))
+
+city_info_list = [['Akron', 'OH'],
+	['Albany', 'NY'],
+	['Atlanta', 'GA'],
+	['Boston','MA'],
+	['Bridgeport', 'CT'],
+	['Buffalo', 'NY'],
+	['Chicago','IL'],
+	['Cincinnati', 'OH'],
+	['Columbus', 'OH'],
+	['Dallas', 'TX'],
+	['Dayton', 'OH'],
+	['Denver','CO'],
+	['Des Moines', 'IA'],
+	['Flint','MI'],
+	['Fort Worth','TX'],
+	['Indianapolis','IN'],
+	['Jacksonville','FL'],
+	['Kansas City','MO'],
+	['Kansas City','KS'],
+	['Miami','FL'],
+	['Minneapolis','MN'],
+	['New Haven','CT'],
+	['New Orleans','LA'],
+	['Newark','NJ'],
+	['Oakland','CA'],
+	['Oklahoma City','OK'], # Needs to be fixed/re-run
+	['Paterson','NJ'],
+	['Pittsburgh','PA'],
+	['Portland','OR'],
+	['Providence','RI'],
+	['St Louis','MO'],
+	['Syracuse','NY'],
+	['Toledo','OH'],
+	['Trenton','NJ'],
+	['Worcester','MA'],
+	['Yonkers','NY']] 
+
+#for city_state in city_info_list:
+#	dumb_fix(city_state[0],city_state[1])
 
 info_list = []
 for city_info in city_info_list:
