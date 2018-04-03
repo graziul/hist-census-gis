@@ -23,6 +23,7 @@ import pysal as ps
 import pandas as pd
 import numpy as np
 import multiprocessing
+import geopandas as gpd
 from blocknum.blocknum import *
 from microclean.STstandardize import *
 
@@ -81,7 +82,7 @@ def fix_dir(city):
 	fips = city[1]
 
 	# Log stuff
- 	sys.stdout = open(stedit_path + "/logs/DirRet_%s.log" % (citystate),'wb')
+	#sys.stdout = open(stedit_path + "/logs/DirRet_%s.log" % (citystate),'wb')
 
 	# Filenames
 	stedit_shp_file = stedit_path + citystate + "_1940_stgrid_edit.shp"
@@ -97,13 +98,14 @@ def fix_dir(city):
 	gaps_file = stedit_path + citystate + "_gaps.shp"
 	temp_file = stedit_path + citystate + "_temp.shp"
 
-	print("\nWorking on %s" % (citystate))
+	print("\nWorking on %s\n" % (citystate))
 
 	# Create copy of edited 1940 street grid (for/while/try/except needed due to processing hiccups)
 	try:
 		arcpy.DeleteFeatures_management(stedit_shp_file)
 	except:
 		pass
+	print("Trying to load 1940 street grid for %s" % (citystate))		
 	for attempt in range(3):
 		try:
 			if citystate == "StLouisMO":
@@ -116,7 +118,7 @@ def fix_dir(city):
 				arcpy.CopyFeatures_management("S:/Projects/1940Census/StreetGrids/" + citystate + "_1940_stgrid_edit.shp", 
 					stedit_shp_file)
 			# Have to remove char from num
-			df_stedit_temp = dbf2DF(stedit_shp_file)	
+			df_stedit_temp = gpd.read_file(stedit_shp_file)	
 			ranges = ['LTOADD','LFROMADD','RTOADD','RFROMADD']
 			for r in ranges:
 				try:
@@ -200,6 +202,7 @@ def fix_dir(city):
 		expression_type="PYTHON") 
 
 	# Process: Spatial Join (for/while/try/except needed due to processing hiccups)
+	print("Trying to performing spatial joins for %s" % (citystate))		
 	for attempt in range(0,3):
 		try:
 			# Spatial join - ARE_IDENTICAL_TO
@@ -239,7 +242,7 @@ def fix_dir(city):
 		else:
 			break
 	else: 
-		print("Error performing spatial joins %s" % (citystate))
+		print("Error performing spatial joins for %s" % (citystate))
 		return ['','','','','',''], {}
 
 	# Load final street grid data and create vars for comparison
@@ -285,15 +288,25 @@ def fix_dir(city):
 	save_dbf(df, citystate + "_temp.shp", stedit_path)
 
 	# Fix gaps
-	arcpy.SpatialJoin_analysis(target_features=temp_file,
-		join_features=temp_file, 
-		out_feature_class=gaps_file, 
-		join_operation="JOIN_ONE_TO_MANY", 
-		join_type="KEEP_ALL", 
-		field_mapping="""FIDCOPYE "FIDCOPYE" true true false 100 Text 0 0 ,First,#,%s,FIDCOPYE,-1,-1;
-		FULLNAME "FULLNAME" true true false 100 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-		FULLNAME_1 "FULLNAME_1" true true false 100 Text 0 0 ,First,#,%s,FULLNAME,-1,-1""" % (temp_file, temp_file, temp_file), 
-		match_option="INTERSECT")
+	print("Trying to create gaps file for %s" % (citystate))		
+	for attempt in range(3):
+		try:
+			arcpy.SpatialJoin_analysis(target_features=temp_file,
+				join_features=temp_file, 
+				out_feature_class=gaps_file, 
+				join_operation="JOIN_ONE_TO_MANY", 
+				join_type="KEEP_ALL", 
+				field_mapping="""FIDCOPYE "FIDCOPYE" true true false 100 Text 0 0 ,First,#,%s,FIDCOPYE,-1,-1;
+				FULLNAME "FULLNAME" true true false 100 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+				FULLNAME_1 "FULLNAME_1" true true false 100 Text 0 0 ,First,#,%s,FULLNAME,-1,-1""" % (temp_file, temp_file, temp_file), 
+				match_option="INTERSECT")
+		except:
+			continue
+		else:
+			break
+	else: 
+		print("Error creating gaps file for %s" % (citystate))
+		return ['','','','','',''], {}
 
 	def list_append_unique(LIST, item) :
 		if(not item in LIST) :
@@ -370,7 +383,7 @@ def fix_dir(city):
 
 	info = [citystate, num_stseg, num_dirs_stedit, num_dirs_added, num_tiger, num_dirs_tiger]
 
-	print("Finished %s, %s DIR mismatches" % (citystate, str(df_sj2['DIR_mismatch'].sum())))
+	print("\nFinished %s, %s DIR mismatches" % (citystate, str(df_sj2['DIR_mismatch'].sum())))
 
 	return info, info_dict 
 
