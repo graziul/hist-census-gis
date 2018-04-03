@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 #
 # All the functions for performing block numbering (includes many things)
 #
@@ -61,12 +63,12 @@ def load_large_dta(fname):
 	return df
 
 # Function to reads in DBF files and return Pandas DF
-def dbf2DF(dbfile, upper=False):
+def shp2DF(dbfile, upper=False):
 	dbfile = dbfile.replace('.shp','.dbf')
 	db = ps.open(dbfile) #Pysal to open DBF
-	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-	#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
+	#d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
+	pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
+	#pandasDF = pd.DataFrame(d) #Convert to Pandas DF
 	if upper == True: #Make columns uppercase if wanted 
 		pandasDF.columns = map(str.upper, db.header) 
 	db.close() 
@@ -368,7 +370,7 @@ def create_addresses(city_name, state_abbr, paths, decade, v=7, df=None):
 			df = load_large_dta(microdata_file)
 		except:
 			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
-			df = pd.read_csv(microdata_file)
+			df = pd.read_csv(microdata_file, low_memory=False)
 	df.columns = map(str.lower, df.columns)
 	# Set index variable
 	df['index'] = df.index
