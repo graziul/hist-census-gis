@@ -259,10 +259,11 @@ def standardize_street(st):
     try :
         assert st == (DIR+' '+NAME+' '+TYPE).strip()
     except AssertionError :
-        print("Something went a bit wrong while trying to pre-standardize stnames.")
-        print("orig was: "+orig_st)
-        print("st is: \""+st+"\"")
-        print("components: ["+(DIR+','+NAME+','+TYPE).strip()+"]")
+        pass
+        #print("Something went a bit wrong while trying to pre-standardize stnames.")
+        #print("orig was: "+orig_st)
+        #print("st is: \""+st+"\"")
+        #print("components: ["+(DIR+','+NAME+','+TYPE).strip()+"]")
     
     if runAgain :
         return standardize_street(st)

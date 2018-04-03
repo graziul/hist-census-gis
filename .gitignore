@@ -29,3 +29,5 @@ geo-utils/Python/consecutive_segments.py
 microclean/STstandardize.pyc
 *.jpg
 *.pyc
+*.pyc
+microclean/SetPriority.pyc
