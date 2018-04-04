@@ -63,12 +63,11 @@ def load_large_dta(fname):
 	return df
 
 # Function to reads in DBF files and return Pandas DF
-def shp2DF(dbfile, upper=False):
+def dbf2DF(dbfile, upper=False):
 	dbfile = dbfile.replace('.shp','.dbf')
 	db = ps.open(dbfile) #Pysal to open DBF
-	#d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-	pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-	#pandasDF = pd.DataFrame(d) #Convert to Pandas DF
+	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
+	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
 	if upper == True: #Make columns uppercase if wanted 
 		pandasDF.columns = map(str.upper, db.header) 
 	db.close() 
@@ -96,8 +95,8 @@ def save_dbf(df, shapefile, dir_path):
 	os.remove(shapefile_name.replace('.shp','.dbf'))
 	os.remove(csv_file)
 	os.rename(rand_part+".dbf",shapefile_name.replace('.shp','.dbf'))
-	#os.remove(rand_part+".dbf.xml")
-	#os.remove(rand_part+".cpg")
+	os.remove(rand_part+".dbf.xml")
+	os.remove(rand_part+".cpg")
 
 #
 # Functions for calling R scripts 
