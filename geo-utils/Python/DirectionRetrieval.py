@@ -23,7 +23,7 @@ import pysal as ps
 import pandas as pd
 import numpy as np
 import multiprocessing
-import geopandas as gpd
+#import geopandas 
 from blocknum.blocknum import *
 from microclean.STstandardize import *
 
@@ -111,14 +111,11 @@ def fix_dir(city):
 			if citystate == "StLouisMO":
 				arcpy.CopyFeatures_management("S:/Projects/1940Census/StLouis/GIS_edited/StLouisMO_1930_stgrid_edit.shp", 
 					stedit_shp_file)
-			elif citystate == "SanAntonioTX":
-				arcpy.CopyFeatures_management("S:/Projects/1940Census/StreetGrids/SanAntonio_1940_edit_stkeep.shp",
-					stedit_shp_file)
 			else:
 				arcpy.CopyFeatures_management("S:/Projects/1940Census/StreetGrids/" + citystate + "_1940_stgrid_edit.shp", 
 					stedit_shp_file)
 			# Have to remove char from num
-			df_stedit_temp = gpd.read_file(stedit_shp_file)	
+			df_stedit_temp = dbf2DF(stedit_shp_file)	
 			ranges = ['LTOADD','LFROMADD','RTOADD','RFROMADD']
 			for r in ranges:
 				try:
