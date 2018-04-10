@@ -76,13 +76,13 @@ def add_dir(dir_e, dir_t1, dir_t2, st_e, st_t1, st_t2):
 		return '', 0
 
 # Function to do the work
-def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
+def fix_dir(city, hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
 	# Load files
 	#citystate = city[0]
 	#fips = city[1]
 
-	citystate='RichmondVA'
+	citystate=city
 	fips=city_fips_dict[citystate]
 	# Log stuff
 	#sys.stdout = open(stedit_path + "/logs/DirRet_%s.log" % (citystate),'wb')
@@ -118,11 +118,11 @@ def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 				arcpy.CopyFeatures_management("S:/Projects/1940Census/StreetGrids/" + citystate + "_1940_stgrid_edit.shp", 
 					stedit_shp_file)
 			# Have to remove char from num (and convert None to either '' or 0)
-			df_stedit_temp = remove_none(gpd.read_file(stedit_shp_file))
+			df_stedit_temp = load_shp(stedit_shp_file, hn_ranges)
 			# If Kansas City, MO need to rename street variable
 			if citystate == "KansasCityMO":
 				df_stedit_temp = df_stedit_temp.rename(columns={'stndrdName': 'FULLNAME'})
-			df_stedit_temp.to_file(filename=stedit_shp_file, encoding='utf-8', driver='ESRI Shapefile')
+			save_shp(df_stedit_temp, stedit_shp_file)
 		except:
 			continue
 		else:
@@ -160,8 +160,8 @@ def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 		out_feature_class=tiger2012_clip_shp_file)
 
 	# Load attibute data for files
-	df_stedit = load_shp(stedit_shp_file, ranges)
-	df_tiger2012 = load_shp(tiger2012_clip_shp_file, ranges)
+	df_stedit = load_shp(stedit_shp_file, hn_ranges)
+	df_tiger2012 = load_shp(tiger2012_clip_shp_file, hn_ranges)
 
 	# Determine number of DIR in TigerLINE 2012
 	df_tiger2012['FULLSTD'], df_tiger2012['DIR'], df_tiger2012['NAME'], df_tiger2012['TYPE'] = zip(*df_tiger2012.apply(lambda x: standardize_street(x['FULLNAME']), axis=1))
@@ -240,7 +240,7 @@ def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 		return ['','','','','',''], {}
 
 	# Load final street grid data and create vars for comparison
-	df_sj2 = load_shp(sj2_file, ranges)  
+	df_sj2 = load_shp(sj2_file, hn_ranges)  
 
 	df_sj2['FULLSTD_e'], df_sj2['DIR_e'], df_sj2['NAME_e'], df_sj2['TYPE_e'] = zip(*df_sj2.apply(lambda x: standardize_street(x['FULLEDIT']), axis=1))
 	df_sj2['FULLSTD_t1'], df_sj2['DIR_t1'], df_sj2['NAME_t1'], df_sj2['TYPE_t1'] = zip(*df_sj2.apply(lambda x: standardize_street(x['FULL2012']), axis=1))
@@ -273,7 +273,7 @@ def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 	df_tomerge = df_sj2[['FIDCOPYE','DIR_e','DIR_fix','FULLNAME']]
 
 	# Merge streets with fixed DIR and 1940 edited street grid
-	df_stedit = load_shp(stedit_shp_file, ranges) 
+	df_stedit = load_shp(stedit_shp_file, hn_ranges) 
 	df = df_stedit.merge(df_tomerge, how='left', on='FIDCOPYE')
 	save_shp(df, temp_file) 
 
@@ -308,7 +308,7 @@ def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 		nametype = NAME + ' ' + TYPE
 		return nametype.rstrip()
 
-	df_gaps = load_shp(gaps_file, ranges)
+	df_gaps = load_shp(gaps_file, hn_ranges)
 	# Make dictionary for FID to TARGET FID
 	fid_dict = {target_fid:df_group['FULLNAME'].tolist() for target_fid, df_group in df_gaps.groupby('TARGET_FID')}
  #	for target_fid, df_group in df_diradd.groupby('TARGET_FID'):
@@ -331,21 +331,30 @@ def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 			return fullname
 
 	arcpy.CopyFeatures_management(temp_file, diradd_file)
-	df_diradd = load_shp(diradd_file, ranges) 	
+	df_diradd = load_shp(diradd_file, hn_ranges) 	
+
+	# Try to fix gaps
 	df_diradd['FULLNAMEda'] = df_diradd.apply(lambda x: fill_gap(x['FIDCOPYE'], x['FULLNAME']), axis=1)
-	save_shp(df_diradd, diradd_file)
+	# Do things if any gaps are fixed
+	if sum(df_diradd['FULLNAMEda'] == df_diradd['FULLNAME']) < len(df_diradd):
 
-	def note_gap_dir_fixes(st,dir_fix):
-		_, st_dir, _, _ = standardize_street(st)
-		if dir_fix == "" and st_dir != "":
-			return st_dir
-		else:
-			return dir_fix
+		def note_gap_dir_fixes(st,dir_fix):
+			_, st_dir, _, _ = standardize_street(st)
+			if dir_fix == "" and st_dir != "":
+				return st_dir
+			else:
+				return dir_fix
 
-	num_missing_before = len(df_diradd[df_diradd['DIR_e']!=df_diradd['DIR_fix']])
-	df_diradd['DIR_fix'] = df_diradd.apply(lambda x: note_gap_dir_fixes(x['FULLNAMEda'], x['DIR_fix']), axis=1)
-	num_missing_after = len(df_diradd[df_diradd['DIR_e']!=df_diradd['DIR_fix']])
-	num_gaps_filled = num_missing_before - num_missing_after
+		num_missing_before = len(df_diradd[df_diradd['DIR_e']!=df_diradd['DIR_fix']])
+		df_diradd['DIR_fix'] = df_diradd.apply(lambda x: note_gap_dir_fixes(x['FULLNAMEda'], x['DIR_fix']), axis=1)
+		num_missing_after = len(df_diradd[df_diradd['DIR_e']!=df_diradd['DIR_fix']])
+		num_gaps_filled = num_missing_before - num_missing_after
+		df_diradd['FULLNAMEgp'] = df_diradd['FULLNAME']
+		df_diradd['FULLNAME'] = df_diradd['FULLNAMEda']
+		save_shp(df_diradd, diradd_file)
+		print("Filled " + str(num_gaps_filled) + " gaps in " + citystate)
+
+	del df_diradd['FULLNAMEda']
 
 	# Cleanup shapefiles
 	arcpy.Delete_management(stedit_pol_shp_file)
