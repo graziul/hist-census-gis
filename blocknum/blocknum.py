@@ -4,6 +4,7 @@
 # All the functions for performing block numbering (includes many things)
 #
 
+import geopandas as gpd
 import arcpy
 import os
 import copy
@@ -63,16 +64,29 @@ def load_large_dta(fname):
 	return df
 
 # Function to reads in DBF files and return Pandas DF
-def dbf2DF(dbfile, upper=False):
-	dbfile = dbfile.replace('.shp','.dbf')
-	db = ps.open(dbfile) #Pysal to open DBF
-	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-	if upper == True: #Make columns uppercase if wanted 
-		pandasDF.columns = map(str.upper, db.header) 
-	db.close() 
-	return pandasDF
+def load_shp(filename, ranges):
+	
+	# Remove None function
+	def remove_none(df):
+		mask = df.applymap(lambda x: x is None)
+		cols = df.columns[(mask).any()]
+		for col in df[cols]:
+			if df[col].dtype == 'O':
+				df.loc[mask[col], col] = ''
+				if col in ranges:
+					df[col] = df[col].apply(lambda x: '' if '-' in x else x).str.replace(r'[aA-zZ]+','').replace('','0').astype(int)
+		return df
 
+	filename = filename.replace('.dbf','.shp')
+	temp_df = remove_none(gpd.read_file(filename))
+	
+	return remove_none(gpd.read_file(filename))
+
+# Function to save Pandas DF as DBF file 
+def save_shp(df, shapefile_name):
+	df.to_file(filename=shapefile_name, encoding='utf-8', driver='ESRI Shapefile')
+
+'''
 # Function to save Pandas DF as DBF file 
 def save_dbf(df, shapefile, dir_path):
 	os.chdir(dir_path)
@@ -97,6 +111,7 @@ def save_dbf(df, shapefile, dir_path):
 	os.rename(rand_part+".dbf",shapefile_name.replace('.shp','.dbf'))
 	os.remove(rand_part+".dbf.xml")
 	os.remove(rand_part+".cpg")
+'''
 
 #
 # Functions for calling R scripts 
@@ -421,12 +436,10 @@ def create_addresses(city_name, state_abbr, paths, decade, v=7, df=None):
 #
 
 # Head script calling individual functions
-def create_blocks_and_block_points(city_name, state_abbr, paths, decade, geocode_file=None):
+def create_blocks_and_block_points(city_name, state_abbr, paths, decade, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], geocode_file=None):
 	
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
-
-	hn_ranges = ['MIN_LFROMA', 'MIN_RFROMA', 'MAX_LTOADD', 'MAX_RTOADD']
 
 	different_geocode = False
 	if geocode_file != None:
@@ -572,7 +585,7 @@ def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 		unsplit_lines="UNSPLIT_LINES")
 
 	#Get the longest street name from multi-part segments
-	df_grid = dbf2DF(grid)
+	df_grid = load_shp(grid, hn_ranges)
 	longest_name_dict = {}
 	problem_segments = {}
 	for grid_id, group in df_grid.groupby(['grid_id']):
@@ -584,7 +597,7 @@ def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 		longest_name_dict[grid_id] = longest_name[0]
 
 	#Assign longest street name by grid_id (also add city and state for geolocator)
-	df_grid_uns = dbf2DF(grid_uns)
+	df_grid_uns = load_shp(grid_uns, hn_ranges)
 	df_grid_uns.loc[:,'CITY'] = city_name
 	df_grid_uns.loc[:,'STATE'] = state_abbr
 	df_grid_uns.loc[:,'FULLNAME'] = df_grid_uns.apply(lambda x: longest_name_dict[x['grid_id']], axis=1)
@@ -602,7 +615,7 @@ def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 		df_grid_uns[field] = df_grid_uns[field].astype(str)
 		df_grid_uns[field] = df_grid_uns.apply(lambda x: replace_nums(x[field]), axis=1)
 
-	save_dbf_st(df_grid_uns, grid_uns, field_map=True)
+	save_shp(df_grid_uns, grid_uns)
 
 	#Add a unique, static identifier (so ranges can be changed later)
 	arcpy.DeleteField_management(grid_uns, "grid_id")
@@ -617,7 +630,7 @@ def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 	return problem_segments
 
 # Amory's code for fixing duplicate address ranges
-def fix_dup_address_ranges(shp,hn_ranges,debug_flag=False):
+def fix_dup_address_ranges(shp, hn_ranges, debug_flag=False):
 	# Set range names
 	LFROMADD, LTOADD, RFROMADD, RTOADD = hn_ranges
 	# Set OBJECTID (grid_id is FID+1)
@@ -1686,7 +1699,7 @@ def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 # FixDirAndBlockNumsUsingMap.py
 #
 
-def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro):
+def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	r_path, script_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
@@ -1697,7 +1710,7 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 	grid_ed_intersect = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_ED_intersect.shp"
 
 	# Load files
-	df_grid = dbf2DF(grid.replace('.shp','.dbf'))
+	df_grid = load_shp(grid, hn_ranges)
 	df_micro[micro_street_var+'_old'] = df_micro[micro_street_var]
 
 	def get_dir(st):
@@ -1705,9 +1718,7 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 		return DIR
 
 	df_grid['DIR'] = df_grid.apply(lambda x: get_dir(x[grid_street_var]), axis=1)
-	grid_path = "/".join(grid.split("/")[:-1]) + "/"
-	grid_filename = grid.split("/")[-1]
-	save_dbf(df_grid, grid_filename, grid_path)
+	save_shp(df_grid, grid)
 
 	arcpy.Intersect_analysis (in_features=[grid, ed], 
 		out_feature_class=grid_ed_intersect, 
@@ -1791,7 +1802,7 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 
 	return df_micro
 
-def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro):
+def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	# Paths
 
@@ -1815,10 +1826,11 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro
 	block_shp_file = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
 
 	# Obtain residuals
-	arcpy.MakeFeatureLayer_management(points, "geocodelyr")
-	arcpy.SelectLayerByAttribute_management("geocodelyr", "NEW_SELECTION", """ "Status" <> 'M' """)
-	arcpy.CopyFeatures_management("geocodelyr",temp)
-	df = dbf2DF(temp.replace('.shp','.dbf'))
+	#arcpy.MakeFeatureLayer_management(points, "geocodelyr")
+	#arcpy.SelectLayerByAttribute_management("geocodelyr", "NEW_SELECTION", """ "Status" <> 'M' """)
+	#arcpy.CopyFeatures_management("geocodelyr",temp)
+	df_points = load_shp(points, hn_ranges)
+	df = df_points[df_points['Status']!='M']
 	# ERROR: LOST INDEX SOMEWHERE ALONG THE WAY
 	resid_vars = ['index','ed','fullname','state','city','address']
 	df_resid = df[resid_vars]
@@ -1848,7 +1860,7 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro
 	arcpy.Intersect_analysis([block_shp_file, inrighted], intersect_correct_ed)
 
 	# Get correct block number based on block map and geocoded in correct ED
-	df_correct_ed = dbf2DF(intersect_correct_ed.replace('.shp','.dbf'))
+	df_correct_ed = load_shp(intersect_correct_ed, hn_ranges)
 	df_correct_ed['block'] = df_correct_ed['am_bn'].str.split('-').str[1:].str.join('-')
 	fix_block_dict = df_correct_ed[['index','block']].set_index('index')['block'].to_dict()
 
@@ -1873,7 +1885,7 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro
 # FixStGridNames.py
 #
 
-def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro=None, v=7):
+def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro=None, v=7, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	city_name = city_spaces.replace(' ','')
 
@@ -1896,17 +1908,17 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 
 	#Load dataframe based on intersection of st_grid and ED map (attaches EDs to segments)
 
-	def get_grid_ed_df(grid_shp, ed_shp, st_grid_ed_shp):
+	def get_grid_ed_df(grid_shp, ed_shp, st_grid_ed_shp, hn_ranges):
 
 		arcpy.Intersect_analysis (in_features=[grid_shp, ed_shp], 
 			out_feature_class=st_grid_ed_shp, 
 			join_attributes="ALL")
 
-		df = dbf2DF(st_grid_ed_shp.replace('.shp','.dbf'))
+		df = load_shp(st_grid_ed_shp, hn_ranges)
 
 		return df
 
-	df_grid_ed = get_grid_ed_df(grid_uns2, ed_shp, st_grid_ed_shp)
+	df_grid_ed = get_grid_ed_df(grid_uns2, ed_shp, st_grid_ed_shp, hn_ranges)
 	df_grid_ed[grid_street_var] = df_grid_ed[grid_street_var].astype(str)
 
 	#
@@ -2205,7 +2217,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	# Step 7: Fix street names and save
 	#
 
-	df_uns2 = dbf2DF(grid_uns2)
+	df_uns2 = load_shp(grid_uns2, hn_ranges)
 	df_uns2[grid_street_var+'_old'] = df_uns2[grid_street_var]
 
 	# Need to do this because missing grid_id numbers in grid_id_st_dict (which is bad)
@@ -2266,7 +2278,8 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
 		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
 
-	save_dbf_st(df_uns2, grid_uns2, field_map=True)
+	#save_dbf_st(df_uns2, grid_uns2, field_map=True)
+	save_shp(df_uns2, grid_uns2)
 
 #
 # Functions for intersecting ED map with street grids and uploading to Rhea/CS1 Unix server
