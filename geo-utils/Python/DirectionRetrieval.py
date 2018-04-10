@@ -76,7 +76,7 @@ def add_dir(dir_e, dir_t1, dir_t2, st_e, st_t1, st_t2):
 		return '', 0
 
 # Function to do the work
-def fix_dir(city):
+def fix_dir(city, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
 	# Load files
 	#citystate = city[0]
@@ -101,18 +101,6 @@ def fix_dir(city):
 	gaps_file = stedit_path + citystate + "_gaps.shp"
 	temp_file = stedit_path + citystate + "_temp.shp"
 
-	ranges = ['LTOADD','LFROMADD','RTOADD','RFROMADD']
-
-	# Remove None function
-	def remove_none(df):
-		mask = df.applymap(lambda x: x is None)
-		cols = df.columns[(mask).any()]
-		for col in df[cols]:
-			if df[col].dtype == 'O':
-				df.loc[mask[col], col] = ''
-				if col in ranges:
-					df[col] = df[col].apply(lambda x: '' if '-' in x else x).str.replace(r'[aA-zZ]+','').replace('','0').astype(int)
-		return df
 	print("\nWorking on %s\n" % (citystate))
 
 	# Create copy of edited 1940 street grid (for/while/try/except needed due to processing hiccups)
@@ -172,8 +160,8 @@ def fix_dir(city):
 		out_feature_class=tiger2012_clip_shp_file)
 
 	# Load attibute data for files
-	df_stedit = remove_none(gpd.read_file(stedit_shp_file))
-	df_tiger2012 =  remove_none(gpd.read_file(tiger2012_clip_shp_file))
+	df_stedit = load_shp(stedit_shp_file, ranges)
+	df_tiger2012 = load_shp(tiger2012_clip_shp_file, ranges)
 
 	# Determine number of DIR in TigerLINE 2012
 	df_tiger2012['FULLSTD'], df_tiger2012['DIR'], df_tiger2012['NAME'], df_tiger2012['TYPE'] = zip(*df_tiger2012.apply(lambda x: standardize_street(x['FULLNAME']), axis=1))
@@ -190,9 +178,9 @@ def fix_dir(city):
 	keep_vars_tiger2012 = ['geometry','FULL2012','OrigStT']
 	df_tiger2012 = df_tiger2012[keep_vars_tiger2012]
 
-	# Write .dbf
-	df_stedit.to_file(filename=stedit_shp_file, encoding='utf-8', driver='ESRI Shapefile')
-	df_tiger2012.to_file(filename=tiger2012_clip_shp_file, encoding='utf-8', driver='ESRI Shapefile')
+	# Write .shp
+	save_shp(df_stedit, stedit_shp_file)
+	save_shp(df_tiger2012, tiger2012_clip_shp_file)
 
 	# Create copies of original FID (text) variable
 	arcpy.AddField_management(stedit_shp_file, "FIDCOPYE", "TEXT", 50, "", "","", "", "")
@@ -252,7 +240,7 @@ def fix_dir(city):
 		return ['','','','','',''], {}
 
 	# Load final street grid data and create vars for comparison
-	df_sj2 = remove_none(gpd.read_file(sj2_file)) 
+	df_sj2 = load_shp(sj2_file, ranges)  
 
 	df_sj2['FULLSTD_e'], df_sj2['DIR_e'], df_sj2['NAME_e'], df_sj2['TYPE_e'] = zip(*df_sj2.apply(lambda x: standardize_street(x['FULLEDIT']), axis=1))
 	df_sj2['FULLSTD_t1'], df_sj2['DIR_t1'], df_sj2['NAME_t1'], df_sj2['TYPE_t1'] = zip(*df_sj2.apply(lambda x: standardize_street(x['FULL2012']), axis=1))
@@ -285,9 +273,9 @@ def fix_dir(city):
 	df_tomerge = df_sj2[['FIDCOPYE','DIR_e','DIR_fix','FULLNAME']]
 
 	# Merge streets with fixed DIR and 1940 edited street grid
-	df_stedit = remove_none(gpd.read_file(stedit_shp_file)) 
+	df_stedit = load_shp(stedit_shp_file, ranges) 
 	df = df_stedit.merge(df_tomerge, how='left', on='FIDCOPYE')
-	df.to_file(filename=temp_file, encoding='utf-8', driver='ESRI Shapefile')
+	save_shp(df, temp_file) 
 
 	# Fix gaps
 	print("Trying to create gaps file for %s" % (citystate))		
@@ -320,7 +308,7 @@ def fix_dir(city):
 		nametype = NAME + ' ' + TYPE
 		return nametype.rstrip()
 
-	df_gaps = remove_none(gpd.read_file(gaps_file))
+	df_gaps = load_shp(gaps_file, ranges)
 	# Make dictionary for FID to TARGET FID
 	fid_dict = {target_fid:df_group['FULLNAME'].tolist() for target_fid, df_group in df_gaps.groupby('TARGET_FID')}
  #	for target_fid, df_group in df_diradd.groupby('TARGET_FID'):
@@ -341,9 +329,11 @@ def fix_dir(city):
 		else :
 			#multiple different directions, no change
 			return fullname
+
 	arcpy.CopyFeatures_management(temp_file, diradd_file)
-	df_diradd = remove_none(gpd.read_file(diradd_file))	
+	df_diradd = load_shp(diradd_file, ranges) 	
 	df_diradd['FULLNAMEda'] = df_diradd.apply(lambda x: fill_gap(x['FIDCOPYE'], x['FULLNAME']), axis=1)
+	save_shp(df_diradd, diradd_file)
 
 	def note_gap_dir_fixes(st,dir_fix):
 		_, st_dir, _, _ = standardize_street(st)
