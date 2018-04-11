@@ -1204,7 +1204,18 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 			with arcpy.da.SearchCursor("st_lyr",[grid_id_var,fullname_var]) as s_cursor :
 				stname_list = []
 				for s_row in s_cursor :
-					stname_list.append(str(s_row[1]))
+					if city == "OklahomaCityOK" :
+						phrase = isolate_st_name(str(s_row[1]),whole_phrase = True)
+						if phrase[0] and re.search("^[A-Z][A-Z]$",phrase[0]):
+							try :
+								stname_list.append(' '.join(phrase[1:]))
+							except TypeError :
+								stname_list.append(str(s_row[1]))
+					else :
+						stname_list.append(str(s_row[1]))
+
+                else :
+                    stname_list.append(str(s_row[1]))
 				stname_list = list(np.unique(stname_list))
 				blk_fullname_dict[blk] = stname_list
 				fullname_blk_dict[tuple(stname_list)] = blk
