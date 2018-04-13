@@ -7,10 +7,9 @@
 from __future__ import print_function
 import csv
 import xlrd
-from arcpy import management
-import arcpy
 from fuzzywuzzy import fuzz
 from blocknum.blocknum import *
+from arcpy import management
 from codecs import open
 
 arcpy.env.overwriteOutput = True
@@ -217,11 +216,13 @@ def draw_EDs(city, state, paths, new_var_name, is_desc, decade) :
 
 	# If using Amory's ED description method do this
 	if is_desc:
-		output_shp = geo_path+city+"_"+str(decade)+"_ED_desc.shp"
-		arcpy.CreateFeatureclass_management(geo_path,city+"_"+str(decade)+"_ED_desc.shp")
+
+		output_shp = geo_path+city+state+"_"+str(decade)+"_ED_desc.shp"
+		arcpy.CreateFeatureclass_management(geo_path,city+state+"_"+str(decade)+"_ED_desc.shp")
 		blk_file = intermed_path+"fullname_dissolve_split.shp"
 		arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
 		arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
+
 		with arcpy.da.InsertCursor(output_shp, ("SHAPE@", "ed_desc")) as cursor:
 			for ED, inter in ED_Intersect_ID_dict.items() :
 				inter = inter.replace("(","").replace(")","").split(",") #convert intersect string to list 
@@ -255,10 +256,14 @@ def draw_EDs(city, state, paths, new_var_name, is_desc, decade) :
 			pass
 		with arcpy.da.UpdateCursor(targ1, ["pblk_id",new_var_name]) as up_cursor:
 			for row in up_cursor :
-				row[1] = blk_ed_dict[row[0]]
-				if row[1] == None :
-					row[1] = 0
-				up_cursor.updateRow(row)
+				try:
+					row[1] = blk_ed_dict[row[0]]
+					if row[1] == None :
+						row[1] = 0
+					up_cursor.updateRow(row)
+				except KeyError:
+					print("Error in draw_EDs: pblk_id " + str(row[0]) + " not in blk_ed_dict")
+					pass
 	
 #
 # Amory's ED descriptions script
@@ -992,22 +997,10 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 		Output_ASCII_File =dir_path+"/Textfile/"+city+"_attr.txt", 
 		Add_Field_Names_to_Output="NO_FIELD_NAMES")
 
-	try:
-		with open(dir_path+"/Textfile/"+city+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
-			blk_lines = blk_txt_file.readlines()
-	except:
-		print("\nNo Block_lines_edit.txt for %s!\n" % (city))
-		with open(dir_path+"/Textfile/"+city+"_Block_lines.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
-			blk_lines = blk_txt_file.readlines()
-
-	try:
-		with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
-			ed_lines = ed_txt_file.readlines()
-	except:
-		print("\nNo ED_lines_edit.txt for %s!\n" % (city))
-		with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
-			ed_lines = ed_txt_file.readlines()
-
+	with open(dir_path+"/Textfile/"+city+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
+		blk_lines = blk_txt_file.readlines()
+	with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
+		ed_lines = ed_txt_file.readlines()
 	with open(dir_path+"/Textfile/"+city+"_attr.txt",'r') as st_list_file :
 		st_lines = st_list_file.readlines()
 
@@ -1100,7 +1093,7 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 				blk_num = re.search("^([0-9A-Za-z]+)[\-\— ]+",blk_line)
 				if blk_num :
 					desc = re.sub(re.escape(blk_num.group(0)),"",blk_line)
-					if city in ["AtlantaGA","MiamiFL"] : #cities with direction listed at end of each line
+					if city in ["AtlantaGA","ToledoOH","OklahomaCityOK","MiamiFL"] : #cities with direction listed at end of each line
 						desc_list = desc.split(', ')
 						if re.search("^.\..\.$",desc_list[-1]) :
 							desc = ', '.join(desc_list[:-1]) #excise the direction (for now)
@@ -1151,8 +1144,8 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 
 	# Have to convert .shp to .gdb here because of text field size limit for dBase files
 	arcpy.FeatureClassToGeodatabase_conversion([sj_targ, stgrid_file],arcpy.env.scratchGDB)
-	arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.scratchGDB,city_state+"_"+str(decade)+"_stgrid_edit_Uns2.shp"), "st_lyr")
-	arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.scratchGDB,city_state[:-2] + "_"+str(decade)+"_Pblk.shp"), "pblk_lyr")
+	arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.scratchGDB,city_state+"_"+str(decade)+"_stgrid_edit_Uns2"), "st_lyr")
+	arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.scratchGDB,city_state[:-2] + "_"+str(decade)+"_Pblk"), "pblk_lyr")
 
 	arcpy.AddField_management ('st_lyr', 'grid_id_s', "TEXT", 750)
 	arcpy.CalculateField_management ('st_lyr', 'grid_id_s', 'str(!'+grid_id_var+'!)+","', 
@@ -1251,31 +1244,35 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 				b_cursor.updateRow(row)
 			except KeyError :
 				continue
+			except IndexError:
+				continue
 
 	arcpy.FeatureClassToShapefile_conversion(join_file, geo_path)        
 
-def ed_desc_algo(city, state, fullname_var, paths, decade):
+def ed_desc_algo(city_spaces, state, fullname_var, paths, decade):
 
-	city = city.replace(' ','')
+	city = city_spaces.replace(' ','')
 	r_path, script_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	global discovered_problem
 	discovered_problem = 0
 
-	shp_targ = geo_path + city + state + '_' + str(year) + "_stgrid_edit_Uns2.shp"
+	shp_targ = geo_path + city + state + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
 	# LOAD SM DESCRIPTIONS....
 	if os.path.isfile(shp_targ) :
 		#pass
-		prepare_map_intersections(city + state +'_' + str(year) + '_stgrid_edit_Uns2.shp', fullname_var, paths)
+		prepare_map_intersections(city + state +'_' + str(decade) + '_stgrid_edit_Uns2.shp', fullname_var, paths)
 	else :
 		print(city+": Error finding stgrid")
 		return
 
-	Descriptions_path = 'S:/Projects/1940Census/SMdescriptions/'+city+'_EDdraw_test.txt'
+	Descriptions_path = 'S:/Projects/1940Census/SMdescriptions/'+city_spaces+'_EDdraw_test.txt'
 	Intersect_TXT = open(geo_path+"/IntersectionsIntermediateFiles/"+city+state+'_1930_stgrid_edit_Uns2_Intersections.txt')
 	InterLines = Intersect_TXT.readlines()[1:]
 	Descriptions = open(Descriptions_path).readlines()
+	if len(Descriptions)==0:
+		print("No ED description data found for " + city_spaces + state)
 
 	# Derived Dict #
 	global ED_Intersect_ID_dict
@@ -1289,7 +1286,12 @@ def ed_desc_algo(city, state, fullname_var, paths, decade):
 		print(city+": Error finding stgrid ("+str(st_grid_exists)+") and/or descriptions ("+str(descriptions_exist)+")")
 	
 	print("Creating ED Map for %s (Descriptions algorithm)" % (city))
-	draw_EDs(city, state, paths, "ED_desc", True, decade)
+	draw_EDs(city=city, 
+		state=state, 
+		paths=paths, 
+		new_var_name="ED_desc", 
+		is_desc=True, 
+		decade=decade)
 
 #
 # Amory's intersection script
@@ -1825,9 +1827,12 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 
 	sm_path = r"S:\Projects\1940Census\SMlists"
 	os.chdir(sm_path+"\\"+str(decade))
-	csv_name = city_spaces+state+"_SM"
-	csv_from_excel(csv_name+".xlsx",csv_name)
-
+	try:
+		csv_name = city_spaces+state+"_SM"
+		csv_from_excel(csv_name+".xlsx",csv_name)
+	except:
+		csv_name = city + state + "_SM"
+		csv_from_excel(csv_name+".xlsx",csv_name)
 	SM_ED_TXT = open(csv_name+".csv",'r')
 	SM_ED_TXT1 = open(csv_name+"_ED.csv",'r')
 
@@ -1844,7 +1849,12 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 	RunAnalysisInt(city)
 
 	print("Creating ED Map for %s (Intersections algorithm)" % (city))
-	draw_EDs(city, state, paths, "ED_inter", False, decade)
+	draw_EDs(city=city, 
+		state=state, 
+		paths=paths, 
+		new_var_name="ED_inter", 
+		is_desc=False, 
+		decade=decade)
 		
 #
 # Matt's initial geocoding script (written in R)
@@ -1866,7 +1876,11 @@ def identify_eds(city_name, paths, decade):
 
 def select_best_ed_guess(x):
 	
-	_, ed_desc, ed_inter, ed_geocode, _ = x
+	# 1940 also had cblk_id, but 1930 does not (may need if/else with decade in future)
+	try:
+		_, _, ed_desc, ed_inter, ed_geocode, _ = x
+	except:
+		_, _, ed_desc, ed_inter, ed_geocode = x
 	# Split if multiple EDs
 	if '|' in str(ed_desc):
 		ed_desc = ed_desc.split('|')
@@ -1956,7 +1970,7 @@ def select_best_ed_guess(x):
 ##
 
 # Head script for running everything - produces ED guess map and statistics
-def get_ed_guesses(city, state, fullname_var, decade=1940):
+def get_ed_guesses(city, state, fullname_var, decade=1940, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	print("\nCreating ED map for %s %s, %s using 3 methods\n" % (str(decade), city, state))
 
@@ -1969,6 +1983,10 @@ def get_ed_guesses(city, state, fullname_var, decade=1940):
 		dir_path = "S:/Projects/1940Census/KansasCityKS"
 	elif city_state == "KansasCityMO":
 		dir_path = "S:/Projects/1940Census/KansasCityMO"
+	elif city_state == "RichmondVA":
+		dir_path = "S:/Projects/1940Census/RichmondVA"
+	elif city_state == "RichmondNY":
+		dir_path = "S:/Projects/1940Census/RichmondNY"
 	else:
 		dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
 	r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
@@ -1977,7 +1995,10 @@ def get_ed_guesses(city, state, fullname_var, decade=1940):
 	geo_path = dir_path + '/GIS_edited/'
 
 	# Step 1: create address file, street grid, physical block, and initial geocode shapefiles 
-	create_addresses(city, state, paths, decade)
+	try:
+		create_addresses(city, state, paths, decade)
+	except:
+		create_addresses(city, state, paths, decade, v=5)
 	create_blocks_and_block_points(city, state, paths, decade)
 
 	# Step 2: Run Amory's intersections script
@@ -1989,16 +2010,16 @@ def get_ed_guesses(city, state, fullname_var, decade=1940):
 	# Step 4: If using descriptions, run, create new shapefile including all three then...
 	#   a. Identify best guesses
 	#   b. Assign confidence to guesses
-	
+
 	last_step = geo_path + city + '_' + str(decade) + '_ED_Choice_map.shp'
 	ed_guess_file = geo_path + city + state + '_' + str(decade) + '_ED_guess_map.shp'
 
 	if decade == 1930:
 		# Run Amory's descriptions algorithm
-		ed_desc_algo(city, state, fullname_var, paths, decade)
+		ed_desc_algo(city_spaces, state, fullname_var, paths, decade)
 	elif decade == 1940:
 		# Run Amory's 1940 descriptions algorithm
-		ed_desc_algo40(city, state, fullname_var, paths, decade)
+		ed_desc_algo40(city_spaces, state, fullname_var, paths, decade)
 	ed_desc_map = geo_path + city + state + '_' + str(decade) + '_ED_desc.shp'
 	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
 	arcpy.SpatialJoin_analysis(target_features=last_step, 
@@ -2009,7 +2030,7 @@ def get_ed_guesses(city, state, fullname_var, decade=1940):
 		match_option="HAVE_THEIR_CENTER_IN")
 
 	# Select relevant variables and extract best ED guesses
-	df = dbf2DF(ed_guess_file)
+	df = load_shp(ed_guess_file, hn_ranges)
 	def replace_blanks(ed):
 		if ed == '':
 			return '0'
@@ -2027,9 +2048,12 @@ def get_ed_guesses(city, state, fullname_var, decade=1940):
 		else:
 			return '|'.join(eds)
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].astype(int).astype(str).apply(lambda x: get_ed_geocode(x), axis=1)
-	relevant_vars = ['pblk_id','ed_desc','ed_inter','ed_geocode','cblk_id']
 	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1)
 	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str)
+	if decade == 1940:
+		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode','cblk_id']
+	else:
+		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode']
 	df_ed_guess = df[relevant_vars]
 	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
 
@@ -2045,109 +2069,25 @@ def get_ed_guesses(city, state, fullname_var, decade=1940):
 
 	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)
 	
-	# Save dbf (have to use field mapping to preserve TEXT data format)
-	def save_dbf_ed(df, geo_path, shapefile_name, decade):
-		file_temp = shapefile_name.split('/')[-1]
-		rand_post = str(random.randint(1,100001))
-		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
-		df.to_csv(csv_file,index=False)
-		try:
-			os.remove(geo_path + "/schema.ini")
-		except:
-			pass
+	#save_dbf_ed(df_ed_guess, geo_path, ed_guess_file, decade)
+	save_shp(df_ed_guess, ed_guess_file)
 
-		# Add a specific field mapping for a special case
-		file = csv_file
-		field_map = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
-		ed_desc "ed_desc" true true false 10 Text 0 0 ,First,#,%s,ed_desc,-1,-1;
-		ed_inter "ed_inter" true true false 80 Text 0 0 ,First,#,%s,ed_inter,-1,-1;
-		ed_geocode "ed_geocode" true true false 10 Text 0 0 ,First,#,%s,ed_geocode,-1,-1;
-		cblk_id "cblk_id" true true false 10 Text 0 0 ,First,#,%s,cblk_id,-1,-1;
-		ed_conf "ed_conf" true true false 30 Text 0 0 ,First,#,%s,ed_conf,-1,-1;
-		ed_guess "ed_guess" true true false 10 Text 0 0 ,First,#,%s,ed_guess,-1,-1""" % (file, file, file, file, file, file, file)
-
-		arcpy.TableToTable_conversion(in_rows=csv_file, 
-			out_path=geo_path, 
-			out_name="temp_for_shp"+rand_post+".dbf",
-			field_mapping=field_map)
-		os.remove(shapefile_name.replace('.shp','.dbf'))
-		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
-		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
-		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
-		os.remove(csv_file)
-
-	save_dbf_ed(df_ed_guess, geo_path, ed_guess_file, decade)
-
-	# Ridiculous but necessary because saving to .dbf converts data type for unknown reasons
-	df_ed_guess.index = df_ed_guess['pblk_id']
-	df_ed_guess_dict = df_ed_guess.to_dict('index')
-	with arcpy.da.UpdateCursor(ed_guess_file, ['pblk_id','ed_inter']) as up_cursor:
-		for row in up_cursor :
-			row[1] = df_ed_guess_dict[str(row[0])]['ed_inter']
-			up_cursor.updateRow(row)
+	# Clean up scratch GDB
+	arcpy.env.workspace = arcpy.env.scratchGDB
+	fcs = arcpy.ListFeatureClasses()
+	for fc in fcs:
+		if city in fc:
+			arcpy.Delete_management(fc)
 
 	print("\nFinished ED map for %s %s, %s\n" % (str(decade), city, state))
 
 # Full street name variable
 fullname_var = "FULLNAME"
-city = "San Antonio"
-state = "TX"
-decade = 1940
+decade = 1930
+#city = 'Birmingham'
+#state = 'AL'
 get_ed_guesses(city, state, fullname_var, decade)
 
-# To be included in the city_info_list, must have:
-#   a. [CITY][STATE]_1940_stgrid_diradd.shp
-#   b. [CITY][STATE]_StudAuto.dta
-
-city_info_list30 = [
-	['Albany','NY'],    
-	['Dayton','OH'],    
-	['Houston','TX'],
-	['Miami','FL'],
-	['New Haven','CT'], 
-	['Newark','NJ'],    
-	['Rochester','NY'], 
-	['San Diego','CA'], 
-	['Seattle','WA'],
-	['St Paul','MN'],
-	['Worcester','MA'], 
-	['Yonkers','NY']    
-	]
-
-'''                                                                                   
-	['Oakland', 'CA'],                                                                                                      
-	['Denver', 'CO'],                                                                                                      
-	['Bridgeport', 'CT'],                                                                                                   
-	['Hartford', 'CT'],                                                                                                     
-	['NewHaven', 'CT'],                                                                                                     
-	['Jacksonville', 'FL'],                                                                                                 
-	['Miami', 'FL'],                                                                                                        
-	['Indianapolis', 'IN'],                                                                                                 
-	['Louisville', 'KY'],                                                                                                   
-	['NewOrleans', 'LA'],                                                                                                   
-	['Boston', 'MA'],                                                                                                       
-	['Worcester', 'MA'],                                                                                                    
-	['Baltimore', 'MD'],                                                                                                    
-	['Flint', 'MI'],                                                                                                        
-	['Minneapolis', 'MN'],                                                                                                  
-	['StLouis', 'MO'],                                                                                                      
-	['Newark', 'NJ'],                                                                                                       
-	['Paterson', 'NJ'],                                                                                                     
-	['Trenton', 'NJ'],                                                                                                      
-	['Buffalo', 'NY'],                                                                                                      
-	['Syracuse', 'NY'],                                                                                                     
-	['Yonkers', 'NY'],                                                                                                      
-	['Akron', 'OH'],                                                                                                        
-	['Dayton', 'OH'],                                                                                                       
-	['Tulsa', 'OK'],                                                                                                        
-	['Pittsburgh', 'PA'],                                                                                                   
-	['Providence', 'RI'],                                                                                                   
-	['SanAntonio', 'TX'],                                                                                                   
-	['Richmond', 'VA'],                                                                                                    
-	['Milwaukee', 'WI']]   
-'''
-
-decade = 1940
 num_finished = 0
 for city_info in city_info_list:
 	city, state = city_info
@@ -2160,7 +2100,7 @@ print("%s of %s cities processed" % (str(num_finished), str(len(city_info_list))
 
 # Save information
 
-def get_ed_guess_stats(city_info, decade):
+def get_ed_guess_stats(city_info, decade, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 	city, state = city_info
 	city = city.replace(' ','')
 	city_state=city+state
@@ -2172,7 +2112,7 @@ def get_ed_guess_stats(city_info, decade):
 		dir_path = "S:/Projects/1940Census/" + city
 	# Load dbf data
 	ed_guess_file = dir_path + '/GIS_edited/' + city + state + '_' + str(decade) + '_ED_guess_map.shp'
-	df_ed_guess = dbf2DF(ed_guess_file)
+	df_ed_guess = load_shp(ed_guess_file, ranges)
 	df_ed_guess['b_guess'] = df_ed_guess['cblk_id'] != ''
 	# Create a tabular summary of number guessed by confidence in guess
 	info1 = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
@@ -2185,42 +2125,58 @@ def get_ed_guess_stats(city_info, decade):
 	info['state'] = state
 	return info
 
-city_info_list = [['Akron', 'OH'],
-	['Albany', 'NY'],
-	['Atlanta', 'GA'],
-	['Boston','MA'],
-	['Bridgeport', 'CT'],
-	['Buffalo', 'NY'],
-	['Chicago','IL'],
-	['Cincinnati', 'OH'],
-	['Columbus', 'OH'],
-	['Dallas', 'TX'],
-	['Dayton', 'OH'],
-	['Denver','CO'],
-	['Des Moines', 'IA'],
-	['Flint','MI'],
-	['Fort Worth','TX'],
-	['Indianapolis','IN'],
-	['Jacksonville','FL'],
-	['Kansas City','MO'],
-	['Kansas City','KS'],
-	['Miami','FL'],
-	['Minneapolis','MN'],
-	['New Haven','CT'],
-	['New Orleans','LA'],
-	['Newark','NJ'],
-	['Oakland','CA'],
-	['Oklahoma City','OK'], # Needs to be fixed/re-run
-	['Paterson','NJ'],
-	['Pittsburgh','PA'],
-	['Portland','OR'],
-	['Providence','RI'],
-	['St Louis','MO'],
-	['Syracuse','NY'],
-	['Toledo','OH'],
-	['Trenton','NJ'],
-	['Worcester','MA'],
-	['Yonkers','NY']] 
+city_info_list = [['Akron','OH'],
+['Albany''NY'],
+['Atlanta''GA'],
+['Baltimore''MD'],
+['Birmingham''AL'],
+['Boston''MA'],
+['Bridgeport''CT'],
+['Buffalo''NY'],
+['Chicago''IL'],
+['Cincinnati''OH'],
+['Columbus''OH'],
+['Dallas''TX'],
+['Dayton''OH'],
+['Denver''CO'],
+['Des Moines''IA'],
+['Flint''MI'],
+['Fort Worth''TX'],
+['Grand Rapids''MI'],
+['Hartford''CT'],
+['Houston''TX'],
+['Indianapolis''IN'],
+['Jacksonville''FL'],
+['Jersey''NJ'],
+['Kansas''KS'],
+['Kansas''MO'],
+['Miami''FL'],
+['Milwaukee''WI'],
+['Minneapolis''MN'],
+['New Haven''CT'],
+['New Orleans''LA'],
+['Newark''NJ'],
+['Oakland''CA'],
+['Oklahoma''OK'],
+['Omaha''NE'],
+['Paterson''NJ'],
+['Pittsburgh''PA'],
+['Portland''OR'],
+['Providence''RI'],
+['San Antonio''TX'],
+['San Diego''CA'],
+['San Francisco''CA'],
+['Seattle''WA'],
+['Spokane''WA'],
+['Springfield''MA'],
+['St Louis''MO'],
+['St Paul''MN'],
+['Syracuse''NY'],
+['Toledo''OH'],
+['Trenton''NJ'],
+['Tulsa''OK'],
+['Worcester''MA'],
+['Yonkers''NY']] 
 
 #for city_state in city_info_list:
 #	dumb_fix(city_state[0],city_state[1])
@@ -2233,7 +2189,7 @@ for city_info in city_info_list:
 		continue
 df = pd.concat(info_list)
 df_to_write = pd.pivot_table(df, values='pblk_id', index=['city','state'], columns=['ed_conf'])
-df_to_write.to_csv('S:/Users/Chris/ed_guess_info'+str(decade)+'.csv')
+df_to_write.to_csv('S:/Users/Chris/ed_guess_info'+str(decade)+'_2018_04_09.csv')
 
 '''
 
