@@ -922,7 +922,7 @@ def ed_desc_algo40(city, state, fullname_var, paths, decade, use_fuzz = True):
 				assert(False)
 			# Standardize "St ____ Ave" -> "Saint ____ Ave" #
 			NAME = re.sub("^([Ss][Tt]\.?|[Ss][Aa][Ii][Nn][Tt])[ \-]","Saint ",NAME)
-		st = re.sub(re.escape(match.group(1).strip()),NAME,st).strip()
+		st = re.sub(re.escape(match.group(1).strip()),NAME,st,count=1).strip()
 		try :
 			assert st == (DIR+' '+NAME+' '+TYPE).strip()
 		except AssertionError :
