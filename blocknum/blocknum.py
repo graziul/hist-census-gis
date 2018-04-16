@@ -412,9 +412,9 @@ def create_addresses(city_name, state_abbr, paths, decade, v=7, df=None):
 	# Create ED-block
 	if decade == 1930:
 		vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn','ed_block']
-		df[:,('ed_int')] = df['ed'].astype(int)
-		df[:,('ed_block')] = df['ed_int'].astype(str) + '-' + df['mblk'].astype(str)
-		del df_add['ed_int']
+		df.loc[:,('ed_int')] = df['ed'].astype(int)
+		df.loc[:,('ed_block')] = df['ed_int'].astype(str) + '-' + df['mblk'].astype(str)
+		del df['ed_int']
 	elif decade == 1940:
 		vars_of_interest = ['index','fullname', 'ed','type','hn']
 
