@@ -2124,16 +2124,22 @@ def get_ed_guess_stats(city_info, decade, ranges=['LTOADD','LFROMADD','RTOADD','
 	# Load dbf data
 	ed_guess_file = dir_path + '/GIS_edited/' + city + state + '_' + str(decade) + '_ED_guess_map.shp'
 	df_ed_guess = load_shp(ed_guess_file, ranges)
-	df_ed_guess['b_guess'] = df_ed_guess['cblk_id'] != ''
-	# Create a tabular summary of number guessed by confidence in guess
-	info1 = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
-	info2 = df_ed_guess.groupby(['b_guess'], as_index=False).count()[['b_guess','pblk_id']]
-	info = info1.append(info2)
-	info.loc[info['ed_conf'].isnull(),'ed_conf'] = info.loc[info['b_guess'].notnull(),'b_guess']
-	info['ed_conf'].replace({False:'No block guess',True:'Block guess'},inplace=True)
-	del info['b_guess']
-	info['city'] = city
-	info['state'] = state
+	if decade == 1940:
+		df_ed_guess['b_guess'] = df_ed_guess['cblk_id'] != ''
+		# Create a tabular summary of number guessed by confidence in guess
+		info1 = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
+		info2 = df_ed_guess.groupby(['b_guess'], as_index=False).count()[['b_guess','pblk_id']]
+		info = info1.append(info2)
+		info.loc[info['ed_conf'].isnull(),'ed_conf'] = info.loc[info['b_guess'].notnull(),'b_guess']
+		info['ed_conf'].replace({False:'No block guess',True:'Block guess'},inplace=True)
+		del info['b_guess']
+		info['city'] = city
+		info['state'] = state
+	else:
+		# Create a tabular summary of number guessed by confidence in guess
+		info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
+		info['city'] = city
+		info['state'] = state		
 	return info
 
 city_info_list = [['Akron','OH'],
