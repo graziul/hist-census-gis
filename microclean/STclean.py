@@ -428,7 +428,10 @@ def load_steve_morse(city, state, year, file_path):
 
 	#NOTE: This dictionary must be built independently of this script
 	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year), str(year)), 'rb'))
-	sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
+	if city == 'Richmond' and state == 'NY':
+		sm_st_ed_dict_nested = sm_st_ed_dict_file[('Staten Island','ny')]
+	else:
+		sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
 
 	#Flatten dictionary
 	temp = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
