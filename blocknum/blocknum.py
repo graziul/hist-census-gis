@@ -161,7 +161,7 @@ def identify_blocks_geocode(city_name, paths, decade):
 #
 
 # Uses block descriptions from microdata to fill in block numbers
-def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, decade, v=7):
+def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, decade, v=5):
 
 	r_path, script_path, dir_path = paths
 
