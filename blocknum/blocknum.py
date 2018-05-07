@@ -156,10 +156,6 @@ def identify_blocks_geocode(city_name, paths, decade):
 	else:
 		print("OK!\n")
 
-#
-# Functions for calling Python scripts (code/functions should get pulled into here)
-#
-
 # Uses block descriptions from microdata to fill in block numbers
 def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, decade, v=5):
 
@@ -340,6 +336,10 @@ def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, de
 		cursor.updateRow(row)
 	del(cursor)
 
+#
+# Functions for calling Python scripts (code/functions should get pulled into here)
+#
+
 # Uses OCR and ED map images to fill in block numbers (not generally used)
 def run_ocr(city_name, paths):
 	r_path, script_path, file_path = paths
@@ -383,8 +383,13 @@ def create_addresses(city_name, state_abbr, paths, decade, v=7, df=None):
 			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
 			df = load_large_dta(microdata_file)
 		except:
-			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
-			df = pd.read_csv(microdata_file, low_memory=False)
+			for version in range(1,v+1)[::-1]:
+				try:
+					microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
+					df = pd.read_csv(microdata_file, low_memory=False)
+				except:
+					if version == v:
+						raise
 	df.columns = map(str.lower, df.columns)
 	# Set index variable
 	df['index'] = df.index
