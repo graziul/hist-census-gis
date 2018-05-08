@@ -385,10 +385,10 @@ def create_addresses(city_name, state_abbr, paths, decade, v=7, df=None):
 		except:
 			for version in range(1,v+1)[::-1]:
 				try:
-					microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
+					microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(version) + ".csv"
 					df = pd.read_csv(microdata_file, low_memory=False)
 				except:
-					if version == v:
+					if version == 1:
 						raise
 	df.columns = map(str.lower, df.columns)
 	# Set index variable
