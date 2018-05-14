@@ -112,6 +112,8 @@ def get_sm_st_ed(year):
 
         try:
             sm_web_abbr = sm_web_abbr_dict[year][state_abbr][city_name]
+            if city_name == 'Springfield' and state_abbr = 'ma':
+                sm_web_abbr = ['spma'] # Algorithm picks up "West Springfield" as well
         except:
             continue
 
