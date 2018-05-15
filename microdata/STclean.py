@@ -29,24 +29,10 @@ import pandas as pd
 import fuzzyset
 import codecs
 #from simpledbf import Dbf5
-from termcolor import colored, cprint
-from colorama import AnsiToWin32, init
 from microclean.STstandardize import *
 from microclean.HNclean import *
 
 #Pretty output for easy reading
-class color:
-   PURPLE = '\033[95m'
-   CYAN = '\033[96m'
-   DARKCYAN = '\033[36m'
-   BLUE = '\033[94m'
-   GREEN = '\033[92m'
-   YELLOW = '\033[93m'
-   RED = '\033[91m'
-   BOLD = '\033[1m'
-   UNDERLINE = '\033[4m'
-   END = '\033[0m'
-
 def dbf2DF(dbfile, upper=False): #Reads in DBF files and returns Pandas DF
 	db = ps.open(dbfile) #Pysal to open DBF
 	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
@@ -84,7 +70,7 @@ def load_city(city, state, year, file_path):
 	load_time = round(float(end-start)/60, 1)
 
 	num_records = len(df)
-	cprint('Loading data for %s took %s' % (city, load_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	print('Loading data for %s took %s' % (city, load_time))
 
 	# Standardize variable names
 	df = rename_variables(df, year)
@@ -286,7 +272,7 @@ def remove_duplicates(df):
 	len1 = len(df)
 	df = df[~(df['line_num'].isnull() & (df['street_raw'] == '') & (df['name_last'] == '') & (df['name_first'] == ''))]
 	len2 = len(df)
-	cprint('%s line number blanks removed' % (len1-len2), file=AnsiToWin32(sys.stdout))
+	print('%s line number blanks removed' % (str(len1-len2)))
 
 	# Remove if pages are duplicates (using sequences of age/gender)
 	if ~df['image_id'].isnull().all():
@@ -334,11 +320,11 @@ def remove_duplicates(df):
 		len1 = len(df)
 		df = df[~df['image_id'].isin(drop_imageids)]
 		len2 = len(df)
-		cprint('%s cases removed due to duplicate pages\n' % (len1-len2), file=AnsiToWin32(sys.stdout))
+		print('%s cases removed due to duplicate pages\n' % (str(len1-len2)))
 
 	end = time.time()
 	search_time = round(float(end-start)/60, 1)
-	cprint('Searching for duplicates took %s minutes\n' % (search_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	print('Searching for duplicates took %s minutes\n' % (search_time))
 
 	return df
 
@@ -418,7 +404,7 @@ def preclean_street(df, city, state, year, file_path):
 	end = time.time()
 	preclean_time = round(float(end-start)/60, 1)
 
-	cprint('Precleaning street names for %s took %s\n' % (city, preclean_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	print('Precleaning street names for %s took %s\n' % (city, str(preclean_time)))
 	
 	preclean_info = sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
 
@@ -560,7 +546,7 @@ def find_exact_matches_sm(df, street, sm_all_streets, basic_info):
 	num_exact_matches_sm = np.sum(df['exact_match_sm_bool'+post])
 	num_noexact_matches_sm =  num_records - num_exact_matches_sm
 	prop_exact_matches_sm = float(num_exact_matches_sm)/float(num_records)
-	cprint("Cases with exact matches (Steve Morse): "+str(num_exact_matches_sm)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_sm, 1))+"%)", file=AnsiToWin32(sys.stdout))
+	print("Cases with exact matches (Steve Morse): "+str(num_exact_matches_sm)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_sm, 1))+"%)")
 
 	# Keep track of unique streets that do and do not have exact matches 
 	df_exact_matches_sm = df[df['exact_match_sm_bool'+post]]
@@ -572,7 +558,7 @@ def find_exact_matches_sm(df, street, sm_all_streets, basic_info):
 		print("Error in number of streets")
 		break
 	prop_exact_streets_sm = float(num_streets_exact_sm)/float(num_streets)
-	cprint("Streets with exact matches (Steve Morse): "+str(num_streets_exact_sm)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_sm, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+	print("Streets with exact matches (Steve Morse): "+str(num_streets_exact_sm)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_sm, 1))+"%)\n")
 
 	# Compile info for later use
 	exact_info_sm = [num_exact_matches_sm, num_noexact_matches_sm, 
@@ -590,7 +576,7 @@ def find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info):
 	num_exact_matches_stgrid = np.sum(df['exact_match_stgrid_bool'+post])
 	num_noexact_matches_stgrid = num_records - num_exact_matches_stgrid
 	prop_exact_matches_stgrid = float(num_exact_matches_stgrid)/float(num_records)
-	cprint("Cases with exact matches (street grid): "+str(num_exact_matches_stgrid)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_stgrid, 1))+"%)", file=AnsiToWin32(sys.stdout))
+	print("Cases with exact matches (street grid): "+str(num_exact_matches_stgrid)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_stgrid, 1))+"%)")
 
 	# Keep track of unique streets that do and do not have exact matches in street grid
 	df['temp'] = df['exact_match_stgrid_bool'+post].fillna('')
@@ -601,7 +587,7 @@ def find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info):
 	num_streets_exact_stgrid = len(df_exact_matches_stgrid.groupby([street]).count())
 	num_streets_noexact_stgrid = len(df_noexact_matches_stgrid.groupby([street]).count())
 	prop_exact_streets_stgrid = float(num_streets_exact_stgrid)/float(num_streets)
-	cprint("Streets with exact matches (street grid): "+str(num_streets_exact_stgrid)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_stgrid, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+	print("Streets with exact matches (street grid): "+str(num_streets_exact_stgrid)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_stgrid, 1))+"%)\n")
 
 	# Compile info for later use
 	exact_info_stgrid = [num_exact_matches_stgrid, num_noexact_matches_stgrid, 
@@ -612,7 +598,7 @@ def find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info):
 #Function to run all exact matching and return results to Clean.py
 def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, source):
 
-	cprint("\nExact matching algorithm for %s \n" % (street), attrs=['underline'], file=AnsiToWin32(sys.stdout))
+	print("\nExact matching algorithm for %s \n" % (street))
 
 	# Timer start
 	start = time.time()
@@ -651,17 +637,17 @@ def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, source):
 	# Generate some information
 	num_exact_matches = df['exact_match_bool'+post].sum()
 	prop_exact_matches = float(num_exact_matches)/float(num_records)
-	cprint("Total cases with exact matches: "+str(num_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches, 1))+"%)", file=AnsiToWin32(sys.stdout))
+	print("Total cases with exact matches: "+str(num_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches, 1))+"%)")
 
 	df_exact_matches = df[df['exact_match_bool'+post]]
 	num_streets_exact = len(df_exact_matches.groupby([street]).count())
 	prop_exact_streets = float(num_streets_exact)/float(num_streets)
-	cprint("Total streets with exact matches: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)\n", 'yellow', file=AnsiToWin32(sys.stdout))
+	print("Total streets with exact matches: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)\n")
 
 	# Timer stop
 	end = time.time()
 	exact_matching_time = round(float(end-start)/60, 1)
-	cprint("Exact matching for %s took %s\n" % (city, exact_matching_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	print("Exact matching for %s took %s\n" % (city, exact_matching_time))
 
 	# Generate dashboard info
 	exact_info = exact_info_sm + [num_records, num_streets] + exact_info_stgrid + [exact_matching_time]
@@ -790,8 +776,8 @@ def find_fuzzy_matches_module(df, city, street, grid_all_streets, grid_ed_st_dic
 	end = time.time()
 	fuzzy_matching_time = round(float(end-start)/60, 1)
 	fuzzy_info = [num_fuzzy_matches, fuzzy_matching_time]
-	cprint("Fuzzy matches (using " + map_type + ": "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)\n", file=AnsiToWin32(sys.stdout))
-	cprint("Fuzzy matching for %s took %s\n" % (city, fuzzy_matching_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	print("Fuzzy matches (using " + map_type + ": "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)\n")
+	print("Fuzzy matching for %s took %s\n" % (city, str(fuzzy_matching_time)))
 
 	return df, fuzzy_info, resid
 
@@ -803,7 +789,7 @@ def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, f
 	except:
 		post = ''
 
-	cprint("Fuzzy matching algorithm for %s \n" % (street), attrs=['underline'], file=AnsiToWin32(sys.stdout))
+	print("Fuzzy matching algorithm for %s \n" % (street))
 
 	#Initialize fuzzy_match_bool
 	df['fuzzy_match_bool'] = False
@@ -848,7 +834,7 @@ def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, f
 
 def fix_blank_st(df, city, HN_seq, street, sm_st_ed_dict):
 
-	cprint("\nFixing blank street names using house number sequences\n", attrs=['underline'], file=AnsiToWin32(sys.stdout))
+	print("\nFixing blank street names using house number sequences\n")
 
 	start = time.time()
 	
@@ -913,19 +899,19 @@ def fix_blank_st(df, city, HN_seq, street, sm_st_ed_dict):
 
 	end = time.time()
 
-	cprint("Found %s cases with blank street names" % (str(num_blank_street_names)), file=AnsiToWin32(sys.stdout))
+	print("Found %s cases with blank street names" % (str(num_blank_street_names)))
  
 	num_blank_street_singletons = len(singleton_list)
 	per_singletons = round(100*float(num_blank_street_singletons)/float(num_blank_street_names), 1)
-	cprint("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+r"% of blanks) were singletons", file=AnsiToWin32(sys.stdout))
+	print("Of these cases, "+str(num_blank_street_singletons)+" ("+str(per_singletons)+r"% of blanks) were singletons")
 
 	per_blank_street_fixed = round(100*float(num_blank_street_fixed)/len(df), 1)
 	per_street_changes_total = round(100*float(num_street_changes_total)/len(df), 1)
-	cprint("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+r"% of all cases) could be fixed using HN sequences", file=AnsiToWin32(sys.stdout))
-	cprint("A total of "+str(num_street_changes_total)+" ("+str(per_street_changes_total)+r"% of all cases) were changed", file=AnsiToWin32(sys.stdout))
+	print("Of non-singleton cases, "+str(num_blank_street_fixed)+" ("+str(per_blank_street_fixed)+r"% of all cases) could be fixed using HN sequences")
+	print("A total of "+str(num_street_changes_total)+" ("+str(per_street_changes_total)+r"% of all cases) were changed")
 
 	blank_fix_time = round(float(end-start)/60, 1)
-	cprint("Fixing blank streets for %s took %s" % (city, blank_fix_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	print("Fixing blank streets for %s took %s" % (city, str(blank_fix_time)))
 
 	fix_blanks_info = [num_street_changes_total, num_blank_street_names, num_blank_street_singletons, per_singletons, num_blank_street_fixed, per_blank_street_fixed, blank_fix_time]
 

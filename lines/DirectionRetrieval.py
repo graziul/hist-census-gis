@@ -406,6 +406,8 @@ print("Total processing time: %s\n" % (total_time))
 
 '''
 
+'''
+# This uses parallel processing rather than iterating sequentially
 if __name__ == "__main__":
 	pool = multiprocessing.Pool(processes=8, maxtasksperchild=1)
 	temp = pool.map(fix_dir, city_fips_dict.items())
@@ -429,3 +431,4 @@ if __name__ == "__main__":
 
 	csv_file = sj_path + '/DirAddSummary2018_03_16.csv' 
 	dashboard.to_csv(csv_file, index=False)
+'''

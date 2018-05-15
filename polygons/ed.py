@@ -4,6 +4,9 @@
 # EDguess.py - combines multiple automated approaches to identifying EDs into one shapefile
 #
 
+import geopandas as gpd
+import arcpy
+
 from __future__ import print_function
 import csv
 import xlrd
@@ -14,6 +17,117 @@ from codecs import open
 import multiprocessing
 
 arcpy.env.overwriteOutput = True
+
+# Identifies EDs and can be run independently (R script)
+def identify_eds(city_name, paths, decade):
+	r_path, script_path, file_path = paths
+	print("Identifying " + str(decade) + " EDs\n")
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	if t != 0:
+		print("Error identifying " + str(decade) + " EDs for "+city_name+"\n")
+	else:
+		print("OK!\n")
+
+# Get adjacent EDs
+def get_adjacent_eds(geo_path, city_name, state_abbr, decade):
+	
+	# Files
+
+	# "vm" is the verified map (e.g., ED or block map)
+	vm = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+	# Feature Class to Feature Class file
+	fc = city_name + state_abbr + "_" + str(decade) + "_ED_Feature.shp"
+	# Spatial weights files:
+	swm_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_spatweight.swm"
+	swm_table = geo_path + city_name + state_abbr + "_" + str(decade) + "_swmTab.dbf"
+	# Amory's formatted EDs dbf
+	fe = geo_path + city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
+	fe_file = city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
+
+	print "creating the swm"
+	# Process: Feature Class to Feature Class
+	ftc_mapping = """OBJECTID \"OBJECTID\" true true false 10 Long 0 10 ,First,#,%s,OBJECTID,-1,-1;
+		ed \"ed\" true true false 19 Double 0 0 ,First,#,%s,ed,-1,-1;
+		Shape_Leng \"Shape_Leng\" true true false 19 Double 0 0 ,First,#,%s,Shape_Leng,-1,-1;
+		Shape_Area \"Shape_Area\" true true false 19 Double 0 0 ,First,#,%s,Shape_Area,-1,-1;
+		ED_int \"ED_int\" true true false 5 Long 0 5 ,First,#,%s,ED_int,-1,-1;
+		Ed_str \"Ed_str\" true true false 5 Text 0 0 ,First,#,%s,Ed_str,-1,-1""" % (vm, vm, vm, vm, vm, vm)
+	arcpy.FeatureClassToFeatureClass_conversion(in_features=vm, 
+		out_path=geo_path, 
+		out_name=fc, 
+		field_mapping=ftc_mapping)
+
+		#Calculate some fields
+
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Shape_Leng", 
+		expression="!SHAPE.LENGTH!",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Shape_Area", 
+		expression="!SHAPE.AREA!",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="ED_int", 
+		expression="int(!ed!)",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Ed_str", 
+		expression="str(int(!ed!))",
+		expression_type="PYTHON_9.3")
+
+	# Process: Generate Spatial Weights Matrix
+	arcpy.GenerateSpatialWeightsMatrix_stats(Input_Feature_Class=geo_path+fc, 
+		Unique_ID_Field="ED_int", 
+		Output_Spatial_Weights_Matrix_File=swm_file, 
+		Conceptualization_of_Spatial_Relationships="CONTIGUITY_EDGES_CORNERS", 
+		Distance_Method="EUCLIDEAN", 
+		Exponent=1,  
+		Number_of_Neighbors=0, 
+		Row_Standardization="NO_STANDARDIZATION")
+
+	# Process: Convert Spatial Weights Matrix to Table
+	arcpy.ConvertSpatialWeightsMatrixtoTable_stats(Input_Spatial_Weights_Matrix_File=swm_file, 
+		Output_Table=swm_table)
+
+	# Do the thing to create the lists for adjacent EDs (inclusive of the ED)
+
+	field_names = [x.name for x in arcpy.ListFields(swm_table)]
+	cursor = arcpy.da.SearchCursor(swm_table, field_names)
+	silly_dict = {}
+
+	for row in cursor :
+		Dict_append_unique(silly_dict,row[2],row[3])
+		Dict_append_unique(silly_dict,row[2],row[2])
+
+	#Remove ED = 0 (unknown EDs)
+	silly_dict = {k:[i for i in v if v != 0] for k,v in silly_dict.items() if k != 0}
+
+	#Formatted ED's from Amory's weights matrix formating script
+	if os.path.isfile(fe):
+		os.remove(fe)	
+
+	arcpy.CreateTable_management(out_path=geo_path, 
+		out_name=fe_file)
+
+	arcpy.AddField_management(in_table=fe, 
+		field_name="ed", 
+		field_type="SHORT")
+	arcpy.AddField_management(in_table=fe, 
+		field_name="contig_ed", 
+		field_type="TEXT")
+
+	rows = arcpy.InsertCursor(fe)
+
+	for k, v in silly_dict.items():
+		row = rows.newRow()
+		row.setValue("ed",k)
+		v = [str(x) for x in v]
+		row.setValue("contig_ed",";".join(v))
+		rows.insertRow(row)
+
+	del row
+	del rows
 
 ##
 ## Function definitions

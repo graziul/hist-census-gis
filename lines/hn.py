@@ -1,60 +1,496 @@
+#
+# Name: hn.py 
+#
+# Contents: Functions primarily associated with house numbers
+#
+
 from operator import itemgetter
 from itertools import groupby
 from blocknum.blocknum import *
 import math
 
+
 # overwrite output
 arcpy.env.overwriteOutput=True
 
-# Function to load large Stata files
-def load_large_dta(fname):
+# Amory's code for fixing duplicate address ranges
+def fix_dup_address_ranges(shp, hn_ranges, debug_flag=False):
+	# Set range names
+	LFROMADD, LTOADD, RFROMADD, RTOADD = hn_ranges
+	# Set OBJECTID (grid_id is FID+1)
+	OBJECTID = "grid_id" 
+	# Calculate starting and ending coordinates and length for each line segment
+	arcpy.AddGeometryAttributes_management(shp, "LENGTH_GEODESIC;LINE_START_MID_END")
 
-	reader = pd.read_stata(fname, iterator=True)
-	df = pd.DataFrame()
+	data = []
 
+	fields = arcpy.ListFields(shp)
+	field_names = [field.name for field in fields]
+
+	for row in arcpy.SearchCursor(shp):
+		data.append([row.getValue(field.name) for field in fields])
+
+	df = pd.DataFrame(data, columns=field_names)
+
+	grouped = df.groupby(["FULLNAME",LFROMADD,LTOADD,RFROMADD,RTOADD])
+	
+	df["IN_FID"] = grouped.grouper.group_info[0]
+
+	#There is no simple way to assign _n of each group to a variable in the dataframe
+	# so use Chris Graziul's dict workaround.
+	foo = {}
+	#create dict: keys: group IDs ; values: number of items in group
+	for g, d in grouped:
+		foo[g] = d[OBJECTID].count()
+	df['size'] = df.apply(lambda x : foo[x["FULLNAME"],x[LFROMADD],x[LTOADD],x[RFROMADD],x[RTOADD]], axis=1)
+
+	df = df[[OBJECTID,LFROMADD,LTOADD,RFROMADD,RTOADD,"IN_FID","LENGTH_GEO","size","START_X","END_X","START_Y","END_Y"]]
+
+	addresses = open('new_addresses.csv', 'wt') #this is deprecated, although topo errors are still output here.
+	addresses.write("fid,l_f_add,l_t_add,r_f_add,r_t_add,short_segment\n")
+
+	df = df.sort_values('IN_FID')
+
+	for col in df:
+		df[col] = df[col].astype(str)
+	DList = df.values.tolist()
+
+	TopoErrors = []
+
+	ind = 0
+
+	#master list for corrected data
+	Data = []
+
+	#input data should be in format :
+	#fid;l_f_add;l_t_add;r_f_add;r_t_add;in_fid;new_length;num_identical;start_x;end_x;start_y;end_y
+
+	appInd = 0
+
+	while ind < len(DList):
+		if(appInd != ind):
+			print("len of Data: %sind: %s" % (appInd,ind))
+		feat_seq = DList[ind][5] # actually in_fid, as feat_seq was unreliable.
+		feat_num = int(DList[ind][7]) # number of features
+		feat_list = DList[ind : ind+feat_num] #list of features that comprised the original feature
+		if feat_num > 1:
+			##find beginning segment##
+			start_segment = False
+			i=0
+			topology_error = False
+			while start_segment == False and i<feat_num:
+				start_segment = True
+				start = (DList[ind+i][8]+" "+DList[ind+i][10]).strip()
+				for feat in feat_list:
+					end = (feat[9]+" "+feat[11]).strip()
+					if end == start:
+						start_segment = False
+						i= i +1
+						#print "found a connexion. i is now %d",i
+						break
+			if start_segment==False : #could not find a start segment
+				#print "PANIC"
+				#probably topology or parsing error; or we are dealing with a circular street segment
+				#pretend that the first segment in the input order is the start segment
+				i=0
+			##put feat list in order of street direction##
+			o_feat_list = []
+			o_feat_list.append(DList[ind+i])
+			order_num = 1
+			end = (o_feat_list[0][9]+" "+o_feat_list[0][11]).strip()
+			feat_length = float(o_feat_list[0][6])
+			while order_num < feat_num:
+				for j,feat in enumerate(feat_list):
+					start = (feat[8]+" "+feat[10]).strip()
+					if start == end:
+						end = (feat[9]+" "+feat[11]).strip()
+						order_num= order_num + 1
+						feat_length = feat_length + float(feat[6])
+						o_feat_list.append(feat)
+						break
+					if j==feat_num-1:
+	#					print ("topological error (there is a gap)~~~~~~~~~~~~~~!!!!!!!!!!!!!!~~~~~~~~~~~~~~")
+						TopoErrors.append(DList[ind+order_num])
+						topology_error = True
+						order_num= order_num + 1
+			if topology_error==False:
+				try:
+					LFAdd = int(o_feat_list[0][1])
+				except ValueError:
+					LFAdd = 0
+				try:
+					LTAdd = int(o_feat_list[0][2])
+				except ValueError:
+					LTAdd = 0
+				try:
+					RFAdd = int(o_feat_list[0][3])
+				except ValueError:
+					RFAdd = 0
+				try:
+					RTAdd = int(o_feat_list[0][4])
+				except ValueError:
+					RTAdd = 0
+				if debug_flag:
+					addresses.write("feat_seq: "+str(feat_seq)+", name: "+o_feat_list[0][5]+", num segments: "+str(feat_num)+", add range: "+str(LFAdd)+"-"+str(LTAdd)+" "+str(RFAdd)+"-"+str(RTAdd)+"\n")
+
+				RRange = (RTAdd - RFAdd)
+				LRange = (LTAdd - LFAdd)
+				ORange = RRange
+				OLange = LRange
+				RDir, LDir = 0,0 #Dir: direction addresses are going in.
+
+				final_feat_list = []
+				for feat in o_feat_list:
+					if round(abs((float(feat[6])/feat_length)*LRange)) < 2 and LRange!= 0 and round(abs((float(feat[6])/feat_length)*RRange)) < 2 and RRange!= 0:
+						#if feat is too short to contain even a single address (on either side) in its range...
+						feat[1]=feat[2]=feat[3]=feat[4]=0
+						feat_num = feat_num - 1
+						feat_length = feat_length - float(feat[6])
+						addresses.write(str(feat[0])+","+str(feat[1])+","+str(feat[2])+","+str(feat[3])+","+str(feat[4])+",1")
+						if debug_flag:
+							addresses.write(" length is "+feat[6]+"/"+str(feat_length)+" which WAS too short\n")
+						else:
+							addresses.write("\n")
+					else:
+						final_feat_list.append(feat)
+
+				o_feat_list = final_feat_list
+
+				ShortRange = False
+				if RRange!=0:
+					RDir = RRange/abs(RRange)
+				if LRange!=0:
+					LDir = LRange/abs(LRange)
+				if abs(RRange)>2*feat_num : #if address range is NOT too small in comparison to number of segments
+					RRange -= 2*(feat_num-1)*RDir #account for the hidden extra 2 address range each time we change segments
+				else:
+					ShortRange = True
+					if debug_flag:
+						addresses.write("WOAH SUPER SHORT ADDRESS RANGE / LOTS OF SEGMENTS!!!\n")
+				if abs(LRange)>2*feat_num:
+					LRange -= 2*(feat_num-1)*LDir
+				else:
+					ShortRange = True
+					if debug_flag:
+						addresses.write("WOAH SUPER SHORT ADDRESS RANGE / LOTS OF SEGMENTS!!!\n")
+				assignedLength = 0
+
+				for j, feat in enumerate(o_feat_list):
+					segmentLength = float(feat[6])
+					assignedLength+=segmentLength
+					tooShort = False
+					if debug_flag:
+						addresses.write(str(int(round(((segmentLength/feat_length)*LRange)/2)*2))+" is more than 2. RRange is "+str(RRange)+"\n")
+					if j == 0:
+						feat[1] = LFAdd
+						feat[3] = RFAdd
+					else:
+						feat[1] = int(o_feat_list[j-1][2])+2*LDir
+						feat[3] = int(o_feat_list[j-1][4])+2*RDir
+	#				print "left range",round(((segmentLength/feat_length)*LRange)/2)*2
+					if j == feat_num-1:
+						feat[2] = LTAdd
+						feat[4] = RTAdd
+					else:
+						feat[2] = feat[1] + int(round(((segmentLength/feat_length)*LRange)/2)*2)
+						feat[4] = feat[3] + int(round(((segmentLength/feat_length)*RRange)/2)*2)
+						if feat[2] > LFAdd + int(round(((assignedLength/feat_length)*OLange)/2)*2) and LDir>0 or LDir<0 and feat[2] < LFAdd + int(round(((assignedLength/feat_length)*OLange)/2)*2):
+							feat[2] = LFAdd + int(round(((assignedLength/feat_length)*OLange)/2)*2)
+							if debug_flag:
+								addresses.write("HAD TO ADJUST on LEFT\n")
+						if feat[4] > RFAdd + int(round(((assignedLength/feat_length)*ORange)/2)*2) and RDir>0 or RDir<0 and feat[4] < RFAdd + int(round(((assignedLength/feat_length)*ORange)/2)*2):
+							if debug_flag:
+								addresses.write("HAD TO ADJUST on RIGHT\n")
+							feat[4] = RFAdd + int(round(((assignedLength/feat_length)*ORange)/2)*2)
+					if RRange == 0:
+						feat[3] = feat[4] = RFAdd
+					if LRange == 0:
+						feat[1] = feat[2] = LFAdd
+
+					if debug_flag:
+						if LDir > 0 and (feat[1] > LTAdd or feat[2] > LTAdd) or LDir < 0 and (feat[1] < LTAdd or feat[2] < LTAdd) or RDir > 0 and (feat[3] > RTAdd or feat[4] > RTAdd) or RDir < 0 and (feat[3] < RTAdd or feat[4] < RTAdd):
+							addresses.write("THIS SHOULD NOT HAPPEN!\n")
+						addresses.write(str(feat[0])+","+str(feat[1])+","+str(feat[2])+","+str(feat[3])+","+str(feat[4])+" length is "+feat[6]+"/"+str(feat_length)+" which was NOT too short\n")
+					else:
+						#addresses.write(str(feat[0])+","+str(feat[1])+","+str(feat[2])+","+str(feat[3])+","+str(feat[4])+"\n")
+						Data.append(feat)
+						appInd =appInd+1
+
+			else : #if topo error
+				for feat in feat_list:
+					Data.append(feat) #add just the fid of all segments to Data if topo error
+					appInd =appInd+1
+
+		else : #if feature was not split
+			feat = DList[ind]
+			#addresses.write(str(feat[0])+","+str(feat[1])+","+str(feat[2])+","+str(feat[3])+","+str(feat[4])+"\n")
+			Data.append(feat)
+			appInd =appInd+1
+
+		ind+=feat_num
+
+	Data.sort(key=itemgetter(0)) #sort both by OBJECTID (both are text so the sorting is weird but consistently so!)
+	newShp = os.path.splitext(shp)[0]+"2.shp"
+	#have to create a new FID field because Arc won't let you sort on fields of type Object ID
+	arcpy.AddField_management(in_table = shp, field_name="FID_str", field_type="TEXT", field_precision="", field_scale="", field_length="", field_alias="",
+		field_is_nullable="NULLABLE", field_is_required="NON_REQUIRED", field_domain="")
+	arcpy.CalculateField_management(in_table = shp, field="FID_str", expression="!"+OBJECTID+"!", expression_type="PYTHON_9.3", code_block="")
+	arcpy.Sort_management(shp, newShp, [["FID_str", "ASCENDING"]])
+
+	with arcpy.da.UpdateCursor(newShp,[LFROMADD,LTOADD,RFROMADD,RTOADD]) as cursor:
+		for i,row in enumerate(cursor):
+			if Data[i][1] == 0:
+				row[0] = ''
+			else:
+				row[0] = Data[i][1]
+			if Data[i][2] == 0:
+				row[1] = ''
+			else:
+				row[1] = Data[i][2]
+			if Data[i][3] == 0:
+				row[2] = ''
+			else:
+				row[2] = Data[i][3]
+			if Data[i][4] == 0:
+				row [3] = ''
+			else:
+				row[3] = Data[i][4]
+			cursor.updateRow(row)
+	addresses.write("Topology Errors. Must be fixed and re-run script or re-address manually.\n")
+
+	for err in TopoErrors:
+		addresses.write(str(err[0])+"\n")
+	addresses.close()
+
+	return "\nFixed duplicate address ranges"
+
+# Adds new streets and ranges based on Steve Morse webpage that may or may not exist (R script)
+def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
+	r_path, script_path, file_path = paths
+	print("Adding ranges to new grid\n")
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Add Ranges to New Grid.R',file_path,city_name,file_name,state_abbr], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	if t != 0:
+		print("Error adding ranges to new grid for "+city_name+"\n")
+	else:
+		print("OK!\n")
+
+# Renumber grid using microdata
+def renumber_grid(city_name, state_abbr, paths, decade, df=None, geocode=False):
+
+	#Paths
+	_, _, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/"
+
+	#Files
+	microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAutoDirBlockFixed.dta"
+	stgrid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	out_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_renumbered.shp"
+	block_shp_file = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
+	block_dbf_file = block_shp_file.replace(".shp",".dbf")
+	addresses = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
+	points = geo_path + city_name + "_" + str(decade) + "_Points_updated.shp"
+	pblk_file = block_shp_file #Note: This is the manually edited block file
+	pblk_grid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_Pblk_Grid_SJ2.shp"
+	add_locator = geo_path + city_name + "_addlocOld" 
+
+	# Load
+	df_grid = dbf2DF(stgrid_file.replace(".shp",".dbf"),upper=False)
+	df_block = dbf2DF(block_dbf_file,upper=False)
+	if df is None:
+		df_micro = load_large_dta(microdata_file)
+	else:
+		df_micro = df
+
+	if 'st_best_guess' in df_micro.columns.values:
+		micro_street_var = 'st_best_guess'
+	else:
+		micro_street_var = 'overall_match'
 	try:
-		chunk = reader.get_chunk(100*1000)
-		while len(chunk) > 0:
-			df = df.append(chunk, ignore_index=True)
-			chunk = reader.get_chunk(100*1000)
-			print '.',
-			sys.stdout.flush()
-	except (StopIteration, KeyboardInterrupt):
-		pass
-
-	print '\nloaded {} rows\n'.format(len(df))
-
-	return df
-
-# Function to reads in DBF files and return Pandas DF
-def dbf2DF(dbfile, upper=False): 
-	if dbfile.split('.')[1] == 'shp':
-		dbfile = dbfile.replace('.shp','.dbf')
-	db = ps.open(dbfile) #Pysal to open DBF
-	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-	#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-	if upper == True: #Make columns uppercase if wanted 
-		pandasDF.columns = map(str.upper, db.header) 
-	db.close() 
-	return pandasDF
-
-# Function to save Pandas DF as DBF file 
-def save_dbf(df, shapefile_name):
-	dir_temp = '/'.join(shapefile_name.split('/')[:-1])
-	file_temp = shapefile_name.split('/')[-1]
-	csv_file = dir_temp + "/temp_for_dbf.csv"
-	df.to_csv(csv_file,index=False)
-	try:
-		os.remove(dir_temp + "/schema.ini")
+		block = 'block'
+		vars_of_interest = ['ed','hn',micro_street_var,block]
+		df_micro = df_micro[vars_of_interest]
 	except:
-		pass
-	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=dir_temp, out_name="temp_for_shp.dbf")
-	os.remove(shapefile_name.replace('.shp','.dbf'))
-	os.remove(csv_file)
-	os.rename(dir_temp+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-	os.remove(dir_temp+"/temp_for_shp.dbf.xml")
-	os.remove(dir_temp+"/temp_for_shp.cpg")
+		block = 'block_old'
+		vars_of_interest = ['ed','hn',micro_street_var,block]
+		df_micro = df_micro[vars_of_interest]
+	df_micro = df_micro.dropna(how='any')
+	df_micro['hn'] = df_micro['hn'].astype(int)
+
+	#Create ED-block variable (standardized against block map)
+	#Turn ED=0 into blank 
+	df_micro['ed1'] = df_micro['ed'].astype(str).replace('0','')
+
+	df_micro['block1'] = df_micro[block].str.replace(' ','-')
+	df_micro['block1'] = df_micro['block1'].str.replace('and','-')
+	df_micro['block1'] = df_micro['block1'].str.replace('.','-')
+	df_micro['block1'] = df_micro['block1'].replace('-+','-',regex=True)
+
+	df_micro['edblock'] = df_micro['ed1'] + '-' + df_micro['block1']
+	df_micro['edblock'] = df_micro['edblock'].replace('^-|-$','',regex=True)
+	df_micro.loc[df_micro[block]=='','edblock'] = ''
+	df_micro.loc[df_micro['ed']==0,'edblock'] = ''
+
+	def get_cray_z_scores(arr) :
+		debug = False
+		if not None in arr :
+			inc_arr = np.unique(arr) #returns sorted array of unique values
+			if(len(inc_arr)>=2) :
+				if debug : print("uniques: "+str(inc_arr))
+				median = np.median(inc_arr,axis=0)
+				diff = np.abs(inc_arr - median)
+				med_abs_deviation = np.median(diff)
+				mean_abs_deviation = np.mean(diff)
+				meanified_z_score = diff / (1.253314 * mean_abs_deviation)
+
+				if med_abs_deviation == 0 :
+						modified_z_score = diff / (1.253314 * mean_abs_deviation)
+				else :
+						modified_z_score = diff / (1.4826 * med_abs_deviation)
+				if debug : print ("MedAD Zs: "+str(modified_z_score))
+				if debug : print("MeanAD Zs: "+str(meanified_z_score))
+				if debug : print ("Results: "+str(meanified_z_score * modified_z_score > 16))
+
+				return dict(zip(inc_arr, meanified_z_score * modified_z_score > 16))    
+		try:
+			return {inc_arr[0]:False}
+		except:
+			pass
+
+	# Get house number ranges for block-street combinations from microdata
+	df_micro_byblkst = df_micro.groupby(['edblock',micro_street_var])
+	blkst_hn_dict = {}
+	bad_blkst = []
+	for group, group_data in df_micro_byblkst:
+		try:
+			cray_dict = get_cray_z_scores(group_data['hn'])
+			hn_range = [k for k,v in cray_dict.items() if not v]
+			blkst_hn_dict[group] = {'min_hn':min(hn_range), 'max_hn':max(hn_range)}
+		except:
+			bad_blkst.append(group)
+
+	# Get dictionaries {pblk_id:edblock} and {pblk_id:ed} 
+	bn_var = 'am_bn'
+	temp = df_block.loc[df_block[bn_var]!='',[bn_var,'ed','pblk_id']]
+	pblk_edblock_dict = temp.set_index('pblk_id')[bn_var].to_dict()
+	pblk_ed_dict = temp.set_index('pblk_id')['ed'].to_dict()
+
+	# Intersect block map and stgrid (needs to be manual block map because dissolved pblks)
+	field_mapSJ = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
+	ed "ed" true true false 10 Long 0 10 ,First,#,%s,ed,-1,-1;
+	FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
+	grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (block_shp_file, block_shp_file, stgrid_file, stgrid_file)
+	arcpy.Intersect_analysis (in_features=[block_shp_file, stgrid_file], 
+		out_feature_class=pblk_grid_file, 
+		join_attributes="ALL")
+	# Used spatial join before, but results in fewer cases (some streets not on block boundaries?)
+	#arcpy.SpatialJoin_analysis(target_features=block_shp_file, join_features=stgrid_file, out_feature_class=pblk_grid_file, 
+	#	join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
+	#	match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
+	df_pblk_grid = dbf2DF(pblk_grid_file.replace(".shp",".dbf"),upper=False)
+
+	# Create dictionary linking grid_id to pblk_id
+	grid_pblk_dict = {}
+	grouped_grid = df_pblk_grid.groupby(['grid_id'])
+	for grid_id, pblk_df in grouped_grid:
+		grid_pblk_dict[grid_id] = pblk_df['pblk_id'].tolist()
+
+	# Create dictionary linking grid_id to fullname
+	# OLd WORKING: grid_fullname_dict = df_pblk_grid.set_index('grid_id').to_dict()['FULLNAME']
+	grid_fullname_dict = df_grid.set_index('grid_id').to_dict()['FULLNAME']
+
+	# Create dictionary linking grid_id to list of edblocks it intersects
+	grid_edblock_dict = {grid_id:[pblk_edblock_dict[int(pblk_id)] for pblk_id in pblk_id_list] for grid_id, pblk_id_list in grid_pblk_dict.items()}
+
+	# Create dictionary linking grid_id to min/max HN and ED
+	grid_hn_dict = {}
+	for grid_id, edblock_list in grid_edblock_dict.items():
+		try:
+			min_hn = max([blkst_hn_dict[i,grid_fullname_dict[grid_id]]['min_hn'] for i in edblock_list])
+			max_hn = min([blkst_hn_dict[i,grid_fullname_dict[grid_id]]['max_hn'] for i in edblock_list])
+			eds = [i.split("-")[0] for i in edblock_list] 
+			grid_hn_dict[grid_id] = {'min_hn':min_hn, 'max_hn':max_hn, 'ed':max(set(eds), key=eds.count)}
+		except:
+			pass
+
+	#Create copy of st_grid to work on 
+	arcpy.CopyFeatures_management(stgrid_file,out_file)
+
+	#Add ED field
+	arcpy.AddField_management(out_file, "ed", "TEXT", 5, "", "","", "", "")
+
+	#Delete contemporary ranges and recreate HN range attributes
+	arcpy.DeleteField_management(out_file, ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD'])
+	arcpy.AddField_management(out_file, "MIN_LFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_LTOADD", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MIN_RFROMA", "TEXT", 5, "", "","", "", "")
+	arcpy.AddField_management(out_file, "MAX_RTOADD", "TEXT", 5, "", "","", "", "")
+
+	#Add HN ranges and ED based on grid_id
+	cursor = arcpy.UpdateCursor(out_file)
+	for row in cursor:
+		grid_id = row.getValue('grid_id')
+		st_name = row.getValue('FULLNAME')
+		try:
+			hn_range = range(grid_hn_dict[grid_id]['min_hn'],grid_hn_dict[grid_id]['max_hn']+1)
+			evensList = [x for x in hn_range if x % 2 == 0]
+			oddsList = [x for x in hn_range if x % 2 != 0]
+			row.setValue('MIN_LFROMA', min(evensList))
+			row.setValue('MAX_LTOADD', max(evensList))
+			row.setValue('MIN_RFROMA', min(oddsList))
+			row.setValue('MAX_RTOADD', max(oddsList))
+			row.setValue('ed', int(grid_hn_dict[grid_id]['ed']))
+		except:
+			pass
+		cursor.updateRow(row)
+	del(cursor)
+
+	#Make sure address locator doesn't already exist - if it does, delete it
+	add_loc_files = [geo_path+'/'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addlocOld.")]
+	for f in add_loc_files:
+		if os.path.isfile(f):
+			os.remove(f)
+
+	if geocode:
+
+		#Recreate Address Locator
+		field_map="'Feature ID' FID VISIBLE NONE; \
+		'*From Left' MIN_LFROMA VISIBLE NONE; \
+		'*To Left' MAX_LTOADD VISIBLE NONE; \
+		'*From Right' MIN_RFROMA VISIBLE NONE; \
+		'*To Right' MAX_RTOADD VISIBLE NONE; \
+		'Prefix Direction' <None> VISIBLE NONE; \
+		'Prefix Type' <None> VISIBLE NONE; \
+		'*Street Name' FULLNAME VISIBLE NONE; \
+		'Suffix Type' '' VISIBLE NONE; \
+		'Suffix Direction' <None> VISIBLE NONE; \
+		'Left City or Place' CITY VISIBLE NONE; \
+		'Right City or Place' CITY VISIBLE NONE; \
+		'Left ZIP Code' <None> VISIBLE NONE; \
+		'Right ZIP Code' <None> VISIBLE NONE; \
+		'Left State' STATE VISIBLE NONE; \
+		'Right State' STATE VISIBLE NONE; \
+		'Left Street ID' <None> VISIBLE NONE; \
+		'Right Street ID' <None> VISIBLE NONE; \
+		'Display X' <None> VISIBLE NONE; \
+		'Display Y' <None> VISIBLE NONE; \
+		'Min X value for extent' <None> VISIBLE NONE; \
+		'Max X value for extent' <None> VISIBLE NONE; \
+		'Min Y value for extent' <None> VISIBLE NONE; \
+		'Max Y value for extent' <None> VISIBLE NONE; \
+		'Left parity' <None> VISIBLE NONE; \
+		'Right parity' <None> VISIBLE NONE; \
+		'Left Additional Field' <None> VISIBLE NONE; \
+		'Right Additional Field' <None> VISIBLE NONE; \
+		'Altname JoinID' <None> VISIBLE NONE"
+		address_fields= "Street address; City city; State state"
+		arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", 
+			in_reference_data=out_file, 
+			in_field_map=field_map, 
+			out_address_locator=add_locator, 
+			config_keyword="")
+
+		#Geocode Points
+		arcpy.GeocodeAddresses_geocoding(addresses, add_locator, address_fields, points)
 
 # Fix blanks
 def fix_blanks(name, group, hn_ranges, blanks_dict):
@@ -647,24 +1083,3 @@ def fill_blank_segs(dir_path, city_name, state_abbr, hn_ranges, old_grid_file, g
 	df[min_l], df[max_l], df[min_r], df[max_r] = zip(*df[['grid_id']+hn_ranges].apply(lambda x: fill_in_blanks(x), axis=1))
 
 	save_dbf(df, grid_file)
-
-#### Not used
-
-''' (only produces a few streets)
-	def check_for_extra_zero(hn_list):
-		new_hn_list = []
-		change_dict = {}
-		for hn in hn_list:
-			if hn/10 in hn_list:
-				list_without_hn = [i for i in hn_list if i != hn]
-				avg_diff = np.mean([hn-i for i in list_without_hn])
-				if avg_diff > 500:
-					change_dict[st, ed] = {hn:hn/10}
-		return change_dict
-
-	hn_change_dict = {}
-	for st_ed, group in df_micro.groupby([micro_street_var,'ed']):
-		st, ed = st_ed
-		micro_hns = group['hn'].tolist()
-		hn_change_dict.update(check_for_extra_zero(micro_hns))
-'''

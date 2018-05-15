@@ -22,6 +22,82 @@ import random
 # All Python to overwrite any ESRI output files (e.g., shapefiles)
 arcpy.env.overwriteOutput=True
 
+# Performs initial geocode on contemporary grid
+def initial_geocode(geo_path, city_name, state_abbr, hn_ranges, decade):
+
+	min_l, max_l, min_r, max_r = hn_ranges
+
+	# Files
+	add_locator = geo_path + city_name + "_addloc_" + str(decade)
+	addresses = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
+	address_fields="Street address; City city; State state"
+	points = geo_path + city_name + "_" + str(decade) + "_Points.shp"
+	reference_data = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp 'Primary Table'"
+
+	# Fix addresses for use in geocoding
+	arcpy.CreateFileGDB_management(geo_path,"temp.gdb")
+	df_addresses_csv = pd.read_csv(addresses)
+	df_addresses_dbf = df_addresses_csv.replace(np.nan,'',regex=True)
+	x = np.array(np.rec.fromrecords(df_addresses_dbf.values))
+	names = df_addresses_dbf.dtypes.index.tolist()
+	x.dtype.names = tuple(names)
+	arcpy.da.NumPyArrayToTable(x,geo_path + "temp.gdb/" + city_name + "_" + str(decade) + "_Addresses")
+	arcpy.env.workspace = geo_path + "temp.gdb"
+
+	field_map="'Feature ID' FID VISIBLE NONE; \
+	'*From Left' %s VISIBLE NONE; \
+	'*To Left' %s  VISIBLE NONE; \
+	'*From Right' %s  VISIBLE NONE; \
+	'*To Right' %s  VISIBLE NONE; \
+	'Prefix Direction' <None> VISIBLE NONE; \
+	'Prefix Type' <None> VISIBLE NONE; \
+	'*Street Name' FULLNAME VISIBLE NONE; \
+	'Suffix Type' '' VISIBLE NONE; \
+	'Suffix Direction' <None> VISIBLE NONE; \
+	'Left City or Place' CITY VISIBLE NONE; \
+	'Right City or Place' CITY VISIBLE NONE; \
+	'Left ZIP Code' <None> VISIBLE NONE; \
+	'Right ZIP Code' <None> VISIBLE NONE; \
+	'Left State' STATE VISIBLE NONE; \
+	'Right State' STATE VISIBLE NONE; \
+	'Left Street ID' <None> VISIBLE NONE; \
+	'Right Street ID' <None> VISIBLE NONE; \
+	'Display X' <None> VISIBLE NONE; \
+	'Display Y' <None> VISIBLE NONE; \
+	'Min X value for extent' <None> VISIBLE NONE; \
+	'Max X value for extent' <None> VISIBLE NONE; \
+	'Min Y value for extent' <None> VISIBLE NONE; \
+	'Max Y value for extent' <None> VISIBLE NONE; \
+	'Left parity' <None> VISIBLE NONE; \
+	'Right parity' <None> VISIBLE NONE; \
+	'Left Additional Field' <None> VISIBLE NONE; \
+	'Right Additional Field' <None> VISIBLE NONE; \
+	'Altname JoinID' <None> VISIBLE NONE" % (min_l, max_l, min_r, max_r)
+
+	#Make sure address locator doesn't already exist - if it does, delete it
+	add_loc_files = [geo_path+'/'+x for x in os.listdir(geo_path) if x.startswith(city_name+"_addloc")]
+	for f in add_loc_files:
+			 if os.path.isfile(f):
+				 os.remove(f)
+
+	print("The script is executing the 'CreateAddressLocator' tool")
+	#Create Address Locator
+	arcpy.CreateAddressLocator_geocoding(in_address_locator_style="US Address - Dual Ranges", 
+		in_reference_data=reference_data, 
+		in_field_map=field_map, 
+		out_address_locator=add_locator, 
+		config_keyword="")
+	print("The script has finished executing the 'CreateAddressLocator' tool and has begun executing the 'GeocodeAddress' tool")
+	#Geocode Points
+	arcpy.GeocodeAddresses_geocoding(in_table=city_name + "_" + str(decade) + "_Addresses", 
+		address_locator=add_locator, 
+		in_address_fields=address_fields, 
+		out_feature_class=points)
+	#Delete temporary.gdb
+	arcpy.Delete_management(geo_path + "temp.gdb/" + city_name + "_" + str(decade) + "_Addresses")
+	arcpy.Delete_management(geo_path + "temp.gdb")
+	print("The script has finished executing the 'GeocodeAddress' tool and has begun executing the 'SpatialJoin' tool")
+
 # Version of Dict_append that only accepts unique v(alues) for each k(ey)
 def Dict_append_unique(Dict, k, v) :
 	if not k in Dict :
@@ -46,107 +122,6 @@ def is_touch(ED, neighbor):
 			return 1
 		else:
 			return 0
-
-# Get adjacent EDs
-def get_adjacent_eds(geo_path, city_name, state_abbr, decade):
-	
-	# Files
-
-	# "vm" is the verified map (e.g., ED or block map)
-	vm = geo_path + city_name + "_" + str(decade) + "_ED.shp"
-	# Feature Class to Feature Class file
-	fc = city_name + state_abbr + "_" + str(decade) + "_ED_Feature.shp"
-	# Spatial weights files:
-	swm_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_spatweight.swm"
-	swm_table = geo_path + city_name + state_abbr + "_" + str(decade) + "_swmTab.dbf"
-	# Amory's formatted EDs dbf
-	fe = geo_path + city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
-	fe_file = city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
-
-	print "creating the swm"
-	# Process: Feature Class to Feature Class
-	ftc_mapping = """OBJECTID \"OBJECTID\" true true false 10 Long 0 10 ,First,#,%s,OBJECTID,-1,-1;
-		ed \"ed\" true true false 19 Double 0 0 ,First,#,%s,ed,-1,-1;
-		Shape_Leng \"Shape_Leng\" true true false 19 Double 0 0 ,First,#,%s,Shape_Leng,-1,-1;
-		Shape_Area \"Shape_Area\" true true false 19 Double 0 0 ,First,#,%s,Shape_Area,-1,-1;
-		ED_int \"ED_int\" true true false 5 Long 0 5 ,First,#,%s,ED_int,-1,-1;
-		Ed_str \"Ed_str\" true true false 5 Text 0 0 ,First,#,%s,Ed_str,-1,-1""" % (vm, vm, vm, vm, vm, vm)
-	arcpy.FeatureClassToFeatureClass_conversion(in_features=vm, 
-		out_path=geo_path, 
-		out_name=fc, 
-		field_mapping=ftc_mapping)
-
-		#Calculate some fields
-
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="Shape_Leng", 
-		expression="!SHAPE.LENGTH!",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="Shape_Area", 
-		expression="!SHAPE.AREA!",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="ED_int", 
-		expression="int(!ed!)",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="Ed_str", 
-		expression="str(int(!ed!))",
-		expression_type="PYTHON_9.3")
-
-	# Process: Generate Spatial Weights Matrix
-	arcpy.GenerateSpatialWeightsMatrix_stats(Input_Feature_Class=geo_path+fc, 
-		Unique_ID_Field="ED_int", 
-		Output_Spatial_Weights_Matrix_File=swm_file, 
-		Conceptualization_of_Spatial_Relationships="CONTIGUITY_EDGES_CORNERS", 
-		Distance_Method="EUCLIDEAN", 
-		Exponent=1,  
-		Number_of_Neighbors=0, 
-		Row_Standardization="NO_STANDARDIZATION")
-
-	# Process: Convert Spatial Weights Matrix to Table
-	arcpy.ConvertSpatialWeightsMatrixtoTable_stats(Input_Spatial_Weights_Matrix_File=swm_file, 
-		Output_Table=swm_table)
-
-	# Do the thing to create the lists for adjacent EDs (inclusive of the ED)
-
-	field_names = [x.name for x in arcpy.ListFields(swm_table)]
-	cursor = arcpy.da.SearchCursor(swm_table, field_names)
-	silly_dict = {}
-
-	for row in cursor :
-		Dict_append_unique(silly_dict,row[2],row[3])
-		Dict_append_unique(silly_dict,row[2],row[2])
-
-	#Remove ED = 0 (unknown EDs)
-	silly_dict = {k:[i for i in v if v != 0] for k,v in silly_dict.items() if k != 0}
-
-	#Formatted ED's from Amory's weights matrix formating script
-	if os.path.isfile(fe):
-		os.remove(fe)	
-
-	arcpy.CreateTable_management(out_path=geo_path, 
-		out_name=fe_file)
-
-	arcpy.AddField_management(in_table=fe, 
-		field_name="ed", 
-		field_type="SHORT")
-	arcpy.AddField_management(in_table=fe, 
-		field_name="contig_ed", 
-		field_type="TEXT")
-
-	rows = arcpy.InsertCursor(fe)
-
-	for k, v in silly_dict.items():
-		row = rows.newRow()
-		row.setValue("ed",k)
-		v = [str(x) for x in v]
-		row.setValue("contig_ed",";".join(v))
-		rows.insertRow(row)
-
-	del row
-	del rows
 
 # Geocode function
 def geocode(geo_path,city_name,add,sg,vm,sg_vm,fl,tl,fr,tr,cal_street,cal_city,cal_state,addfield,al,g_address,g_city,g_state,gr,no_side_offset=True):
