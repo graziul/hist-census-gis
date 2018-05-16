@@ -6,15 +6,7 @@
 
 import geopandas as gpd
 import arcpy
-
-from __future__ import print_function
-import csv
-import xlrd
-from fuzzywuzzy import fuzz
-from blocknum.blocknum import *
 from arcpy import management
-from codecs import open
-import multiprocessing
 
 arcpy.env.overwriteOutput = True
 

@@ -14,25 +14,7 @@
 #   To do list: 1. Identify/flag institutions
 #               2. Fix blank street names (naive)
 
-from __future__ import print_function
-import urllib
-import re
-import os
-import dbf
-import sys
-import time
-import math
-import pickle
-import numpy as np
-import pysal as ps
-import pandas as pd
-import fuzzyset
-import codecs
-#from simpledbf import Dbf5
-from microclean.STstandardize import *
-from microclean.HNclean import *
-
-#Pretty output for easy reading
+# DEPRECATED - Convert to geopandas when able
 def dbf2DF(dbfile, upper=False): #Reads in DBF files and returns Pandas DF
 	db = ps.open(dbfile) #Pysal to open DBF
 	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
@@ -332,7 +314,6 @@ def remove_duplicates(df):
 # Step 2a: Properly format street names and get Steve Morse street-ed information
 #
 
-
 def preclean_street(df, city, state, year, file_path):
 
 	start = time.time()
@@ -409,42 +390,6 @@ def preclean_street(df, city, state, year, file_path):
 	preclean_info = sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
 
 	return df, preclean_info
-
-def load_steve_morse(city, state, year, file_path):
-
-	if city == 'Richmond' and state == 'NY':
-		city = 'Staten Island'
-	#NOTE: This dictionary must be built independently of this script
-	sm_st_ed_dict_file = pickle.load(open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(year), str(year)), 'rb'))
-	sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
-
-	#Flatten dictionary
-	temp = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
-
-	#Capture all Steve Morse streets in one list
-	sm_all_streets = temp.keys()
-
-	#
-	# Build a Steve Morse (sm) ED-to-Street (ed_st) dictionary (dict)
-	#
-
-	sm_ed_st_dict = {}
-	#Initialize a list of street names without an ED in Steve Morse
-	sm_ed_st_dict[''] = []
-	for st, eds in temp.items():
-		#If street name has no associated EDs (i.e. street name not found in Steve Morse) 
-		#then add to dictionary entry for no ED
-		if eds is None:
-			sm_ed_st_dict[''].append(st)
-		else:
-			#For every ED associated with a street name...
-			for ed in eds:
-				#Initalize an empty list if ED has no list of street names yet
-				sm_ed_st_dict[ed] = sm_ed_st_dict.setdefault(ed, [])
-				#Add street name to the list of streets
-				sm_ed_st_dict[ed].append(st)
-
-	return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
 
 #
 # Step 3a: Import street names from street grids  

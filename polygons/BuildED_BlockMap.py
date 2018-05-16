@@ -2,23 +2,9 @@
 
 # File where everything has been edited is EmptyBlockToFillNumbers2.shp for St Louis
 
-import re
 import arcpy
-import pandas as pd
-import pysal as ps
-import os
 
 arcpy.env.overwriteOutput=True
-
-def dbf2DF(dbfile, upper=False): #Reads in DBF files and returns Pandas DF
-    db = ps.open(dbfile) #Pysal to open DBF
-    d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-    #pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-    pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-    if upper == True: #Make columns uppercase if wanted 
-        pandasDF.columns = map(str.upper, db.header) 
-    db.close() 
-    return pandasDF
 
 file_path = "S:\\Projects\\1940Census\\StLouis" 
 city_name = "StLouis"
@@ -31,7 +17,7 @@ temp_shp_file = dir_path + city_name + "_1930_temp.shp"
 dbf_file = dir_path + city_name + "_1930_temp.dbf"
 
 arcpy.CopyFeatures_management(edit_shp_file,temp_shp_file)
-df = dbf2DF(dbf_file,upper=False)
+df = load_shp(temp_shp_file)
 
 #Code to clean up automatic block numbers
 
@@ -53,15 +39,8 @@ df['am_bn'] = df['block1']
 #Add automatic block numbers where there is no manual block number
 df.loc[df['D']==0,'am_bn'] = df['auto_bn1']
 
-# Save as dbf via csv
-csv_file = dir_path + "\\temp_for_dbf.csv"
-df.to_csv(csv_file)
-arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp.dbf")
-os.remove(dbf_file)
-os.remove(csv_file)
-os.rename(dir_path+"\\temp_for_shp.dbf",dbf_file)
-os.remove(dir_path+"\\temp_for_shp.dbf.xml")
-os.remove(dir_path+"\\temp_for_shp.cpg")
+# Save dataframe
+save_shp(df, temp_shp_file)
 
 #Select non-missing block numbers
 arcpy.MakeFeatureLayer_management(temp_shp_file,"edit_lyr")
@@ -91,5 +70,3 @@ arcpy.CopyFeatures_management(temp_shp_file,ed_shp_file)
 arcpy.DeleteFeatures_management(temp_shp_file)
 
 #### Could write dictionary to assign blocks {block:ed} that could then be used to fill in ED
-
-# Next script is FixDirUsingED.py

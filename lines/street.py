@@ -1,57 +1,43 @@
 #
 # Name: street.py 
 #
-# Contents: Functions primarily associated with streets and street names in the grid
+# Contents: Functions primarily associated with the street grid 
 #
 
-# Code to import and "fix up" the street grid (calls find_consecutive_segments)
-def street(geo_path, city_name, state_abbr, hn_ranges, decade):
+def grid_geo_fix(geo_path, city_name, state_abbr, decade, hn_ranges=['LFROMADD','LTOADD','RFROMADD','RTOADD']):
 
-	min_l, max_l, min_r, max_r = hn_ranges
+	"""
+	Code to "fix up" street grid geometry (and duplicate ranges)
 
-	rand_post = str(random.randint(1,100001))
+	Steps involved: 
+		a) Dissolves multi-part street segments
+		b) Splits on intersections
+		c) Calls fix_dup_address_ranges
 
-	# Function to save Pandas DF as DBF file 
-	def save_dbf_st(df, shapefile_name, field_map = None):
-		file_temp = shapefile_name.split('/')[-1]
-		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
-		df.to_csv(csv_file,index=False)
-		try:
-			os.remove(geo_path + "/schema.ini")
-		except:
-			pass
+	Parameters
+	----------
+	geo_path : str
+		Path to GIS files
+	city_name : str
+		City name, no spaces
+	state_abbr : str
+		Two letter state abbreviation, capitalized
+	decade : int
+		Decade of interest (e.g. 1930)
+	hn_ranges : list (Optional)
+		List of string variables naming min/max from/to for house number ranges in street grid
 
-		# Add a specific field mapping for a special case
-		if field_map:
-			file = csv_file
-			field_map = """FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-			CITY "CITY" true true false 30 Text 0 0 ,First,#,%s,CITY,-1,-1;
-			STATE "STATE" true true false 30 Text 0 0 ,First,#,%s,STATE,-1,-1;
-			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
-			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
-			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
-			%s "%s" true true false 10 Text 0 0 ,First,#,%s,%s,-1,-1;
-			grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (file, file, file, 
-				min_l, min_l, file, min_l,
-				max_l, max_l, file, max_l,
-				min_r, min_r, file, min_r,
-				max_r, max_r, file, max_r,				
-				file)
-		else:
-			field_map = None
+	Returns
+	-------
+	[CITY][ST]_[DECADE]_stgrid_edit_Uns2.shp : ESRI shapefile
+		Fixed street grid
+	problem_segments : list
+		List of street segments with multiple names of same length (arises from multi-part segments)
 
-		arcpy.TableToTable_conversion(in_rows=csv_file, 
-			out_path=geo_path, 
-			out_name="temp_for_shp"+rand_post+".dbf",
-			field_mapping=field_map)
-		os.remove(shapefile_name.replace('.shp','.dbf'))
-		os.remove(csv_file)
-		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
-		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
-		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
+	"""
 
-	#Create Paths to be used throughout Process
-	#
+	#Create filenames to be used throughout process
+
 	#NOTE: By defualt we are starting with 1940 cleaned grids then saving them as 19X0 grids!	
 	grid = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit.shp"
 	grid_orig = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
@@ -165,8 +151,30 @@ def street(geo_path, city_name, state_abbr, hn_ranges, decade):
 
 	return problem_segments
 
-# Find consecutive segments in the street grid
 def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
+
+	"""
+	Find consecutive street segments
+
+	Employs a number of methods to identify consecutive line segments composing the same street
+
+	Parameters
+	----------
+	grid_shp : ESRI shapefile
+		Filename for street grid
+	grid_street_var : str
+		City name, no spaces
+	debug_flag : bool (Optional)
+		Flag for debugging 
+
+	Returns
+	-------
+	name_sequence_dict : dictionary
+		??
+	exact_next_dict : dictionary
+		??
+
+	"""
 
 	fields = arcpy.ListFields(grid_shp)
 
@@ -653,8 +661,22 @@ def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 
 	return name_sequence_dict, exact_next_dict
 
-# Returns a list of streets for students to add (R script)
 def analyzing_microdata_and_grid(city_name, state_abbr, paths, decade):
+
+	"""
+	Analyzing microdata and grid (R function)
+
+	Returns a list of streets for students to add 
+
+	Parameters
+	----------
+	city_name : str
+		City name, no spaces
+	state_abbr : str
+		Two letter state abbreviation, capitalized
+
+	"""
+
 	print("Analyzing microdata and grids\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Analyzing Microdata and Grid.R',file_path,city_name,state_abbr, str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
@@ -662,8 +684,35 @@ def analyzing_microdata_and_grid(city_name, state_abbr, paths, decade):
 	else:
 		print("OK!\n") 
 
-# Should be repeat of above
-def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, decade, post=''):
+# Should be repeat of analyzing_microdata_and_grid?? (CHECK)
+def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, decade):
+
+	"""
+	Get street names in microdata but not in street grid
+
+	Compares microdata street names to grid street names, returns names in former but not latter.
+
+	Parameters
+	----------
+	geo_path : str
+		Path to GIS files
+	df_ungeocoded : Pandas dataframe
+		Dataframe including ungeocoded data
+	df_grid : Pandas dataframe
+		Dataframe of street grid attributes
+	city_name : str
+		City name, no spaces
+	state_abbr : str
+		Two letter state abbreviation, capitalized
+	decade : int
+		Decade of interest (e.g. 1930)
+
+	Returns
+	-------
+	Excel file with list of streets for students to search for and (if possible) add to street grid
+
+	"""
+
 	# Get ungeocoded street-ED combinations (and count number of ungeocoded cases)
 	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
 	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
@@ -685,8 +734,39 @@ def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_
 	# Close the Pandas Excel writer and output the Excel file.
 	writer.save()
 
-# Fix street grid names 
-def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro=None, v=7, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+def grid_names_fix(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro=None, v=7, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+
+	"""
+	Fix street grid names 
+
+	Uses Microdata and Steve Morse to 'fix' street grid names. In reality, it harmonizes for consistency.
+
+	Parameters
+	----------
+	city_spaces : str
+		City name, including spaces
+	state_abbr : str
+		Two letter state abbreviation, capitalized
+	micro_street_var : str
+		Name of street variable from microdata (e.g. 'overall_match')
+	grid_street_var : str
+		Name of street variable in grid (e.g. 'FULLNAME')
+	paths : list
+		List of paths to script and file locations
+	decade : int
+		Decade of interest (e.g. 1930)
+	df_micro : Pandas dataframe (Optional)
+		Microdata to use, if you want to specify. Searches for studauto or latest autoclean, otherwise.
+	v : int (Optional)
+		Version of autoclean to use, set to 7 by default.
+	hn_ranges : list (Optional)
+		List of string variables naming min/max from/to for house number ranges in street grid
+
+	Returns
+	-------
+	Uns2 is returned, with old street names saved in a new variable and 'fixed' street names included
+	
+	"""
 
 	city_name = city_spaces.replace(' ','')
 
@@ -748,42 +828,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	# Step 3: Load Steve Morse data 
 	#
 
-	# Function to load Steve Morse dictionary (same as STclean.py)
-	def load_steve_morse(city, state, decade):
-
-		#NOTE: This dictionary must be built independently of this script
-		sm_st_ed_dict_file = pickle.load(open('/'.join(dir_path.split('/')[:-1])+'/sm_st_ed_dict%s.pickle' % (str(decade)), 'rb'))
-		sm_st_ed_dict_nested = sm_st_ed_dict_file[(city, '%s' % (state.lower()))]
-
-		#Flatten dictionary
-		temp = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
-
-		#Capture all Steve Morse streets in one list
-		sm_all_streets = temp.keys()
-
-		#
-		# Build a Steve Morse (sm) ED-to-Street (ed_st) dictionary (dict)
-		#
-
-		sm_ed_st_dict = {}
-		#Initialize a list of street names without an ED in Steve Morse
-		sm_ed_st_dict[''] = []
-		for st, eds in temp.items():
-			#If street name has no associated EDs (i.e. street name not found in Steve Morse) 
-			#then add to dictionary entry for no ED
-			if eds is None:
-				sm_ed_st_dict[''].append(st)
-			else:
-				#For every ED associated with a street name...
-				for ed in eds:
-					#Initalize an empty list if ED has no list of street names yet
-					sm_ed_st_dict[ed] = sm_ed_st_dict.setdefault(ed, [])
-					#Add street name to the list of streets
-					sm_ed_st_dict[ed].append(st)
-
-		return sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict
-
-	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state_abbr, decade)
+	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state_abbr, decade, dir_path)
 
 	#
 	# Step 4: Perform exact matching
@@ -1040,7 +1085,7 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 	df_uns2.loc[:,('NameChng')] = df_uns2[grid_street_var+'_old'] != df_uns2[grid_street_var]
 
 	print("Number of street names changed: "+str(df_uns2['NameChng'].sum())+" of "+str(len(df_uns2))+" ("+'{:.1%}'.format(float(df_uns2['NameChng'].sum())/len(df_uns2))+") of cases")
-
+	'''
 	# Function to save Pandas DF as DBF file 
 	def save_dbf_st(df, shapefile_name, field_map = False):
 		file_temp = shapefile_name.split('/')[-1]
@@ -1079,5 +1124,6 @@ def fix_st_grid_names(city_spaces, state_abbr, micro_street_var, grid_street_var
 		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
 		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
 
-	#save_dbf_st(df_uns2, grid_uns2, field_map=True)
+	save_dbf_st(df_uns2, grid_uns2, field_map=True)
+	'''
 	save_shp(df_uns2, grid_uns2)

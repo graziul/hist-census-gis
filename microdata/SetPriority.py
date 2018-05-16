@@ -13,8 +13,6 @@
 import time, sys
 import pandas as pd
 import numpy as np
-from termcolor import colored, cprint
-from colorama import AnsiToWin32, init
 
 def set_priority(df):
 
@@ -108,12 +106,12 @@ def set_priority(df):
 
 	num_records = len(df)
 	for i in range(1,8):
-		cprint('Priority ' + str(i) + ' cases to check: ' + str(priority_counts[i]) + ' (' + str(round(100*float(priority_counts[i])/num_records,1)) + '% of all cases)',file=AnsiToWin32(sys.stdout))
-	cprint('\nTotal cases to check: ' + str(sum(priority_counts.values())) + ' (' + str(round(100*float(sum(priority_counts.values()))/num_records,1)) + '%)','red',file=AnsiToWin32(sys.stdout))
+		cprint('Priority ' + str(i) + ' cases to check: ' + str(priority_counts[i]) + ' (' + str(round(100*float(priority_counts[i])/num_records,1)) + '% of all cases)')
+	print('\nTotal cases to check: ' + str(sum(priority_counts.values())) + ' (' + str(round(100*float(sum(priority_counts.values()))/num_records,1)) + '%)')
 
 	end_priority = time.time()
 	priority_time = round(float(end_priority-start_priority)/60,1)
-	cprint('Setting priority took %s \n' % (priority_time), 'cyan', attrs=['dark'], file=AnsiToWin32(sys.stdout))
+	print('Setting priority took %s \n' % (priority_time))
 	priority_info = priority_counts, num_priority, priority_time
 
 	return df, priority_info

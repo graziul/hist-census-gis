@@ -34,21 +34,24 @@ def load_large_dta(fname):
 	return df
 
 # Function to reads in DBF files and return Pandas DF
-def load_shp(filename, ranges):
+def load_shp(filename, ranges=None):
 	
 	# Remove None function
-	def remove_none(df):
-		mask = df.applymap(lambda x: x is None)
-		cols = df.columns[(mask).any()]
-		for col in df[cols]:
-			if df[col].dtype == 'O':
-				df.loc[mask[col], col] = ''
-				if col in ranges:
-					df[col] = df[col].apply(lambda x: '' if '-' in x else x).str.replace(r'[aA-zZ]+','').replace('','0').astype(int)
-		return df
+	def remove_none(df, ranges):
+		if ranges == None:
+			return df
+		else:
+			mask = df.applymap(lambda x: x is None)
+			cols = df.columns[(mask).any()]
+			for col in df[cols]:
+				if df[col].dtype == 'O':
+					df.loc[mask[col], col] = ''
+					if col in ranges:
+						df[col] = df[col].apply(lambda x: '' if '-' in x else x).str.replace(r'[aA-zZ]+','').replace('','0').astype(int)
+			return df
 
 	filename = filename.replace('.dbf','.shp')
-	temp_df = remove_none(gpd.read_file(filename))
+	temp_df = remove_none(gpd.read_file(filename), ranges)
 	
 	return remove_none(gpd.read_file(filename))
 

@@ -24,3 +24,29 @@ def read_file_lines(d,remove_white_space = True) :
             x = temp
     return x
 
+# Outlier detection
+def get_cray_z_scores(arr, return_bool=False) :
+    debug = False
+    if not None in arr :
+        inc_arr = np.unique(arr) #returns sorted array of unique values
+        if(len(inc_arr)>2) :
+            if debug : print("uniques: "+str(inc_arr))
+            median = np.median(inc_arr,axis=0)
+            diff = np.abs(inc_arr - median)
+            med_abs_deviation = np.median(diff)
+            mean_abs_deviation = np.mean(diff)
+            meanified_z_score = diff / (1.253314 * mean_abs_deviation)
+
+            if med_abs_deviation == 0 :
+                    modified_z_score = diff / (1.253314 * mean_abs_deviation)
+            else :
+                    modified_z_score = diff / (1.4826 * med_abs_deviation)
+            if debug : print ("MedAD Zs: "+str(modified_z_score))
+            if debug : print("MeanAD Zs: "+str(meanified_z_score))
+            if debug : print ("Results: "+str(meanified_z_score * modified_z_score > 16))
+            
+            if return_bool:
+                return dict(zip(inc_arr, np.sqrt(meanified_z_score * modified_z_score)>8))
+            else:
+                return dict(zip(inc_arr, np.sqrt(meanified_z_score * modified_z_score)))
+    return None
