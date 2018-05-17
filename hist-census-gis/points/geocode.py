@@ -10,14 +10,7 @@ Author: Joseph Danko
 Created: 11/3/2017
 Updated: Chris Graziul, 12/11/2017 (stripped down to functions only)
 """
-
-# Import the ESRI library of tools into Python
-import arcpy
-import os
-import pysal as ps
-import pandas as pd
-from blocknum.blocknum import *
-import random
+import lines
 
 # All Python to overwrite any ESRI output files (e.g., shapefiles)
 arcpy.env.overwriteOutput=True
@@ -333,27 +326,5 @@ def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
 	outfile_excel = geo_path + "StLouisMO_GeocodeFinal"+post+".xlsx"
 	writer = pd.ExcelWriter(outfile_excel, engine='xlsxwriter')
 	df_merge_collapse.to_excel(writer, sheet_name='Sheet1', index=False)
-	writer.save()
-
-def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, decade, post=''):
-	# Get ungeocoded street-ED combinations (and count number of ungeocoded cases)
-	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
-	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
-	# Get street list from grid
-	grid_streets_list = df_grid['FULLNAME'].drop_duplicates().tolist()
-	# Select ungeocoded streets not in grid
-	df_ungeocoded_st_ed_tocheck = df_ungeocoded_st_ed[~df_ungeocoded_st_ed['fullname'].isin(grid_streets_list)].sort_values(['ed'])
-	# Remove streets with <50 people on them
-	thresh = 50
-	temp = df_ungeocoded_st_ed_tocheck.groupby('fullname')['count'].aggregate(sum) >= thresh
-	temp = temp.reset_index(name='select_street')
-	st_list = temp.loc[temp['select_street'],'fullname'].tolist()
-	df_ungeocoded_st_ed_tocheck_final = df_ungeocoded_st_ed_tocheck[df_ungeocoded_st_ed_tocheck['fullname'].isin(st_list)]
-	# Create a Pandas Excel writer using XlsxWriter as the engine.
-	file_name = geo_path + '/' + city_name + state_abbr + '_' + str(decade) + 'ungeocoded_not_in_grid'+post+'.xlsx'
-	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-	# Convert the dataframe to an XlsxWriter Excel object.
-	df_ungeocoded_st_ed_tocheck_final.to_excel(writer, sheet_name='Sheet1', index=False)
-	# Close the Pandas Excel writer and output the Excel file.
 	writer.save()
 

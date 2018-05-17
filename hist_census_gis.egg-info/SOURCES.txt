@@ -1,0 +1,8 @@
+README.md
+setup.cfg
+setup.py
+hist_census_gis.egg-info/PKG-INFO
+hist_census_gis.egg-info/SOURCES.txt
+hist_census_gis.egg-info/dependency_links.txt
+hist_census_gis.egg-info/requires.txt
+hist_census_gis.egg-info/top_level.txt

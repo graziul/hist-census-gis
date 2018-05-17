@@ -8,7 +8,7 @@ from microclean.STclean import *
 from microclean.HNclean import *
 from microclean.SetPriority import *
 
-# Version number
+# Version number 
 version = 7
 
 # Changelog
@@ -75,8 +75,8 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
- 	init()
- 	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
+ 	#init()
+ 	#sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
 	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
 
@@ -97,8 +97,7 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 	# Step 2b: Use formatted street names to get house number sequences
 	if year != 1940:
 		street_var = 'street_precleaned'
-		HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
-		df['hn_outlier1'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
+		df, HN_SEQ, ED_ST_HN_dict = handle_outliers(df, street_var, 'hn_outlier1', HN_SEQ, ED_ST_HN_dict)
 
 	# Step 2c: Use house number sequences to fill in blank street names
 	if year != 1940:
@@ -130,9 +129,7 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 
 	# Step 4b: Use fuzzy matches to get house number sequences
 	if year != 1940:
-		HN_SEQ = {}
-		HN_SEQ[street_var], ED_ST_HN_dict[street_var] = get_HN_SEQ(df, year, street_var, debug=True)
-		df['hn_outlier2'] = df.apply(lambda s: is_HN_OUTLIER(s['ed'], s[street_var], s['hn'], ED_ST_HN_dict[street_var]),axis=1)
+		df, HN_SEQ, ED_ST_HN_dict = handle_outliers(df, street_var, 'hn_outlier2', HN_SEQ, ED_ST_HN_dict)
 
 	# Step 4c: Use house number sequences to fill in blank street names
 	if year != 1940:
@@ -176,6 +173,7 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 
 	return info 
 
+print(clean_microdata(['Flint','MI',1930],ed_map=False))
 # Get city list
 file_path = '/home/s4-data/LatestCities' 
 city_info_file = file_path + '/CityInfo.csv' 

@@ -22,45 +22,6 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1930,1940]):
 	def ignore_unicode(chars):
 		chars = unicode(chars,errors='ignore')
 		return chars
-
-	# Standardize Steve Morse street names
-	def sm_standardize(st) :
-		orig_st = st
-		st = re.sub(r" [Ee][Xx][Tt][Ee]?[Nn]?[Dd]?[Ee]?[Dd]?$","",st)
-		DIR = re.search(r" ([NSEW ]+)$",st)
-		st = re.sub(r" ([NSEW ]+)$","",st)
-		if(DIR) :
-			DIR = DIR.group(1)
-			DIR = re.sub(" ","",DIR)
-		else :
-			DIR = ""
-
-		TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
-		
-		if(TYPE) :
-			st = re.sub(TYPE.group(0),"",st)
-			TYPE = TYPE.group(1)
-			if(TYPE=="Av") :
-				TYPE = "Ave"
-			if(TYPE=="Rd") :
-				TYPE = "Road"
-			if(TYPE=="Dr") :
-				TYPE = "Drive"
-			if(TYPE=="La") :
-				TYPE = "Ln"            
-			if(re.match("All?e?y?",TYPE)) :
-				TYPE = "Aly"
-		else :
-			if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
-				TYPE = ""
-			else :
-				TYPE = "St"
-		
-		NAME = st
-		st = (DIR+" "+NAME+" "+TYPE).strip()
-		#print(orig_st)
-		#print("changed to "+st)
-		return [st,DIR,NAME,TYPE]
 	
 	# Download and save Steve Morse web abbreviations
 	def download_sm_web_abbr(decades):

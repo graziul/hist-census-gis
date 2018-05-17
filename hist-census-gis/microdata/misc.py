@@ -1,5 +1,5 @@
 #
-#	Name: 		SetPriority.py
+#	Name: 		misc.py
 #	Authors: 	Chris Graziul
 #
 #	Input:		df - Data frame (autocleaning completed)

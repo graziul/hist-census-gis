@@ -14,17 +14,6 @@
 #   To do list: 1. Identify/flag institutions
 #               2. Fix blank street names (naive)
 
-# DEPRECATED - Convert to geopandas when able
-def dbf2DF(dbfile, upper=False): #Reads in DBF files and returns Pandas DF
-	db = ps.open(dbfile) #Pysal to open DBF
-	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-	#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-	if upper == True: #Make columns uppercase if wanted 
-		pandasDF.columns = map(str.upper, db.header) 
-	db.close() 
-	return pandasDF
-
 #
 # Step 1: Load city
 #
@@ -452,20 +441,20 @@ def get_stgrid_with_EDs(city, state, map_type, file_path, ed_year=1940):
 
 	#Map from 1940 street grid (student edited to 1940 black/white map - in future may be 1930)
 	if map_type == "1940":
-		file_name_st_grid = st_grid_path + c + state + '_1940_stgrid_%s_ED_sj.dbf' % (str(ed_year))
+		file_name_st_grid = st_grid_path + c + state + '_1940_stgrid_%s_ED_sj.shp' % (str(ed_year))
 		street = 'FULLNAME'
 
 	#Map from Tiger/Line 2012 (clipped to approximate city boundary)
 	if map_type == "Contemp":
-		file_name_st_grid = st_grid_path + c + state + '_Contemp_stgrid_%s_ED_sj.dbf' % (str(ed_year))
+		file_name_st_grid = st_grid_path + c + state + '_Contemp_stgrid_%s_ED_sj.shp' % (str(ed_year))
 		street = 'FULL2012'
 
 	#Map from Chicago group (only very certain cities)
 	if map_type == "Chicago":
-		file_name_st_grid = st_grid_path + c + state + '_1930_stgrid_ED_%s_sj.dbf' % (str(ed_year))
+		file_name_st_grid = st_grid_path + c + state + '_1930_stgrid_ED_%s_sj.shp' % (str(ed_year))
 		street = 'FULLNAME'
 
-	df = dbf2DF(file_name_st_grid) 
+	df = load_shp(file_name_st_grid) 
 
 	all_streets = df[street].drop_duplicates().tolist()
 

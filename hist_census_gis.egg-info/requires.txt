@@ -1,0 +1,6 @@
+pysal
+openpyxl
+geopandas
+fuzzyset
+paramiko
+unicodecsv
