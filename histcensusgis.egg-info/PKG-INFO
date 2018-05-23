@@ -1,0 +1,13 @@
+Metadata-Version: 1.1
+Name: histcensusgis
+Version: 1.0.0a35
+Summary: Tools for cleaning and geocoding full count census data (1900-1940)
+Home-page: http://www.github.com/graziul/hist-census-gis
+Author: Historical GIS Project, Spatial Structures in the Social Sciences, Brown University
+Author-email: christopher_graziul@brown.edu
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 2.7
