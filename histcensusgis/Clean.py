@@ -1,6 +1,7 @@
 from histcensusgis.microdata import *
 from histcensusgis.s4utils import *
 
+
 # Version number 
 version = 7
 
@@ -43,9 +44,7 @@ version = 7
 
 datestr = time.strftime("%Y_%m_%d")
 
-file_path = '/home/s4-data/LatestCities' 
-
-def clean_microdata(city_info, ed_map=True, debug=False):
+def clean_microdata(city_info, ed_map=True, debug=False, file_path = '/home/s4-data/LatestCities'):
 
 	#
 	# Step 0: Initialize a bunch of variables for use throughout
@@ -71,7 +70,7 @@ def clean_microdata(city_info, ed_map=True, debug=False):
  	#init()
  	#sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
 
-	cprint('%s Automated Cleaning\n' % (city), attrs=['bold'], file=AnsiToWin32(sys.stdout))
+	print('%s Automated Cleaning\n' % (city))
 
 	#
 	# Step 1: Load city and standardize variable names
@@ -90,7 +89,7 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 	# Step 2b: Use formatted street names to get house number sequences
 	if year != 1940:
 		street_var = 'street_precleaned'
-		df, HN_SEQ, ED_ST_HN_dict = handle_outliers(df, street_var, 'hn_outlier1', HN_SEQ, ED_ST_HN_dict)
+		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier1', year, HN_SEQ, ED_ST_HN_dict)
 
 	# Step 2c: Use house number sequences to fill in blank street names
 	if year != 1940:
@@ -112,8 +111,6 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
 	#
 
-	ed_map = False
-
 	# Step 4a: Search for fuzzy matches
 	df, fuzzy_info = find_fuzzy_matches(df, city, state, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map)
 	street_var = 'street_post_fuzzy'
@@ -122,7 +119,7 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 
 	# Step 4b: Use fuzzy matches to get house number sequences
 	if year != 1940:
-		df, HN_SEQ, ED_ST_HN_dict = handle_outliers(df, street_var, 'hn_outlier2', HN_SEQ, ED_ST_HN_dict)
+		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier2', year, HN_SEQ, ED_ST_HN_dict)
 
 	# Step 4c: Use house number sequences to fill in blank street names
 	if year != 1940:
@@ -137,7 +134,7 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 	else:
 		post_var = 'street_post_fuzzyHN'
 	df = create_overall_match_variables(df, year)
-	cprint("Overall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n",'green',attrs=['bold'],file=AnsiToWin32(sys.stdout))
+	print("\nOverall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n")
 
 	#
 	# Step 6: Set priority level for residual cases
@@ -155,18 +152,23 @@ def clean_microdata(city_info, ed_map=True, debug=False):
 
 	end_total = time.time()
 	total_time = round(float(end_total-start_total)/60,1)
-	cprint("Total processing time for %s: %s\n" % (city, total_time),'cyan',attrs=['bold'],file=AnsiToWin32(sys.stdout))
+	print("Total processing time for %s: %s\n" % (city, total_time))
 
+	'''
 	#Generate dashbaord info
 	times = [load_time, total_time]
 	if year != 1940:
 		info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1, fix_blanks_info2)
 	else:
 		info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times)
+	'''
+	
+	return "%s complete" % (city)
 
-	return info 
+# Example: clean_microdata(['Flint','MI',1930],ed_map=False)
 
-print(clean_microdata(['Flint','MI',1930],ed_map=False))
+'''
+
 # Get city list
 file_path = '/home/s4-data/LatestCities' 
 city_info_file = file_path + '/CityInfo.csv' 
@@ -255,3 +257,4 @@ else:
 dashboard['version'] = version
 csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(year),str(year),datestr)
 dashboard.to_csv(csv_file,index=False)
+'''

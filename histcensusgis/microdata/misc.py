@@ -10,7 +10,17 @@
 #
 #	Purpose:	This script assigns a manual cleaning priority for students to follow
 
-import time, sys
+import codecs
+import sys
+import re
+import time
+import math
+import urllib
+import dbf
+import time
+import math
+import pickle
+import fuzzyset
 import pandas as pd
 import numpy as np
 

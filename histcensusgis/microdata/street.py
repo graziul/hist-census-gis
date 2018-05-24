@@ -15,7 +15,22 @@
 #               2. Fix blank street names (naive)
 
 import codecs
-
+import sys
+import re
+import time
+import math
+import urllib
+import dbf
+import time
+import math
+import pickle
+import fuzzyset
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+from histcensusgis.microdata.hn import *
+from histcensusgis.text.standardize import *
+from histcensusgis.text.stevemorse import *
 #
 # Step 1: Load city
 #
@@ -713,7 +728,7 @@ def find_fuzzy_matches_module(df, city, street, grid_all_streets, grid_ed_st_dic
 	end = time.time()
 	fuzzy_matching_time = round(float(end-start)/60, 1)
 	fuzzy_info = [num_fuzzy_matches, fuzzy_matching_time]
-	print("Fuzzy matches (using " + map_type + ": "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)\n")
+	print("Fuzzy matches (using " + map_type + "): "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)\n")
 	print("Fuzzy matching for %s took %s\n" % (city, str(fuzzy_matching_time)))
 
 	return df, fuzzy_info, resid

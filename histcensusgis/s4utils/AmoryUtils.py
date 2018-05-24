@@ -1,3 +1,5 @@
+import numpy as np
+
 # Dict: add v(alue) to k(ey), create k if it doesn't exist
 def Dict_append(Dict, k, v) :
     if not k in Dict :

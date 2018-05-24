@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 
 setup(
  	name='histcensusgis',
- 	version='1.0.0a35',
+ 	version='1.0.0a49',
  	description='Tools for cleaning and geocoding full count census data (1900-1940)',
  	author='Historical GIS Project, Spatial Structures in the Social Sciences, Brown University',
  	author_email='christopher_graziul@brown.edu',
@@ -30,9 +30,9 @@ setup(
  	'paramiko',
  	'unicodecsv',
  	'dbf'],
- 	#package_data={
- 	#'':['*.pickle']
- 	#},
+ 	package_data={
+ 	'':['*.pickle']
+ 	},
  	url='http://www.github.com/graziul/hist-census-gis',
   	zip_safe=False,
   	)

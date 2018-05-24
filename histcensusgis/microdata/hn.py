@@ -1,6 +1,61 @@
+import codecs
+import sys
+import re
+import time
+import math
+import urllib
+import dbf
+import time
+import math
+import pickle
+import fuzzyset
+from histcensusgis.s4utils.AmoryUtils import *
+import numpy as np
+
+def standardize_hn(s):
+	# recommended usage:
+	# dfHNList = df['general_house_number_in_cities_o'].apply(standardize_hn1,"columns")
+	# df['hn']      = [x[0] for x in dfHNList]
+	# df['hn_flag'] = [x[1] for x in dfHNList]
+	debug = False
+	if(not type(s) == str) :
+		row = s
+		s = s['hn']
+	orig_s = s
+	s = s.strip()
+	hnFlag = ''
+	s = re.sub('[0-9]/[0-9]|[Rr][Ee][Aa][Rr]','',s)
+	s = re.sub('\.$','',s)
+	s = re.sub('\([0-9]\)','',s)
+	s = s.strip()
+	if(re.search("[0-9][0-9][ \-]+[0-9][A-Za-z]$",s)) :
+	# Throwing syntax errors
+	# if debug : print("%s became " %s,end="")
+		s = re.sub("[0-9][A-Za-z]$","",s).strip()
+		if debug : print(s)
+	if(re.search("^[0-9][0-9][0-9]+[ \-]?[A-Za-z]$",s)) :
+	# if debug : print("%s became " %s,end="")
+		s = re.sub("[ \-]?[A-Za-z]$","",s).strip()
+		if debug : print(s)
+	
+	s = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',s)
+	rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",s)
+	if(rangeHN) :
+		s = rangeHN.group(1)
+	s = s.strip()
+	if(not orig_s == s) :
+		hnFlag = orig_s
+	return s, hnFlag
+
+def make_int(s):
+	try :
+		s = int(s)
+		return s
+	except ValueError:
+		return None
 
 # Handle house number outliers (Amory)
-def handle_outlier_hns(df, street_var, outlier_var, HN_SEQ, ED_ST_HN_dict):
+def handle_outlier_hns(df, street_var, outlier_var, year, HN_SEQ, ED_ST_HN_dict):
 
 	### THIS IS A CITYWIDE LIMIT ON THE NUMBER OF PEOPLE THAT CAN LIVE AT A SINGLE ADDRESS ###
 	# Limit increased - Buffalo Insane Asylum had >2000 cases
@@ -19,53 +74,11 @@ def handle_outlier_hns(df, street_var, outlier_var, HN_SEQ, ED_ST_HN_dict):
 
 	missingTypes=0
 
-	def make_int(s):
-		try :
-			s = int(s)
-			return s
-		except ValueError:
-			return None
-
 	def is_none(n) :
 		if(type(n)==str) :
 			return n=='' or n==None
 		else :
 			return n==None or math.isnan(n)
-
-	def standardize_hn(s):
-	# recommended usage:
-	# dfHNList = df['general_house_number_in_cities_o'].apply(standardize_hn1,"columns")
-	# df['hn']      = [x[0] for x in dfHNList]
-	# df['hn_flag'] = [x[1] for x in dfHNList]
-		debug = False
-		if(not type(s) == str) :
-			row = s
-			s = s['hn']
-		orig_s = s
-		s = s.strip()
-		hnFlag = ''
-		s = re.sub('[0-9]/[0-9]|[Rr][Ee][Aa][Rr]','',s)
-		s = re.sub('\.$','',s)
-		s = re.sub('\([0-9]\)','',s)
-		s = s.strip()
-		if(re.search("[0-9][0-9][ \-]+[0-9][A-Za-z]$",s)) :
-	# Throwing syntax errors
-	#        if debug : print("%s became " %s,end="")
-			s = re.sub("[0-9][A-Za-z]$","",s).strip()
-			if debug : print(s)
-		if(re.search("^[0-9][0-9][0-9]+[ \-]?[A-Za-z]$",s)) :
-	#        if debug : print("%s became " %s,end="")
-			s = re.sub("[ \-]?[A-Za-z]$","",s).strip()
-			if debug : print(s)
-		
-		s = re.sub("-?\(?([Cc]ontinued|[Cc][Oo][Nn][\'Tte]*[Dd]?\.?)\)?",'',s)
-		rangeHN = re.search("([0-9]+)([\- ]+| [Tt][Oo] )[0-9]+",s)
-		if(rangeHN) :
-			s = rangeHN.group(1)
-		s = s.strip()
-		if(not orig_s == s) :
-			hnFlag = orig_s
-		return s, hnFlag
 
 	def get_linenum(df,ind) :
 		if ind>=0 and ind<len(df) :
