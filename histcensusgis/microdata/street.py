@@ -31,6 +31,8 @@ import numpy as np
 from histcensusgis.microdata.hn import *
 from histcensusgis.text.standardize import *
 from histcensusgis.text.stevemorse import *
+from histcensusgis.s4utils.IOutils import *
+
 #
 # Step 1: Load city
 #
@@ -459,17 +461,17 @@ def get_stgrid_with_EDs(city, state, map_type, file_path, ed_year=1940):
 
 	#Map from 1940 street grid (student edited to 1940 black/white map - in future may be 1930)
 	if map_type == "1940":
-		file_name_st_grid = st_grid_path + c + state + '_1940_stgrid_%s_ED_sj.shp' % (str(ed_year))
+		file_name_st_grid = st_grid_path + c + state + '_1940_stgrid_ED_sj.shp' 
 		street = 'FULLNAME'
 
 	#Map from Tiger/Line 2012 (clipped to approximate city boundary)
 	if map_type == "Contemp":
-		file_name_st_grid = st_grid_path + c + state + '_Contemp_stgrid_%s_ED_sj.shp' % (str(ed_year))
+		file_name_st_grid = st_grid_path + c + state + '_Contemp_stgrid_ED_sj.shp'
 		street = 'FULL2012'
 
 	#Map from Chicago group (only very certain cities)
 	if map_type == "Chicago":
-		file_name_st_grid = st_grid_path + c + state + '_1930_stgrid_ED_%s_sj.shp' % (str(ed_year))
+		file_name_st_grid = st_grid_path + c + state + '_1930_stgrid_ED_sj.shp'
 		street = 'FULLNAME'
 
 	df = load_shp(file_name_st_grid) 

@@ -134,6 +134,7 @@ def clean_microdata(city_info, ed_map=True, debug=False, file_path = '/home/s4-d
 	else:
 		post_var = 'street_post_fuzzyHN'
 	df = create_overall_match_variables(df, year)
+
 	print("\nOverall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n")
 
 	#
@@ -163,7 +164,7 @@ def clean_microdata(city_info, ed_map=True, debug=False, file_path = '/home/s4-d
 		info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times)
 	'''
 	
-	return "%s complete" % (city)
+	print("%s %s complete" % (city, year))
 
 # Example: clean_microdata(['Flint','MI',1930],ed_map=False)
 

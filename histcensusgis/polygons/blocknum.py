@@ -25,7 +25,7 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, decade, hn_rang
 
 	print("The script has started to work and is running the 'street' function")
 
-	problem_segments = street(geo_path, city_name, state_abbr, hn_ranges, decade)
+	problem_segments = grid_geo_fix(geo_path, city_name, state_abbr, hn_ranges, decade)
 	print("The script has finished executing the 'street' function and has now started executing 'physical_blocks' function")
 
 	physical_blocks(geo_path, city_name, decade)
@@ -75,6 +75,8 @@ def attach_pblk_id(geo_path, city_name, points, decade):
 # 
 
 # Identifies block numbers and can be run independently (R script)
+# NOTE: Assigns block numbers using microdata blocks. Examines proportion of cases that geocode 
+# onto the same physical block and decides  
 def identify_blocks_geocode(city_name, paths, decade):
 	r_path, script_path, file_path = paths
 	print("Identifying " + str(decade) + " blocks\n")

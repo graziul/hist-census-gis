@@ -308,3 +308,46 @@ def sm_standardize(st) :
 	#print(orig_st)
 	#print("changed to "+st)
 	return [st,DIR,NAME,TYPE]
+
+# Standardize numbered streets [TODO: redundant code in standardize_street should use this instead]
+def Num_Standardize(NAME) :
+
+	NAME = re.sub("^[Tt]enth","10th",NAME)
+	NAME = re.sub("^[Ee]leven(th)?","11th",NAME)
+	NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
+	NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
+	NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
+	NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
+	NAME = re.sub("^[Ss]ixt[h]?een(th)?","16th",NAME)
+	NAME = re.sub("^[Ss]event[h]?een(th)?","17th",NAME)
+	NAME = re.sub("^[eE]ighteen(th)?","18th",NAME)
+	NAME = re.sub("^[Nn]inet[h]?e+n(th)?","19th",NAME)
+	NAME = re.sub("^[Tt]went[iy]eth","20th",NAME)
+	NAME = re.sub("^[Tt]hirt[iy]eth","30th",NAME)
+	NAME = re.sub("^[Ff]o[u]?rt[iy]eth","40th",NAME)
+	NAME = re.sub("^[Ff]ift[iy]eth", "50th",NAME)
+	NAME = re.sub("^[Ss]ixt[iy]eth", "60th",NAME)
+	NAME = re.sub("^[Ss]event[iy]eth", "70th",NAME)
+	NAME = re.sub("^[Ee]ight[iy]eth", "80th",NAME)
+	NAME = re.sub("^[Nn]inet[iy]eth", "90th",NAME)
+
+	NAME = re.sub("[Tt]wenty[ \-]*","2",NAME)
+	NAME = re.sub("[Tt]hirty[ \-]*","3",NAME)
+	NAME = re.sub("[Ff]orty[ \-]*","4",NAME)
+	NAME = re.sub("[Ff]ifty[ \-]*","5",NAME)
+	NAME = re.sub("[Ss]ixty[ \-]*","6",NAME)
+	NAME = re.sub("[Ss]eventy[ \-]*","7",NAME)
+	NAME = re.sub("[Ee]ighty[ \-]*","8",NAME)
+	NAME = re.sub("[Nn]inety[ \-]*","9",NAME)
+	
+	if re.search("(^|[0-9]+.*)([Ff]irst|[Oo]ne)",NAME) : NAME = re.sub("([Ff]irst|[Oo]ne)","1st",NAME)
+	if re.search("(^|[0-9]+.*)([Ss]econd|[Tt]wo)",NAME) : NAME = re.sub("([Ss]econd|[Tt]wo)","2nd",NAME)
+	if re.search("(^|[0-9]+.*)([Tt]hird|[Tt]hree)",NAME) : NAME = re.sub("([Tt]hird|[Tt]hree)","3rd",NAME)
+	if re.search("(^|[0-9]+.*)[Ff]our(th)?",NAME) : NAME = re.sub("[Ff]our(th)?","4th",NAME)
+	if re.search("(^|[0-9]+.*)([Ff]ifth|[Ff]ive)",NAME) : NAME = re.sub("([Ff]ifth|[Ff]ive)","5th",NAME)
+	if re.search("(^|[0-9]+.*)[Ss]ix(th)?",NAME) : NAME = re.sub("[Ss]ix(th)?","6th",NAME)
+	if re.search("(^|[0-9]+.*)[Ss]even(th)?",NAME) : NAME = re.sub("[Ss]even(th)?","7th",NAME)
+	if re.search("(^|[0-9]+.*)[Ee]igh?th?",NAME) : NAME = re.sub("[Ee]igh?th?","8th",NAME)
+	if re.search("(^|[0-9]+.*)[Nn]in(th|e)+",NAME) : NAME = re.sub("[Nn]in(th|e)+","9th",NAME)
+	
+	return NAME

@@ -4,6 +4,9 @@
 # Content: Functions involving various IO operations
 #
 
+import pandas as pd
+import geopandas as gpd
+
 # Function to load large Stata files
 def load_large_dta(fname):
 
@@ -51,9 +54,12 @@ def load_shp(filename, ranges=None):
 			return df
 
 	filename = filename.replace('.dbf','.shp')
-	temp_df = remove_none(gpd.read_file(filename), ranges)
-	
-	return remove_none(gpd.read_file(filename))
+	if ranges is not None:
+		temp_df = remove_none(gpd.read_file(filename), ranges)
+	else:
+		temp_df = gpd.read_file(filename)
+
+	return temp_df
 
 # Function to save Pandas DF as DBF file 
 def save_shp(df, shapefile_name):
