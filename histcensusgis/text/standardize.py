@@ -351,3 +351,33 @@ def Num_Standardize(NAME) :
 	if re.search("(^|[0-9]+.*)[Nn]in(th|e)+",NAME) : NAME = re.sub("[Nn]in(th|e)+","9th",NAME)
 	
 	return NAME
+
+#Returns just the NAME component of the street phrase, if any If second argument is True, return a list of all components 
+def isolate_st_name(st,whole_phrase = False) :
+	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
+		return ''
+	else :
+		TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|Rive?r?|Ocean|Bay|Canal|Sound|[Ll]ine|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+		if(TYPE) :
+			TYPE = TYPE.group(0)
+			st = re.sub(TYPE+"$", "",st)
+			TYPE = TYPE.strip()
+		DIR = re.search("^[NSEW]+ ",st)
+		if(DIR) :
+			DIR = DIR.group(0)
+			st = re.sub("^"+DIR, "",st)
+			DIR = DIR.strip()
+		st = st.strip()
+		
+	if whole_phrase :
+		return [DIR,st,TYPE]
+	else :
+		return st
+
+#Function to standardize Steve Morse street names
+def morse_standardize(st) :
+	if re.search('[Cc]ity [Ll]imits',st) :
+		return 'City Limits'
+	st = re.sub(" [Rr]iv($| St$)"," River",st)
+	st = re.sub("^Mt ","Mount ",st)
+	return st

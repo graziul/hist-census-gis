@@ -15,6 +15,14 @@ def Dict_append_unique(Dict, k, v) :
         if not v in Dict[k] :
             Dict[k].append(v)
 
+
+def Dict_append_flexible(Dict, k, v) :
+    if not k in Dict :
+        Dict[k] = v
+    else :
+        Dict[k] = [Dict[k]]
+        Dict[k].append(v)
+
 # Read a text file and return it as a list, removing the white space by default
 def read_file_lines(d,remove_white_space = True) :
     with open(d,'r') as tfile :
@@ -52,3 +60,34 @@ def get_cray_z_scores(arr, return_bool=False) :
             else:
                 return dict(zip(inc_arr, np.sqrt(meanified_z_score * modified_z_score)))
     return None
+
+# looks for duplicate adjacent elements and deletes one
+# iterate backwards to avoid problems with iterating and modifying list simultaneously...!
+def f7(seq):
+    rem_list = []
+    if seq[0] == seq[-1]:
+        del seq[len(seq)-1]
+        rem_list = [len(seq)]
+    ind = len(seq) - 2
+    while ind >= 0 :
+        if seq[ind] == seq[ind+1] :
+            del seq[ind+1]
+            rem_list.append(ind+1)
+        ind -= 1
+    return seq, rem_list
+
+# Find mode of a list
+def find_mode(l) :
+    mode_dict = {}
+    for i in l :
+        if not i in mode_dict.keys() :
+            mode_dict[i] = 1
+        else :
+           mode_dict[i] += 1
+    try :
+        max_freq = sorted(mode_dict.values())[-1]
+    except :
+        #print("max_freq prob")
+        #print(l)
+        return -999
+    return [x[0] for x in mode_dict.items() if x[1]==max_freq]

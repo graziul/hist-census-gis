@@ -11,8 +11,27 @@ import pandas as pd
 #
 
 # Head script calling individual functions
-def create_blocks_and_block_points(city_name, state_abbr, paths, decade, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], geocode_file=None):
+def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], geocode_file=None):
 	
+	"""
+	Creates physical blocks, geocodes addresses, then intersects geocoded points with physical blocks
+
+	Parameters
+	----------
+	city_info : list
+		List containing city name (e.g. "Hartford"), state abbreviation (e.g. "CT"), and decade (e.g. 1930)
+	paths : list 
+		List of file paths for R code, Python scripts, and data files
+	hn_ranges : list (Optional)
+		List of string variables naming min/max from/to for house number ranges in street grid
+
+	Returns
+	-------
+	Excel file with list of streets for students to search for and (if possible) add to street grid
+
+	"""
+
+
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
@@ -25,26 +44,29 @@ def create_blocks_and_block_points(city_name, state_abbr, paths, decade, hn_rang
 
 	print("The script has started to work and is running the 'street' function")
 
-	problem_segments = grid_geo_fix(geo_path, city_name, state_abbr, hn_ranges, decade)
+	problem_segments = grid_geo_fix(city_info, geo_path, hn_ranges)
 	print("The script has finished executing the 'street' function and has now started executing 'physical_blocks' function")
 
-	physical_blocks(geo_path, city_name, decade)
+	physical_blocks(city_info, geo_path)
 	print("The script has finished executing the 'physical_blocks' function and has now started executing 'geocode' function")
 
-	initial_geocode(geo_path, city_name, state_abbr, hn_ranges, decade)
+	initial_geocode(city_info, geo_path, hn_ranges)
 	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
 
 	if different_geocode:
 		points = geocode_file
 		print("Different geocode")
 	else:
-		points = geo_path + city_name + "_" + str(decade) + "_Points.shp"
+		points_shp = geo_path + city_name + "_" + str(decade) + "_Points.shp"
 
-	attach_pblk_id(geo_path, city_name, points, decade)
+	attach_pblk_id(city_info, geo_path, points_shp)
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Creates physical blocks shapefile 
-def physical_blocks(geo_path, city_name, decade):
+def physical_blocks(city_info, geo_path):
+
+	city_name, _, decade = city_info
+	city_name = city_name.replace(' ','')
 
 	pblocks = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
@@ -61,12 +83,24 @@ def physical_blocks(geo_path, city_name, decade):
 	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
 
 # Attach physical block IDs to geocoded points 
-def attach_pblk_id(geo_path, city_name, points, decade):
+def attach_pblk_id(city_info, geo_path, points_shp):
+
+	city_name, _, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
+
 	# Files
-	pblk_points = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
-	pblocks = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	pblk_points_shp = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
+	pblocks_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+
 	#Attach Pblk ids to points
-	arcpy.SpatialJoin_analysis(points, pblocks, pblk_points, "JOIN_ONE_TO_MANY", "KEEP_ALL", "#", "INTERSECT")
+	arcpy.SpatialJoin_analysis(points_shp, 
+		pblocks_shp, 
+		pblk_points_shp, 
+		"JOIN_ONE_TO_MANY", 
+		"KEEP_ALL", 
+		"#", 
+		"INTERSECT")
 	print("The script has finished executing the 'SpatialJoin' tool")
 
 
@@ -77,7 +111,11 @@ def attach_pblk_id(geo_path, city_name, points, decade):
 # Identifies block numbers and can be run independently (R script)
 # NOTE: Assigns block numbers using microdata blocks. Examines proportion of cases that geocode 
 # onto the same physical block and decides  
-def identify_blocks_geocode(city_name, paths, decade):
+def identify_blocks_geocode(city_info, paths):
+
+	city_name, _, decade = city_info
+	city_name = city_name.replace(' ','')
+
 	r_path, script_path, file_path = paths
 	print("Identifying " + str(decade) + " blocks\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 Blocks.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
@@ -87,7 +125,11 @@ def identify_blocks_geocode(city_name, paths, decade):
 		print("OK!\n")
 
 # Uses block descriptions from microdata to fill in block numbers 
-def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, decade, v=5):
+def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess', v=7):
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
 
 	r_path, script_path, dir_path = paths
 
@@ -116,7 +158,7 @@ def identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, de
 		df_pre = load_large_dta(microdata_file)
 	except:
 		df_pre = pd.read_csv(microdata_file2)
-	df_pre = df_pre[['ed','block',street]]
+	df_pre = df_pre[['ed','block',micro_street_var]]
 
 	end = time.time()
 	run_time = round(float(end-start)/60, 1)
@@ -486,67 +528,6 @@ def set_blocknum_confidence(city_name, paths):
 		print("Error setting confidence for for "+city_name+"\n")
 	else:
 		print("OK!\n")
-
-# This function replaces Matt's R script but produces exactly the same file
-def create_addresses(city_name, state_abbr, paths, decade, v=7, df=None):
-	r_path, script_path, dir_path = paths
-	# Load microdata file if not passed to function
-	if type(df) == 'NoneType' or df == None:
-		try:
-			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
-			df = load_large_dta(microdata_file)
-		except:
-			for version in range(1,v+1)[::-1]:
-				try:
-					microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(version) + ".csv"
-					df = pd.read_csv(microdata_file, low_memory=False)
-				except:
-					continue
-	df.columns = map(str.lower, df.columns)
-	# Set index variable
-	df['index'] = df.index
-	if decade == 1930:
-		# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
-		df.loc[:,('mblk')] = df['block']
-	elif decade == 1940:
-		df['mblk'] = ''
-	# Choose the best available street name variable (st_best_guess includes student cleaning)
-	# NOTE: When student cleaning is unavailable we should probably fill in overall_match_bool==FALSE
-	#	    with street_precleanedHN, but this has not been done yet to my knowledge.
-	if 'st_best_guess' in df.columns.values:
-		street_var = 'st_best_guess'
-	elif 'overall_match' in df.columns.values:
-		street_var = 'overall_match'
-	# Change '.' to blank string
-	df.loc[:,'fullname'] = df[street_var]
-	df.loc[df['fullname']=='.','fullname'] = ''
-	# Make sure we found a street name variable
-	if 'fullname' not in df.columns.values:
-		print("No street name variable selected")
-		raise
-	
-	# Select variables for file
-	# Create ED-block
-	if decade == 1930:
-		vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn','ed_block']
-		df.loc[:,('ed_int')] = df['ed'].astype(int)
-		df.loc[:,('ed_block')] = df['ed_int'].astype(str) + '-' + df['mblk'].astype(str)
-		del df['ed_int']
-	elif decade == 1940:
-		vars_of_interest = ['index','fullname', 'ed','type','hn']
-
-	df_add = df.loc[:,vars_of_interest]
-
-	# Change missing and 0 to blank string
-	df_add.loc[(np.isnan(df_add['hn']))|(df_add['hn']==0),'hn'] = '-1'
-	df_add.loc[:,'hn'] = df_add['hn'].astype(int)
-	df_add.loc[:,'hn'] = df_add['hn'].astype(str).str.replace('-1','')
-	df_add.loc[:,'city'] = city_name
-	df_add.loc[:,'state'] = state_abbr
-	df_add.loc[:,'address'] = (df_add['hn'] + " " + df_add['fullname']).str.strip()
-	# Save address file	
-	addresses = dir_path + "/GIS_edited/" + city_name + "_" + str(decade) + "_Addresses.csv"
-	df_add.to_csv(addresses, index=False)
 
 #
 # Functions for intersecting ED map with street grids and uploading to Rhea/CS1 Unix server

@@ -12,7 +12,11 @@ Updated: Chris Graziul, 12/11/2017 (stripped down to functions only)
 """
 
 # Performs initial geocode on contemporary grid
-def initial_geocode(geo_path, city_name, state_abbr, hn_ranges, decade):
+def initial_geocode(city_info, geo_path, hn_ranges):
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
 
 	min_l, max_l, min_r, max_r = hn_ranges
 

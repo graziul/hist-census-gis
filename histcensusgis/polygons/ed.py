@@ -8,12 +8,17 @@ from arcpy import management
 import pandas as pd
 
 # Identifies EDs and can be run independently (R script)
-def identify_eds(city_name, paths, decade):
+def identify_eds(city_info, paths):
+
+	city_name, _, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
+
 	r_path, script_path, file_path = paths
 	print("Identifying " + str(decade) + " EDs\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
-		print("Error identifying " + str(decade) + " EDs for "+city_name+"\n")
+		print("Error identifying "+str(decade)+" EDs for "+city_name+"\n")
 	else:
 		print("OK!\n")
 

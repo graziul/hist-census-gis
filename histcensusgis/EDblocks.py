@@ -5,15 +5,16 @@
 #
 
 from __future__ import print_function
-from histcensusgis.s4utils.AmoryUtils import *
-from histcensusgis.lines.street import *
-import csv
-import xlrd
 from fuzzywuzzy import fuzz
-from blocknum.blocknum import *
-from arcpy import management
 from codecs import open
 import multiprocessing
+from histcensusgis.microdata.misc import create_addresses
+from histcensusgis.lines.street import *
+from histcensusgis.polygons.blocknum import *
+from histcensusgis.polygons.ed import *
+from histcensusgis.s4utils.AmoryUtils import *
+from histcensusgis.s4utils.IOutils import *
+from arcpy import management
 
 arcpy.env.overwriteOutput = True
 
@@ -27,30 +28,27 @@ file_path = "S:/Projects/1940Census/%s" % (city_name) #TO DO: Directories need t
 
 paths = [r_path, script_path, file_path]
 
-def number_ed_block(decade, paths):
+def get_ed_block_numbers(decade, paths):
 
 	#
 	# Step 1: Get addresses, create physical blocks
 	#
 
-	# Create 1930 addresses
-	create_1930_addresses(city_name, state_abbr, file_name, paths)
+	# Create addresses
+	create_addresses(city_name, state_abbr, file_name, paths)
 
 	# Create blocks and block points
-	create_blocks_and_block_points(city_name, state_abbr, paths)
-
-	# Analyze microdata and grid
-	analyzing_microdata_and_grid(city_name, state_abbr, paths)
+	create_blocks_and_block_points(city_info, paths)
 
 	if decade == 1940:
 
 	elif decade == 1930:
 		# Identify 1930 EDs
-		identify_1930_eds(city_name, paths)
+		identify_1930_eds(city_info, paths)
 		# Identify blocks using geocoding
-		identify_blocks_geocode(city_name, paths)
+		identify_blocks_geocode(city_info, paths)
 		# Identify blocks using microdata alone (derived block descriptions)
-		identify_blocks_microdata(city_name, state_abbr, paths)
+		identify_blocks_microdata(city_info, paths)
 		'''
 		NOTE: These functions have worked in the past, but are not in use currently.
 		# Add ranges to new grid 
@@ -182,7 +180,7 @@ def prepare_map_intersections(stgrid_file, fullname_var, paths) :
 		Output_ASCII_File = intermed_path + city_name + "_Intersections.txt", 
 		Add_Field_Names_to_Output="ADD_FIELD_NAMES")
 
-# Draw ED maps (descriptions, intersections)
+# Draw ED maps (descriptions or intersections)
 def draw_EDs(city, state, paths, new_var_name, is_desc, decade) :
 
 	_, _, dir_path = paths
@@ -275,52 +273,6 @@ def draw_EDs(city, state, paths, new_var_name, is_desc, decade) :
 #           3) create the ED polygon using feature_to_polygon on the selected segments
 #               - if correct polygon cannot be created, flag ED for manual checking
 
-#Returns just the NAME component of the street phrase, if any#
-#If second argument is True, return a list of all components 
-'''
-def isolate_st_name(st,whole_phrase = False) :
-	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
-		return ''
-	else :
-		TYPE = re.search(" (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$",st)
-		if(TYPE) :
-			TYPE = TYPE.group(0)
-			st = re.sub(TYPE+"$", "",st)
-			TYPE = TYPE.strip()
-		DIR = re.search("^[NSEW]+ ",st)
-		if(DIR) :
-			DIR = DIR.group(0)
-			st = re.sub("^"+DIR, "",st)
-			DIR = DIR.strip()
-		st = st.strip()
-		
-	if whole_phrase :
-		return [DIR,st,TYPE]
-	else :
-		return st
-'''
-
-#Returns just the NAME component of the street phrase, if any If second argument is True, return a list of all components 
-def isolate_st_name(st,whole_phrase = False) :
-	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
-		return ''
-	else :
-		TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|Rive?r?|Ocean|Bay|Canal|Sound|[Ll]ine|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
-		if(TYPE) :
-			TYPE = TYPE.group(0)
-			st = re.sub(TYPE+"$", "",st)
-			TYPE = TYPE.strip()
-		DIR = re.search("^[NSEW]+ ",st)
-		if(DIR) :
-			DIR = DIR.group(0)
-			st = re.sub("^"+DIR, "",st)
-			DIR = DIR.strip()
-		st = st.strip()
-		
-	if whole_phrase :
-		return [DIR,st,TYPE]
-	else :
-		return st
 
 # fuzzy matches a given fullname st string against the list of all streets from grid
 def fuzzy_match_list(st) :
@@ -359,21 +311,6 @@ def get_block_by_intersections(i1,i2) :
 		return in_common[0]
 	else :
 		print("NO BLOCK FOUND FOR INTERSECTIONS "+str(i1)+" and "+str(i2))
-
-# looks for duplicate adjacent elements and deletes one
-# iterate backwards to avoid problems with iterating and modifying list simultaneously...!
-def f7(seq):
-	rem_list = []
-	if seq[0] == seq[-1]:
-		del seq[len(seq)-1]
-		rem_list = [len(seq)]
-	ind = len(seq) - 2
-	while ind >= 0 :
-		if seq[ind] == seq[ind+1] :
-			del seq[ind+1]
-			rem_list.append(ind+1)
-		ind -= 1
-	return seq, rem_list
 
 #compares st1 with st2, which can be a string or a list of strings
 #if list, return True if st1 matches with ANY string in st2
@@ -1338,57 +1275,6 @@ def ed_desc_algo(city_spaces, state, fullname_var, paths, decade):
 # Numbered Streets - fuzzy matching will match S 27th St with S 17th St instead of 27th St
 # ->->-> GO THRU CHRIS's fuzzy match, copy the code over
 
-def csv_from_excel(excel_file, csv_name):
-	workbook = xlrd.open_workbook(excel_file)
-	all_worksheets = workbook.sheet_names()
-	for i,worksheet_name in enumerate(all_worksheets[0:2]) : #Use only first two worksheets
-		worksheet = workbook.sheet_by_name(worksheet_name)
-		if i==0 :
-			namename = csv_name
-		elif i == 1 :
-			namename = csv_name+"_ED"
-		else :
-			assert(True == False)
-		with open('{}.csv'.format(namename), 'w+') as your_csv_file:
-			for rownum in range(worksheet.nrows):
-				rowstr = ""
-				for v in worksheet.row_values(rownum) :
-					if v=="" :
-						break
-					rowstr = rowstr+v+","
-				rowstr = rowstr[:-1] #remove trailing comma
-				your_csv_file.write(rowstr+"\n")
-
-def morse_standardize(st) :
-	if re.search('[Cc]ity [Ll]imits',st) :
-		return 'City Limits'
-	st = re.sub(" [Rr]iv($| St$)"," River",st)
-	st = re.sub("^Mt ","Mount ",st)
-	return st
-
-def get_cray_z_scores(arr) :
-	debug = False
-	if not None in arr :
-		inc_arr = np.unique(arr) #returns sorted array of unique values
-		if(len(inc_arr)>2) :
-			if debug : print("uniques: "+str(inc_arr))
-			median = np.median(inc_arr,axis=0)
-			diff = np.abs(inc_arr - median)
-			med_abs_deviation = np.median(diff)
-			mean_abs_deviation = np.mean(diff)
-			meanified_z_score = diff / (1.253314 * mean_abs_deviation)
-
-			if med_abs_deviation == 0 :
-					modified_z_score = diff / (1.253314 * mean_abs_deviation)
-			else :
-					modified_z_score = diff / (1.4826 * med_abs_deviation)
-			if debug : print ("MedAD Zs: "+str(modified_z_score))
-			if debug : print("MeanAD Zs: "+str(meanified_z_score))
-			if debug : print ("Results: "+str(meanified_z_score * modified_z_score > 16))
-
-			return dict(zip(inc_arr, np.sqrt(meanified_z_score * modified_z_score)))
-	return None
-
 # returns list of all EDs shared by all streets in st_ed_dict_chk
 def ED_in_common(st_ed_dict_chk) :
 	EDs = list(st_ed_dict_chk.values())
@@ -1413,32 +1299,34 @@ def find_unique_st(st_list) :
 	else :
 		return unique_sts,redundant_sts
 
-#helper function for is_ED_boundary
-#if >= 90% of addresses are even or odd, return 'even' or 'odd', respectively. Otherwise, return 'both'
-def even_or_odd(Address_List) :
-	even_cnt = 0
-	odd_cnt = 0
-	if len(Address_List) < 2 :
-		return 'na'
-	for a_str in Address_List :
-		try :
-			a = int(a_str)
-			if a%2 == 0 :
-				even_cnt = even_cnt+1
-			else :
-				odd_cnt = odd_cnt+1
-		except ValueError :
-			# print("not an address #: "+str(a_str))
-			continue
-	if even_cnt / len(Address_List) >= .9 :
-		return 'even'
-	elif odd_cnt / len(Address_List) >= .9 :
-		return 'odd'
-	else :
-		return 'both'
-		
+	
 # function for resolving ambiguous 3-way intersections
 def is_ED_boundary(st,ED) :
+
+	#helper function for is_ED_boundary
+	#if >= 90% of addresses are even or odd, return 'even' or 'odd', respectively. Otherwise, return 'both'
+	def even_or_odd(Address_List) :
+		even_cnt = 0
+		odd_cnt = 0
+		if len(Address_List) < 2 :
+			return 'na'
+		for a_str in Address_List :
+			try :
+				a = int(a_str)
+				if a%2 == 0 :
+					even_cnt = even_cnt+1
+				else :
+					odd_cnt = odd_cnt+1
+			except ValueError :
+				# print("not an address #: "+str(a_str))
+				continue
+		if even_cnt / len(Address_List) >= .9 :
+			return 'even'
+		elif odd_cnt / len(Address_List) >= .9 :
+			return 'odd'
+		else :
+			return 'both'
+
 	#print("called ED boundary")
 	try :
 		temp_addresses_unfiltered = ST_ED_Address_DICT[st+ED]
@@ -1476,31 +1364,6 @@ def get_st_by_name(name, st_dict) :
 		if v == name :
 			name_list.append(k)
 	return name_list
-
-#Returns just the NAME component of the street phrase, if any#
-#If second argument is True, return a list of all components 
-def isolate_st_name(st,whole_phrase = False) :
-	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
-		# print("it is "+str(whole_phrase))
-		# print(str(st)+" is not a silly string")
-		return None
-	else :
-		TYPE = re.search(" (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$",st)
-		if(TYPE) :
-			TYPE = TYPE.group(0)
-			st = re.sub(TYPE+"$", "",st)
-			TYPE = TYPE.strip()
-		DIR = re.search("^[NSEW]+ ",st)
-		if(DIR) :
-			DIR = DIR.group(0)
-			st = re.sub("^"+DIR, "",st)
-			DIR = DIR.strip()
-		st = st.strip()
-		
-	if whole_phrase :
-		return [DIR,st,TYPE]
-	else :
-		return st
 
 # return all EDs associated with st according to st_ed_dict_chk
 # st can be a string or an iterable of strings
@@ -1578,21 +1441,6 @@ def fuzzy_match(phrase,st_list) :
 		m_TYPE = m_list[2]
 		if(m_TYPE == TYPE) :
 			return m
-
-def find_mode(l) :
-	mode_dict = {}
-	for i in l :
-		if not i in mode_dict.keys() :
-			mode_dict[i] = 1
-		else :
-		   mode_dict[i] += 1
-	try :
-		max_freq = sorted(mode_dict.values())[-1]
-	except :
-		#print("max_freq prob")
-		#print(l)
-		return -999
-	return [x[0] for x in mode_dict.items() if x[1]==max_freq]
 
 # given a intersect->info dict for a particular block, return what ED the block should be in
 def aggregate_blk_inter_data(inter_dict) :
@@ -1865,20 +1713,6 @@ def ed_inter_algo(city, state, fullname_var, paths, decade=1930):
 		new_var_name="ED_inter", 
 		is_desc=False, 
 		decade=decade)
-		
-#
-# Matt's initial geocoding script (written in R)
-#
-
-# See "/blocknum/R/Identify 1930 EDs.R" for details
-def identify_eds(city_name, paths, decade):
-	r_path, script_path, file_path = paths
-	print("Identifying " + str(decade) + " EDs\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-	if t != 0:
-		print("Error identifying "+str(decade)+" EDs for "+city_name+"\n")
-	else:
-		print("OK!\n")
 
 #
 # Function to select best ED guess based on three methods
@@ -2045,6 +1879,7 @@ def get_ed_guesses(city_info, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD',
 	elif decade == 1940:
 		# Run Amory's 1940 descriptions algorithm
 		ed_desc_algo40(city_spaces, state, fullname_var, paths, decade)
+
 	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
 	arcpy.SpatialJoin_analysis(target_features=last_step, 
 		join_features=ed_desc_map, 

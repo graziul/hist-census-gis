@@ -272,3 +272,75 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 		info = header + STprop + sp + STnum + sp + Time
 
 	return info
+
+def load_cleaned_microdata(city_info, dir_path, v=7):
+	city_name, state_abbr, decade = city_info
+	try:
+		microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
+		df = load_large_dta(microdata_file)
+	except:
+		for version in range(1,v+1)[::-1]:
+			try:
+				microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(version) + ".csv"
+				df = pd.read_csv(microdata_file, low_memory=False)
+			except:
+				print("Error loading microdata for %s %s, %s" % (decade, city_name, state_abbr))
+				raise
+	return df
+
+# This function replaces Matt's R script but produces exactly the same file
+def create_addresses(city_info, paths, df=None):
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
+
+	r_path, script_path, dir_path = paths
+	# Load microdata file if not passed to function
+	if type(df) == 'NoneType' or df == None:
+		df = load_cleaned_microdata(city_info, dir_path)
+	df.columns = map(str.lower, df.columns)
+	# Set index variable
+	df['index'] = df.index
+	if decade == 1930:
+		# Change name of 'block' to 'Mblk' (useful for later somehow? Matt did it)
+		df.loc[:,('mblk')] = df['block']
+	elif decade == 1940:
+		df['mblk'] = ''
+	# Choose the best available street name variable (st_best_guess includes student cleaning)
+	# NOTE: When student cleaning is unavailable we should probably fill in overall_match_bool==FALSE
+	#	    with street_precleanedHN, but this has not been done yet to my knowledge.
+	if 'st_best_guess' in df.columns.values:
+		street_var = 'st_best_guess'
+	elif 'overall_match' in df.columns.values:
+		street_var = 'overall_match'
+	# Change '.' to blank string
+	df.loc[:,'fullname'] = df[street_var]
+	df.loc[df['fullname']=='.','fullname'] = ''
+	# Make sure we found a street name variable
+	if 'fullname' not in df.columns.values:
+		print("No street name variable selected")
+		raise
+
+	# Select variables for file
+	# Create ED-block
+	if decade == 1930:
+		vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn','ed_block']
+		df.loc[:,('ed_int')] = df['ed'].astype(int)
+		df.loc[:,('ed_block')] = df['ed_int'].astype(str) + '-' + df['mblk'].astype(str)
+		del df['ed_int']
+	elif decade == 1940:
+		vars_of_interest = ['index','fullname', 'ed','type','hn']
+
+	df_add = df.loc[:,vars_of_interest]
+
+	# Change missing and 0 to blank string
+	df_add.loc[(np.isnan(df_add['hn']))|(df_add['hn']==0),'hn'] = '-1'
+	df_add.loc[:,'hn'] = df_add['hn'].astype(int)
+	df_add.loc[:,'hn'] = df_add['hn'].astype(str).str.replace('-1','')
+	df_add.loc[:,'city'] = city_name
+	df_add.loc[:,'state'] = state_abbr
+	df_add.loc[:,'address'] = (df_add['hn'] + " " + df_add['fullname']).str.strip()
+	# Save address file	
+	addresses = dir_path + "/GIS_edited/" + city_name + "_" + str(decade) + "_Addresses.csv"
+	df_add.to_csv(addresses, index=False)

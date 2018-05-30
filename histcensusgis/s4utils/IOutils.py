@@ -6,6 +6,8 @@
 
 import pandas as pd
 import geopandas as gpd
+import csv
+import xlrd
 
 # Function to load large Stata files
 def load_large_dta(fname):
@@ -64,6 +66,28 @@ def load_shp(filename, ranges=None):
 # Function to save Pandas DF as DBF file 
 def save_shp(df, shapefile_name):
 	df.to_file(filename=shapefile_name, encoding='utf-8', driver='ESRI Shapefile')
+
+# Function to convert Excel to .csv
+def csv_from_excel(excel_file, csv_name):
+	workbook = xlrd.open_workbook(excel_file)
+	all_worksheets = workbook.sheet_names()
+	for i,worksheet_name in enumerate(all_worksheets[0:2]) : #Use only first two worksheets
+		worksheet = workbook.sheet_by_name(worksheet_name)
+		if i==0 :
+			namename = csv_name
+		elif i == 1 :
+			namename = csv_name+"_ED"
+		else :
+			assert(True == False)
+		with open('{}.csv'.format(namename), 'w+') as your_csv_file:
+			for rownum in range(worksheet.nrows):
+				rowstr = ""
+				for v in worksheet.row_values(rownum) :
+					if v=="" :
+						break
+					rowstr = rowstr+v+","
+				rowstr = rowstr[:-1] #remove trailing comma
+				your_csv_file.write(rowstr+"\n")
 
 #
 # DEPRECATED - WILL BE REMOVED AS SOON AS FEASIBLE

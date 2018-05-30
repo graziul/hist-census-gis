@@ -4,7 +4,9 @@
 # Contents: Functions primarily associated with the street grid 
 #
 
-def grid_geo_fix(geo_path, city_name, state_abbr, decade, hn_ranges=['LFROMADD','LTOADD','RFROMADD','RTOADD']):
+from histcensusgis.s4utils.AmoryUtils import *
+
+def grid_geo_fix(city_info, geo_path, hn_ranges=['LFROMADD','LTOADD','RFROMADD','RTOADD']):
 
 	"""
 	Code to "fix up" street grid geometry (and duplicate ranges)
@@ -16,14 +18,10 @@ def grid_geo_fix(geo_path, city_name, state_abbr, decade, hn_ranges=['LFROMADD',
 
 	Parameters
 	----------
-	geo_path : str
-		Path to GIS files
-	city_name : str
-		City name, no spaces
-	state_abbr : str
-		Two letter state abbreviation, capitalized
-	decade : int
-		Decade of interest (e.g. 1930)
+	city_info : list
+		List containing city name (e.g. "Hartford"), state abbreviation (e.g. "CT"), and decade (e.g. 1930)
+	paths : list
+		List of file paths for R code, Python scripts, and data files
 	hn_ranges : list (Optional)
 		List of string variables naming min/max from/to for house number ranges in street grid
 
@@ -37,6 +35,13 @@ def grid_geo_fix(geo_path, city_name, state_abbr, decade, hn_ranges=['LFROMADD',
 	"""
 
 	#Create filenames to be used throughout process
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
+
+	_, _, dir_path = paths
+	geo_path = 
 
 	#NOTE: By defualt we are starting with 1940 cleaned grids then saving them as 19X0 grids!	
 	grid = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit.shp"
@@ -187,20 +192,6 @@ def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 
 	field_names = [x.name for x in fields]
 
-	# Version of Dict_append that only accepts unique v(alues) for each k(ey)
-	def Dict_append_unique(Dict, k, v) :
-		if not k in Dict :
-			Dict[k] = [v]
-		else :
-			if not v in Dict[k] :
-				Dict[k].append(v)
-				
-	def Dict_append_flexible(Dict, k, v) :
-		if not k in Dict :
-			Dict[k] = v
-		else :
-			Dict[k] = [Dict[k]]
-			Dict[k].append(v)
 
 	#Return all unique values of field found in table
 	def unique_values(table, field):
@@ -661,31 +652,8 @@ def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 
 	return name_sequence_dict, exact_next_dict
 
-def analyzing_microdata_and_grid(city_name, state_abbr, paths, decade):
-
-	"""
-	Analyzing microdata and grid (R function)
-
-	Returns a list of streets for students to add 
-
-	Parameters
-	----------
-	city_name : str
-		City name, no spaces
-	state_abbr : str
-		Two letter state abbreviation, capitalized
-
-	"""
-
-	print("Analyzing microdata and grids\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Analyzing Microdata and Grid.R',file_path,city_name,state_abbr, str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-	if t != 0:
-		print("Error analyzing microdata and grid for "+city_name+"\n")
-	else:
-		print("OK!\n") 
-
-# Should be repeat of analyzing_microdata_and_grid?? (CHECK)
-def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, decade):
+# Check for streets not in grid 
+def check_for_streets_not_grid(geo_path, df, grid_shp, city_info, df_street_var, df_ed_var='ed', grid_street_var='FULLNAME'):
 
 	"""
 	Get street names in microdata but not in street grid
@@ -696,16 +664,18 @@ def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_
 	----------
 	geo_path : str
 		Path to GIS files
-	df_ungeocoded : Pandas dataframe
-		Dataframe including ungeocoded data
-	df_grid : Pandas dataframe
-		Dataframe of street grid attributes
-	city_name : str
-		City name, no spaces
-	state_abbr : str
-		Two letter state abbreviation, capitalized
-	decade : int
-		Decade of interest (e.g. 1930)
+	df : Pandas dataframe
+		Dataframe that includes street names
+	grid_shp : str
+		Filename (including path) to street grid shapefile
+	city_info : list
+		List containing city name (e.g. "Hartford"), state abbreviation (e.g. "CT"), and decade (e.g. 1930)
+	df_street_var : str
+		Variable in Pandas dataframe containing street names 
+	df_ed_var : str (Optional)
+		Variable in Pandas dataframe containing ED numbers
+	grid_street_var : str (Optional)
+		Variable in street grid shapefile containing street names
 
 	Returns
 	-------
@@ -713,28 +683,36 @@ def get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_
 
 	"""
 
-	# Get ungeocoded street-ED combinations (and count number of ungeocoded cases)
-	df_ungeocoded_st_ed = df_ungeocoded.loc[df_ungeocoded['fullname']!='.',['fullname','ed']]
-	df_ungeocoded_st_ed = df_ungeocoded_st_ed.groupby(['fullname','ed']).size().reset_index(name='count')
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
+
+	# Load grid dataframe
+	df_grid = load_shp(grid_shp)
 	# Get street list from grid
-	grid_streets_list = df_grid['FULLNAME'].drop_duplicates().tolist()
+	grid_streets_list = df_grid[grid_street_var].drop_duplicates().tolist()
+
+	# Get street-ED combinations from df 
+	df_st_ed = df.loc[df[df_street_var]!='.',[df_street_var,df_ed_var]]
+	df_microdata_st_ed = df_ungeocoded_st_ed.groupby([df_street_var,df_ed_var]).size().reset_index(name='count')
 	# Select ungeocoded streets not in grid
-	df_ungeocoded_st_ed_tocheck = df_ungeocoded_st_ed[~df_ungeocoded_st_ed['fullname'].isin(grid_streets_list)].sort_values(['ed'])
+	df_st_ed_tocheck = df_st_ed[~df_st_ed[df_street_var].isin(grid_streets_list)].sort_values([df_ed_var])
 	# Remove streets with <50 people on them
 	thresh = 50
-	temp = df_ungeocoded_st_ed_tocheck.groupby('fullname')['count'].aggregate(sum) >= thresh
+	temp = df_st_ed_tocheck.groupby(df_street_var)['count'].aggregate(sum) >= thresh
 	temp = temp.reset_index(name='select_street')
-	st_list = temp.loc[temp['select_street'],'fullname'].tolist()
-	df_ungeocoded_st_ed_tocheck_final = df_ungeocoded_st_ed_tocheck[df_ungeocoded_st_ed_tocheck['fullname'].isin(st_list)]
+	st_list = temp.loc[temp['select_street'],df_street_var].tolist()
+	df_st_ed_tocheck_final = df_st_ed_tocheck[df_st_ed_tocheck[df_street_var].isin(st_list)]
+
 	# Create a Pandas Excel writer using XlsxWriter as the engine.
-	file_name = geo_path + '/' + city_name + state_abbr + '_' + str(decade) + 'ungeocoded_not_in_grid'+post+'.xlsx'
+	file_name = geo_path + '/' + city_name + state_abbr + '_' + str(decade) + '_st_not_in_grid'+post+'.xlsx'
 	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 	# Convert the dataframe to an XlsxWriter Excel object.
-	df_ungeocoded_st_ed_tocheck_final.to_excel(writer, sheet_name='Sheet1', index=False)
+	df_st_ed_tocheck_final.to_excel(writer, sheet_name='Missing from grid', index=False)
 	# Close the Pandas Excel writer and output the Excel file.
 	writer.save()
 
-def grid_names_fix(city_spaces, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro=None, v=7, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro=None, v=7, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	"""
 	Fix street grid names 
@@ -743,18 +721,14 @@ def grid_names_fix(city_spaces, state_abbr, micro_street_var, grid_street_var, p
 
 	Parameters
 	----------
-	city_spaces : str
-		City name, including spaces
-	state_abbr : str
-		Two letter state abbreviation, capitalized
+	city_info : list
+		List containing city name (e.g. "Hartford"), state abbreviation (e.g. "CT"), and decade (e.g. 1930)
+	paths : list
+		List of paths to script and file locations
 	micro_street_var : str
 		Name of street variable from microdata (e.g. 'overall_match')
 	grid_street_var : str
 		Name of street variable in grid (e.g. 'FULLNAME')
-	paths : list
-		List of paths to script and file locations
-	decade : int
-		Decade of interest (e.g. 1930)
 	df_micro : Pandas dataframe (Optional)
 		Microdata to use, if you want to specify. Searches for studauto or latest autoclean, otherwise.
 	v : int (Optional)
@@ -768,7 +742,9 @@ def grid_names_fix(city_spaces, state_abbr, micro_street_var, grid_street_var, p
 	
 	"""
 
-	city_name = city_spaces.replace(' ','')
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
 
 	# Paths
 	r_path, script_path, dir_path = paths
