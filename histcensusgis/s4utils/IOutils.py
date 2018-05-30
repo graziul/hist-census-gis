@@ -90,9 +90,10 @@ def csv_from_excel(excel_file, csv_name):
 				your_csv_file.write(rowstr+"\n")
 
 #
-# DEPRECATED - WILL BE REMOVED AS SOON AS FEASIBLE
+# DEPRECATED 
 #
 
+'''
 #Function to reads in DBF files and return Pandas DF
 def dbf2DF(dbfile, upper=False): 
 	if dbfile.split('.')[1] == 'shp':
@@ -122,3 +123,4 @@ def save_dbf(df, shapefile_name):
 	os.rename(dir_temp+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
 	os.remove(dir_temp+"/temp_for_shp.dbf.xml")
 	os.remove(dir_temp+"/temp_for_shp.cpg")
+'''

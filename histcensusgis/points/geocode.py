@@ -11,6 +11,8 @@ Created: 11/3/2017
 Updated: Chris Graziul, 12/11/2017 (stripped down to functions only)
 """
 
+from histcensusgis.s4utils.AmoryUtils import *
+
 # Performs initial geocode on contemporary grid
 def initial_geocode(city_info, geo_path, hn_ranges):
 
@@ -90,14 +92,6 @@ def initial_geocode(city_info, geo_path, hn_ranges):
 	arcpy.Delete_management(geo_path + "temp.gdb/" + city_name + "_" + str(decade) + "_Addresses")
 	arcpy.Delete_management(geo_path + "temp.gdb")
 	print("The script has finished executing the 'GeocodeAddress' tool and has begun executing the 'SpatialJoin' tool")
-
-# Version of Dict_append that only accepts unique v(alues) for each k(ey)
-def Dict_append_unique(Dict, k, v) :
-	if not k in Dict :
-		Dict[k] = [v]
-	else :
-		if not v in Dict[k] :
-			Dict[k].append(v)
 
 # Add and calculate check field, save the result
 def is_touch(ED, neighbor):

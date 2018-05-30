@@ -783,13 +783,7 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 	#
 
 	# Load microdata
-	if type(df_micro) == 'NoneType':
-		try:
-			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
-			df_micro = load_large_dta(microdata_file)
-		except:
-			microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(v) + ".csv"
-			df_micro = pd.read_csv(microdata_file)
+	df_micro = load_cleaned_microdata(city_info, dir_path)
 
 	# Convert to string
 	df_micro[micro_street_var] = df_micro[micro_street_var].astype(str)

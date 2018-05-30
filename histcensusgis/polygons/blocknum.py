@@ -6,11 +6,7 @@
 
 import pandas as pd
 
-#
 # Create physical blocks and block points
-#
-
-# Head script calling individual functions
 def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], geocode_file=None):
 	
 	"""
@@ -31,13 +27,12 @@ def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MI
 
 	"""
 
+	city_name, _, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
 
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
-
-	different_geocode = False
-	if geocode_file != None:
-		different_geocode = True
 
 	# overwrite output
 	arcpy.env.overwriteOutput=True
@@ -53,7 +48,7 @@ def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MI
 	initial_geocode(city_info, geo_path, hn_ranges)
 	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
 
-	if different_geocode:
+	if geocode_file != None:
 		points = geocode_file
 		print("Different geocode")
 	else:
@@ -103,7 +98,6 @@ def attach_pblk_id(city_info, geo_path, points_shp):
 		"INTERSECT")
 	print("The script has finished executing the 'SpatialJoin' tool")
 
-
 #
 # Block numbering functions
 # 
@@ -117,6 +111,7 @@ def identify_blocks_geocode(city_info, paths):
 	city_name = city_name.replace(' ','')
 
 	r_path, script_path, file_path = paths
+
 	print("Identifying " + str(decade) + " blocks\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 Blocks.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
@@ -132,7 +127,6 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 	state_abbr = state_abbr.upper()
 
 	r_path, script_path, dir_path = paths
-
 	geo_path = dir_path + "/GIS_edited/"
 
 	block_file = geo_path + city_name + "_" + str(decade) + "_Block_Choice_Map.shp"
@@ -313,7 +307,8 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 #
 
 # Uses OCR and ED map images to fill in block numbers 
-def run_ocr(city_name, paths):
+def run_ocr(city_info, paths):
+	city_name, _, _ = city_info
 	r_path, script_path, file_path = paths
 	print("Runing Matlab script\n")
 	t = subprocess.call(["python",script_path+"/blocknum/Python/RunOCR.py",file_path,script_path],stdout=open(os.devnull, 'wb'))
@@ -323,7 +318,8 @@ def run_ocr(city_name, paths):
 		print("OK!\n")
 
 # Incorporates OCR block data
-def integrate_ocr(city_name, file_name, paths):
+def integrate_ocr(city_info, paths, file_name):
+	city_name, _, _ = city_info
 	r_path, script_path, file_path = paths
 	print("Integrating OCR block numbering results\n")
 	t = subprocess.call(["python",script_path+"/blocknum/Python/MapOCRintegration.py",file_path,city_name,file_name])
@@ -336,7 +332,11 @@ def integrate_ocr(city_name, file_name, paths):
 # FixDirAndBlockNumsUsingMap.py
 #
 
-def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_street_var, paths, decade, df_micro, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+def fix_micro_dir_using_ed_map(city_info, paths, micro_street_var, grid_street_var, df_micro, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
 
 	r_path, script_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
@@ -439,7 +439,11 @@ def fix_micro_dir_using_ed_map(city_name, state_abbr, micro_street_var, grid_str
 
 	return df_micro
 
-def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+def fix_micro_blocks_using_ed_map(city_info, paths, df_micro, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
 
 	# Paths
 
@@ -520,7 +524,8 @@ def fix_micro_blocks_using_ed_map(city_name, state_abbr, paths, decade, df_micro
 
 
 # Sets confidence in block number based on multpiel sources
-def set_blocknum_confidence(city_name, paths):
+def set_blocknum_confidence(city_info, paths):
+	city_name, _, _ = city_info
 	r_path, script_path, file_path = paths
 	print("Setting confidence\n")
 	t = subprocess.call(["python",script_path+"/blocknum/Python/SetConfidence.py",file_path,city_name])
