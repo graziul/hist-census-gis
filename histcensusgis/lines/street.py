@@ -747,7 +747,7 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 	state_abbr = state_abbr.upper()
 
 	# Paths
-	r_path, script_path, dir_path = paths
+	r_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 
 	# Files

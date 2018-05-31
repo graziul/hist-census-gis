@@ -23,8 +23,7 @@ if geocode_file != "":
 # Paths
 dir_path = "C:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
 r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
-script_path = "C:/Users/cgraziul/Documents/GitHub/hist-census-gis"
-paths = [r_path, script_path, dir_path]
+paths = [r_path, dir_path]
 hn_ranges = ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD']
 
 start = time.time()
@@ -165,10 +164,8 @@ fill_blank_segs(city_name=city,
 geo_path = dir_path + '/GIS_edited/'
 
 # Get adjacent EDs
-get_adjacent_eds(geo_path=geo_path, 
-	city_name=city, 
-	state_abbr=state, 
-	decade=decade)
+get_adjacent_eds(city_info=city_info,
+	geo_path=geo_path)
 
 # Common variables
 

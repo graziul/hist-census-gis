@@ -18,7 +18,7 @@ def ed_geocode_algo(city_info, paths):
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
-	r_path, script_path, file_path = paths
+	r_path, file_path = paths
 	print("Identifying " + str(decade) + " EDs\n")
 	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
@@ -27,8 +27,10 @@ def ed_geocode_algo(city_info, paths):
 		print("OK!\n")
 
 # Get adjacent EDs (used for validation of geocoding)
-def get_adjacent_eds(geo_path, city_name, state_abbr, decade):
+def get_adjacent_eds(city_info, geo_path):
 	
+	city_name, state_abbr, decade = city_info
+
 	# Files
 
 	# "vm" is the verified map (e.g., ED or block map)
@@ -523,11 +525,11 @@ def RunAnalysisInt(city_name) :
 
 def ed_inter_algo(city_info, paths, grid_street_var):
 
-	city, state, decade = city_info
-	city_spaces = city
+	city_name, state_abbr, decade = city_info
+	city_spaces = city_name
 	city = city.replace(' ','')
 
-	r_path, script_path, dir_path = paths
+	r_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 
 	global SMLines
@@ -569,23 +571,23 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 	global Intersect_Info_DICT
 	Intersect_Info_DICT = {} # lookup intersection -> list of information
 
-	Micro_TXT = open(geo_path + city + '_' + str(decade) + '_Addresses.csv')
+	Micro_TXT = open(geo_path + city_name + '_' + str(decade) + '_Addresses.csv')
 
 	sm_path = r"S:\Projects\1940Census\SMlists"
 	os.chdir(sm_path+"\\"+str(decade))
 	try:
-		csv_name = city_spaces+state+"_SM"
+		csv_name = city_spaces+state_abbr+"_SM"
 		csv_from_excel(csv_name+".xlsx",csv_name)
 	except:
-		csv_name = city + state + "_SM"
+		csv_name = city_name + state_abbr + "_SM"
 		csv_from_excel(csv_name+".xlsx",csv_name)
 	SM_ED_TXT = open(csv_name+".csv",'r')
 	SM_ED_TXT1 = open(csv_name+"_ED.csv",'r')
 
-	if ~os.path.isfile(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'):
-		prepare_map_intersections(city + state + '_' + str(decade) + '_stgrid_edit_Uns2.shp', grid_street_var, paths)
+	if ~os.path.isfile(geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'):
+		prepare_map_intersections(city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2.shp', grid_street_var, paths)
 
-	Intersect_TXT = open(geo_path + '/IntersectionsIntermediateFiles/' + city + state + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.txt')
+	Intersect_TXT = open(geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.txt')
 	SMLines = csv.reader(SM_ED_TXT)
 	next(SMLines, None)  # skip header
 	SMLines1 = csv.reader(SM_ED_TXT1)
@@ -595,9 +597,7 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 	RunAnalysisInt(city)
 
 	print("Creating ED Map for %s (Intersections algorithm)" % (city))
-	draw_EDs(city=city, 
-		state=state, 
-		paths=paths, 
+	draw_EDs(city_info=city_info, 
 		new_var_name="ED_inter", 
 		is_desc=False, 
 		decade=decade)
@@ -759,14 +759,16 @@ def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
 		Add_Field_Names_to_Output="ADD_FIELD_NAMES")
 
 # Draw ED maps (descriptions, intersections)
-def draw_EDs(city, state, paths, new_var_name, is_desc, decade) :
+def draw_EDs(city_info, paths, new_var_name, is_desc) :
 
-	_, _, dir_path = paths
+	city_name, state_abbr, decade = city_info
+
+	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
 
-	targ = intermed_path + city + state + "_" + str(decade) + "_stgrid_edit_Uns2_spatial_join.shp"
-	targ1 = geo_path + city + "_" + str(decade) + "_Pblk.shp"
+	targ = intermed_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2_spatial_join.shp"
+	targ1 = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 
 	inter = arcpy.Intersect_analysis(in_features=[targ,targ1],
 		out_feature_class=intermed_path + "intersectToGetEDs.shp",
@@ -786,8 +788,8 @@ def draw_EDs(city, state, paths, new_var_name, is_desc, decade) :
 	# If using Amory's ED description method do this
 	if is_desc:
 
-		output_shp = geo_path+city+state+"_"+str(decade)+"_ED_desc.shp"
-		arcpy.CreateFeatureclass_management(geo_path,city+state+"_"+str(decade)+"_ED_desc.shp")
+		output_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp"
+		arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp")
 		blk_file = intermed_path+"fullname_dissolve_split.shp"
 		arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
 		arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
@@ -1034,13 +1036,13 @@ def find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = Fa
 
 	return finished,str(filter(None,predecessor_dict.values())).replace("'","").replace("[","(").replace("]",")")+" "+str(vertex)+" "+next_name
 
-def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
+def RunAnalysisDesc(city_name, state_abbr, paths, InterLines, Descriptions, shp_targ) :
 
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
-	output = open(geo_path + city+"_EDs.txt","w+")
-	problem_EDs = open(geo_path + city+"_problem_EDs.txt","w+")
+	output = open(geo_path + city_name+"_EDs.txt","w+")
+	problem_EDs = open(geo_path + city_name+"_problem_EDs.txt","w+")
 
 	debug = False
 
@@ -1064,7 +1066,7 @@ def RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ) :
 	BLOCK_Intersect_dict = {} # lookup BLOCK ID -> which intersections
 	BLOCK_NAME_dict = {} # lookup BLOCK ID -> NAME of segment
 
-	print("Preparing Input for "+city+ " (descriptions)")
+	print("Preparing Input for "+city_name+ " (descriptions)")
 
 	# Create Map DICTs
 	for ind, iline in enumerate(InterLines) :
@@ -1180,7 +1182,7 @@ def ed_desc_algo(city_info, paths, grid_street_var):
 	city_spaces = city_name
 	city_name = city_name.replace(' ','')
 
-	r_path, script_path, dir_path = paths
+	r_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	global discovered_problem
@@ -1243,14 +1245,14 @@ def ed_desc_algo(city_info, paths, grid_street_var):
 
 		arcpy.ExportXYv_stats(Input_Feature_Class =stgrid_file, 
 			Value_Field=fullname_var, Delimiter="COMMA",
-			Output_ASCII_File=dir_path+"/Textfile/"+city+"_attr.txt", 
+			Output_ASCII_File=dir_path+"/Textfile/"+city_name+"_attr.txt", 
 			Add_Field_Names_to_Output="NO_FIELD_NAMES")
 
-		with open(dir_path+"/Textfile/"+city+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
+		with open(dir_path+"/Textfile/"+city_name+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
 			blk_lines = blk_txt_file.readlines()
-		with open(dir_path+"/Textfile/"+city+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
+		with open(dir_path+"/Textfile/"+city_name+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
 			ed_lines = ed_txt_file.readlines()
-		with open(dir_path+"/Textfile/"+city+"_attr.txt",'r') as st_list_file :
+		with open(dir_path+"/Textfile/"+city_name+"_attr.txt",'r') as st_list_file :
 			st_lines = st_list_file.readlines()
 
 		for i in range(0,len(st_lines)) :
@@ -1394,10 +1396,10 @@ def ed_desc_algo(city_info, paths, grid_street_var):
 			raise
 
 		# Have to convert .shp to .gdb here because of text field size limit for dBase files
-		if arcpy.Exists(geo_path+"scratch%s.gdb" % (city)):
-			arcpy.Delete_management(geo_path+"scratch%s.gdb" % (city))
-		arcpy.CreateFileGDB_management(geo_path, "scratch%s" % (city))
-		arcpy.env.workspace = geo_path+"scratch%s.gdb" % (city)
+		if arcpy.Exists(geo_path+"scratch%s.gdb" % (city_name)):
+			arcpy.Delete_management(geo_path+"scratch%s.gdb" % (city_name))
+		arcpy.CreateFileGDB_management(geo_path, "scratch%s" % (city_name))
+		arcpy.env.workspace = geo_path+"scratch%s.gdb" % (city_name)
 		arcpy.FeatureClassToGeodatabase_conversion([sj_targ, stgrid_file], arcpy.env.workspace)
 		arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_stgrid_edit_Uns2"), "st_lyr")
 		arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state[:-2] + "_"+str(decade)+"_Pblk"), "pblk_lyr")
@@ -1452,7 +1454,7 @@ def ed_desc_algo(city_info, paths, grid_street_var):
 				with arcpy.da.SearchCursor("st_lyr",[grid_id_var,fullname_var]) as s_cursor :
 					stname_list = []
 					for s_row in s_cursor :
-						if city == "OklahomaCityOK" :
+						if city_state == "OklahomaCityOK" :
 							phrase = isolate_st_name(str(s_row[1]),whole_phrase = True)
 							if phrase[0] and re.search("^[A-Z][A-Z]$",phrase[0]):
 								try :
@@ -1538,15 +1540,13 @@ def ed_desc_algo(city_info, paths, grid_street_var):
 		ED_Intersect_ID_dict = {} # lookup ED -> string of Intersection IDs
 
 		if st_grid_exists and descriptions_exist:
-			RunAnalysisDesc(city, state, paths, InterLines, Descriptions, shp_targ)
+			RunAnalysisDesc(city_name, state_abbr, paths, InterLines, Descriptions, shp_targ)
 		else :
-			print(city+": Error finding stgrid ("+str(st_grid_exists)+") and/or descriptions ("+str(descriptions_exist)+")")
+			print(city_name+": Error finding stgrid ("+str(st_grid_exists)+") and/or descriptions ("+str(descriptions_exist)+")")
 	
-	print("Creating ED Map for %s (Descriptions algorithm)" % (city))
+	print("Creating ED Map for %s (Descriptions algorithm)" % (city_name))
 
-	draw_EDs(city=city, 
-		state=state, 
-		paths=paths, 
+	draw_EDs(city_info=city_info, 
 		new_var_name="ED_desc", 
 		is_desc=True, 
 		decade=decade)
@@ -1714,18 +1714,18 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 # Save information
 
 def get_ed_guess_stats(city_info, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
-	city, state, decade = city_info
-	city = city.replace(' ','')
-	city_state=city+state
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	city_state=city_name+state_abbr
 	if city_state == "KansasCityKS":
 		dir_path = "S:/Projects/1940Census/KansasCityKS"
 	elif city_state == "KansasCityMO":
 		dir_path = "S:/Projects/1940Census/KansasCityMO"
 	else:
-		dir_path = "S:/Projects/1940Census/" + city
+		dir_path = "S:/Projects/1940Census/" + city_name
 	geo_path = dir_path + "/GIS_edited/"
 	# Load dbf data
-	ed_guess_file = geo_path + city + state + '_' + str(decade) + '_ED_guess_map.shp'
+	ed_guess_file = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
 	df_ed_guess = load_shp(ed_guess_file, ranges)
 	if decade == 1940:
 		# Get number of blocks in block description file
@@ -1757,13 +1757,13 @@ def get_ed_guess_stats(city_info, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD
 		info.loc[info['ed_conf'].isnull(),'ed_conf'] = info.loc[info['b_guess'].notnull(),'b_guess']
 		info['ed_conf'].replace({False:'No Block Guess',True:'Block Guess'},inplace=True)
 		del info['b_guess']
-		info['city'] = city
-		info['state'] = state
+		info['city'] = city_name
+		info['state'] = state_abbr
 	else:
 		# Create a tabular summary of number guessed by confidence in guess
 		info = df_ed_guess.groupby(['ed_conf'], as_index=False).count()[['ed_conf','pblk_id']]
-		info['city'] = city
-		info['state'] = state		
+		info['city'] = city_name
+		info['state'] = state_abbr		
 	return info
 
 
@@ -1841,8 +1841,8 @@ city_info_list5 = [['Toledo','OH'],
 def do_city_list(city_info_list):
 	city_list = []
 	for city_info in city_info_list:
-		city, state = city_info
-		city_list.append([city, state, decade, fullname_var])
+		city_name, state_abbr, decade = city_info
+		city_list.append(city_info+[fullname_var])
 	for city_info in city_list:
 		try:
 			get_ed_guesses(city_info)

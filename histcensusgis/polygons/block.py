@@ -31,7 +31,7 @@ def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MI
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
-	_, _, dir_path = paths
+	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	# overwrite output
@@ -105,15 +105,15 @@ def attach_pblk_id(city_info, geo_path, points_shp):
 # Identifies block numbers and can be run independently (R script)
 # NOTE: Assigns block numbers using microdata blocks. Examines proportion of cases that geocode 
 # onto the same physical block and decides  
-def identify_blocks_geocode(city_info, paths):
+def identify_blocks_geocode(city_info, paths, script_path):
 
 	city_name, _, decade = city_info
 	city_name = city_name.replace(' ','')
 
-	r_path, script_path, file_path = paths
+	r_path, dir_path = paths
 
 	print("Identifying " + str(decade) + " blocks\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 Blocks.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 Blocks.R',dir_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error identifying " + str(decade) + " blocks for "+city_name+"\n")
 	else:
@@ -126,7 +126,7 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
-	r_path, script_path, dir_path = paths
+	r_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	block_file = geo_path + city_name + "_" + str(decade) + "_Block_Choice_Map.shp"
@@ -307,9 +307,9 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 #
 
 # Uses OCR and ED map images to fill in block numbers 
-def run_ocr(city_info, paths):
+def run_ocr(city_info, paths, script_path):
 	city_name, _, _ = city_info
-	r_path, script_path, file_path = paths
+	r_path, file_path = paths
 	print("Runing Matlab script\n")
 	t = subprocess.call(["python",script_path+"/blocknum/Python/RunOCR.py",file_path,script_path],stdout=open(os.devnull, 'wb'))
 	if t != 0:
@@ -318,9 +318,9 @@ def run_ocr(city_info, paths):
 		print("OK!\n")
 
 # Incorporates OCR block data
-def integrate_ocr(city_info, paths, file_name):
+def integrate_ocr(city_info, paths, script_path, file_name):
 	city_name, _, _ = city_info
-	r_path, script_path, file_path = paths
+	r_path, file_path = paths
 	print("Integrating OCR block numbering results\n")
 	t = subprocess.call(["python",script_path+"/blocknum/Python/MapOCRintegration.py",file_path,city_name,file_name])
 	if t != 0:
@@ -338,7 +338,7 @@ def fix_micro_dir_using_ed_map(city_info, paths, micro_street_var, grid_street_v
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
-	r_path, script_path, dir_path = paths
+	r_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	# Files
@@ -447,7 +447,7 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro, hn_ranges=['MIN_LF
 
 	# Paths
 
-	_, _, dir_path = paths
+	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/" 
 
 	# File names
@@ -526,7 +526,7 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro, hn_ranges=['MIN_LF
 # Sets confidence in block number based on multpiel sources
 def set_blocknum_confidence(city_info, paths):
 	city_name, _, _ = city_info
-	r_path, script_path, file_path = paths
+	r_path, file_path = paths
 	print("Setting confidence\n")
 	t = subprocess.call(["python",script_path+"/blocknum/Python/SetConfidence.py",file_path,city_name])
 	if t != 0:

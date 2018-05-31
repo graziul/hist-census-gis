@@ -156,8 +156,10 @@ def create_overall_match_variables(df, year):
 
 	return df
 
-def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1=None, fix_blanks_info2=None):
+def gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1=None, fix_blanks_info2=None):
 
+	city_name, state_abbr, decade = city_info
+	
 	#Parse exact matching info
 	num_exact_matches_sm, num_noexact_matches_sm, \
 	num_streets_exact_sm, num_streets_noexact_sm, \
@@ -182,7 +184,7 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	#Calculate fuzzy matching variables
 	prop_fuzzy_matches = float(num_fuzzy_matches)/num_records
 
-	if year != 1940:
+	if decade != 1940:
 		num_street_changes1, num_blank_street_names1, \
 		num_blank_street_singletons1, per_singletons1, \
 		num_blank_street_fixed1, per_blank_street_fixed1, \
@@ -246,18 +248,18 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 	prop_resid_total = prop_resid_check_st + prop_resid_check_st_hn + prop_resid_check_hn
 	'''
 
-	header = [year, city, state, num_records]
+	header = [decade, city_name, state_abbr, num_records]
 	sp = ['']
 
 	#Old solution: Back out first blank fixing since it occurs before exact matching
 	#New solution: Ignore first blank fixing since it occurs before exact matching
-	if year != 1940:
+	if decade != 1940:
 		STprop = [prop_exact_matches_stgrid, prop_fuzzy_matches, prop_blank_street_fixed2]
-		STnum = [city, state, num_exact_matches_stgrid, num_fuzzy_matches, num_blank_street_fixed2]
-		ED = [city, state, problem_EDs_present]
-		FixBlank = [city, state, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
+		STnum = [city_name, state_abbr, num_exact_matches_stgrid, num_fuzzy_matches, num_blank_street_fixed2]
+		ED = [city_name, state_abbr, problem_EDs_present]
+		FixBlank = [city_name, state_abbr, num_hn_outliers1, num_blank_street_names1, num_blank_street_singletons1, per_singletons1,   
 			num_hn_outliers2, num_blank_street_names2, num_blank_street_singletons2, per_singletons2]
-		Time = [city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
+		Time = [city_name, state_abbr, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, 
 			blank_fix_time, priority_time, total_time]
 
 		info = header + STprop + sp + STnum + sp + ED + sp + FixBlank + sp + Time
@@ -266,8 +268,8 @@ def gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_i
 		num_resid = num_records - num_exact_matches - num_fuzzy_matches
 		prop_resid = float(num_resid)/num_records
 		STprop = [prop_exact_matches, prop_fuzzy_matches, prop_resid]
-		STnum = [city, state, num_exact_matches, num_fuzzy_matches, num_resid]
-		Time = [city, state, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, total_time]
+		STnum = [city_name, state_abbr, num_exact_matches, num_fuzzy_matches, num_resid]
+		Time = [city_name, state_abbr, load_time, preclean_time, exact_matching_time, fuzzy_matching_time, total_time]
 
 		info = header + STprop + sp + STnum + sp + Time
 
@@ -295,7 +297,7 @@ def create_addresses(city_info, paths, df=None):
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
-	r_path, script_path, dir_path = paths
+	_, dir_path = paths
 	# Load microdata file if not passed to function
 	if type(df) == 'NoneType' or df == None:
 		df = load_cleaned_microdata(city_info, dir_path)

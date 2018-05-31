@@ -37,7 +37,10 @@ from histcensusgis.s4utils.IOutils import *
 # Step 1: Load city
 #
 
-def load_city(city, state, year, file_path):
+def load_city(city_info, file_path):
+
+	city, state, year = city_info
+	city = city.replace(' ','')
 
 	start = time.time()
 
@@ -66,7 +69,10 @@ def load_city(city, state, year, file_path):
 	df = rename_variables(df, year)
 
 	# Remove duplicates
-	df = remove_duplicates(df)
+	try:
+		df = remove_duplicates(df)
+	except:
+		print("Remove duplicates failed")
 
 	# Sort by image_id and line_num (important for HN) 
 	df = df.sort_values(['image_id', 'line_num'])
@@ -322,7 +328,9 @@ def remove_duplicates(df):
 # Step 2a: Properly format street names and get Steve Morse street-ed information
 #
 
-def preclean_street(df, city, state, year, file_path):
+def preclean_street(df, city_info, file_path):
+
+	city_name, state_abbr, decade = city_info 
 
 	start = time.time()
 
@@ -339,7 +347,7 @@ def preclean_street(df, city, state, year, file_path):
 	#Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
 	df['street_precleaned'], df['DIR'], df['NAME'] ,df['TYPE'] = zip(*df['street_raw'].apply(lambda s: cleaning_dict[s]))
 
-	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city, state, year, file_path)
+	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path)
 
 	#Create dictionary {NAME:num_NAME_versions}
 	num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
@@ -393,7 +401,7 @@ def preclean_street(df, city, state, year, file_path):
 	end = time.time()
 	preclean_time = round(float(end-start)/60, 1)
 
-	print('Precleaning street names for %s took %s\n' % (city, str(preclean_time)))
+	print('Precleaning street names for %s took %s\n' % (city_name, str(preclean_time)))
 	
 	preclean_info = sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
 
@@ -410,26 +418,28 @@ def specials(error):
 codecs.register_error('specials', specials)
 
 #Function to load 1940 street grid data (no or incomplete ED information)
-def get_streets_from_1940_street_grid(city, state, file_path): 
+def get_streets_from_street_grid(city_info, file_path): 
+
+	city_name, state_abbr, decade = city_info 
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',
 					'Dallas':'standardiz',
 					'Springfield':'standardiz'}
 
-	if city == 'StatenIsland':
+	if city_name == 'StatenIsland':
 		c = 'Richmond'
 	else:
-		c = city.replace(' ','')
+		c = city_name.replace(' ','')
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
-		file_name_st_grid = c + state + '_1940_stgrid_diradd.dbf'
-		st_grid_path = file_path + '/1940/stgrid/' + c + state + '/'
+		file_name_st_grid = c + state_abbr + '_' + str(decade) + '_stgrid_diradd.dbf'
+		st_grid_path = file_path + '/' + str(decade) + '/stgrid/' + c + state_abbr + '/'
 	#TODO: AltSt has street name if FULLNAME/standardized == "City limits" (actually "City limit")
-		if city in special_cities.keys():
-			var = special_cities[city]
-		if city == "Kansas City" and state == "MO":
+		if city_name in special_cities.keys():
+			var = special_cities[city_name]
+		if city_name == "Kansas City" and state_abbr == "MO":
 			var = 'stndrdname'
 		else:
 			var = 'fullname'
@@ -440,38 +450,43 @@ def get_streets_from_1940_street_grid(city, state, file_path):
 		s_no_utf = [i.replace('\xc2\xbd',' 1/2') for i in list(set(s))]
 		streets = list(set(s_no_utf))
 	except:
-		print('Error getting %s street grid data' % (city))
+		print('Error getting %s street grid data' % (city_name))
 
 	return streets
 
 #Function to load 1940, Contemporary, and Chicago group 1930 street grid data (joined with Chicago group 1930 EDs)
-def get_stgrid_with_EDs(city, state, map_type, file_path, ed_year=1940): 
+def get_stgrid_with_EDs(city_info, map_type, file_path, use_1940=True): 
+
+	city_name, state_abbr, decade = city_info
+
+	if use_1940:
+		decade = 1940
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',
 					'Dallas':'standardiz',
 					'Springfield':'standardiz'}
 
-	if city == 'StatenIsland':
+	if city_name == 'StatenIsland':
 		c = 'Richmond'
 	else:
-		c = city.replace(' ','')
+		c = city_name.replace(' ','')
 
-	st_grid_path = file_path + '/1940/stgrid/' + c + state + '/'
+	st_grid_path = file_path + '/' + str(decade) + '/stgrid/' + c + state_abbr + '/'
 
 	#Map from 1940 street grid (student edited to 1940 black/white map - in future may be 1930)
 	if map_type == "1940":
-		file_name_st_grid = st_grid_path + c + state + '_1940_stgrid_ED_sj.shp' 
+		file_name_st_grid = st_grid_path + c + state_abbr + '_1940_stgrid_ED_sj.shp' 
 		street = 'FULLNAME'
 
 	#Map from Tiger/Line 2012 (clipped to approximate city boundary)
 	if map_type == "Contemp":
-		file_name_st_grid = st_grid_path + c + state + '_Contemp_stgrid_ED_sj.shp'
+		file_name_st_grid = st_grid_path + c + state_abbr + '_Contemp_stgrid_ED_sj.shp'
 		street = 'FULL2012'
 
 	#Map from Chicago group (only very certain cities)
 	if map_type == "Chicago":
-		file_name_st_grid = st_grid_path + c + state + '_1930_stgrid_ED_sj.shp'
+		file_name_st_grid = st_grid_path + c + state_abbr + '_1930_stgrid_ED_sj.shp'
 		street = 'FULLNAME'
 
 	df = load_shp(file_name_st_grid) 
@@ -691,7 +706,9 @@ def update_current_match(current_match, current_match_bool, new_match, new_match
 		return current_match, current_match_bool
 
 #Function to do fuzzy matching using multiple sources
-def find_fuzzy_matches_module(df, city, street, grid_all_streets, grid_ed_st_dict, map_type,resid=0):
+def find_fuzzy_matches_module(df, grid_all_streets, grid_ed_st_dict, map_type,resid=0):
+
+	city_name, state_abbr, _ = city_info
 
 	start = time.time()
 
@@ -731,12 +748,14 @@ def find_fuzzy_matches_module(df, city, street, grid_all_streets, grid_ed_st_dic
 	fuzzy_matching_time = round(float(end-start)/60, 1)
 	fuzzy_info = [num_fuzzy_matches, fuzzy_matching_time]
 	print("Fuzzy matches (using " + map_type + "): "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)\n")
-	print("Fuzzy matching for %s took %s\n" % (city, str(fuzzy_matching_time)))
+	print("Fuzzy matching for took %s\n" % (str(fuzzy_matching_time)))
 
 	return df, fuzzy_info, resid
 
 #Function to run all fuzzy matching and return results to Clean.py
-def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, file_path, ed_map=False):
+def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, file_path, ed_map=False):
+
+	city_name, state_abbr, _ = city_info
 
 	try:
 		post = '_' + street.split('_')[2].split('HN')[0]
@@ -756,28 +775,28 @@ def find_fuzzy_matches(df, city, state, street, sm_all_streets, sm_ed_st_dict, f
 	if ed_map:
 		
 		#Get 1940 grid fuzzy matches
-		grid_1940_all_streets, grid_1940_ed_st_dict = get_stgrid_with_EDs(city, state, "1940", file_path)
-		df, fuzzy_info_1940_grid, resid = find_fuzzy_matches_module(df, city, street, grid_1940_all_streets, grid_1940_ed_st_dict, "1940")
+		grid_1940_all_streets, grid_1940_ed_st_dict = get_stgrid_with_EDs(city_info, '1940', file_path)
+		df, fuzzy_info_1940_grid, resid = find_fuzzy_matches_module(df, grid_1940_all_streets, grid_1940_ed_st_dict, "1940")
 
 		#Get Contemporary grid fuzzy matches
-		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city, state, "Contemp", file_path)
-		df, fuzzy_info_Contemp_grid, resid = find_fuzzy_matches_module(df, city, street, grid_Contemp_all_streets, grid_Contemp_ed_st_dict, "Contemp", resid)
+		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city_info, 'Contemp', file_path)
+		df, fuzzy_info_Contemp_grid, resid = find_fuzzy_matches_module(df, grid_Contemp_all_streets, grid_Contemp_ed_st_dict, "Contemp", resid)
 
 		#Get Chicago group 1930 grid fuzzy matches
 		if city in ['Boston', 'Cincinnatti','Philadelphia']:
-			grid_1930_all_streets, grid_1930_ed_st_dict = get_stgrid_with_EDs(city, state, "Chicago", file_path)
-			df, fuzzy_info_1930_grid, resid = find_fuzzy_matches_module(df, city, street, grid_1930_all_streets, grid_1930_ed_st_dict, "Chicago", resid)
+			grid_1930_all_streets, grid_1930_ed_st_dict = get_stgrid_with_EDs(city_info, 'Chicago', file_path)
+			df, fuzzy_info_1930_grid, resid = find_fuzzy_matches_module(df, grid_1930_all_streets, grid_1930_ed_st_dict, "Chicago", resid)
 			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid + fuzzy_info_1930_grid
 		else:
 			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid 
 
 		# Get Steve Morse fuzzy matches
-		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, city, street, sm_all_streets, sm_ed_st_dict, "sm", resid)
+		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, sm_all_streets, sm_ed_st_dict, 'sm', resid)
 
 		fuzzy_info = fuzzy_info + fuzzy_info_sm 
 
 	else:
-		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, city, street, sm_all_streets, sm_ed_st_dict, "sm")
+		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, sm_all_streets, sm_ed_st_dict, 'sm')
 		fuzzy_info = fuzzy_info_sm
 
 	return df, fuzzy_info

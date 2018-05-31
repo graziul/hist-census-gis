@@ -11,28 +11,7 @@ from histcensusgis.polygons.ed import *
 from histcensusgis.s4utils.AmoryUtils import *
 from histcensusgis.s4utils.IOutils import *
 
-city_name = "Akron"
-state_abbr = "OH"
-#r_path = "C:\Program Files\\R\\R-3.3.2\\bin\Rscript"
-#script_path = "C:\Users\\cgraziul\\hist-census-gis"
 r_path = "C:\Program Files\\R\\R-3.4.2\\bin\\Rscript"
-script_path = "C:\Users\\cgraziul\\Documents\\GitHub\\hist-census-gis"
-file_path = "S:/Projects/1940Census/%s" % (city_name) #TO DO: Directories need to be city_name+state_abbr
-
-
-city_state = city_name + state_abbr
-if city_state == "KansasCityKS":
-	dir_path = "S:/Projects/1940Census/KansasCityKS"
-elif city_state == "KansasCityMO":
-	dir_path = "S:/Projects/1940Census/KansasCityMO"
-elif city_state == "RichmondVA":
-	dir_path = "S:/Projects/1940Census/RichmondVA"
-elif city_state == "RichmondNY":
-	dir_path = "S:/Projects/1940Census/RichmondNY"
-else:
-	dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
-
-paths = [r_path, script_path, file_path]
 
 def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], just_desc=False):
 
@@ -40,15 +19,24 @@ def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges
 	city_spaces = city_name
 	city_name = city_name.replace(' ','')
 
-	_, _, dir_path = paths
+	city_state = city_name + state_abbr
+	if city_state == "KansasCityKS":
+		dir_path = "S:/Projects/1940Census/KansasCityKS"
+	elif city_state == "KansasCityMO":
+		dir_path = "S:/Projects/1940Census/KansasCityMO"
+	elif city_state == "RichmondVA":
+		dir_path = "S:/Projects/1940Census/RichmondVA"
+	elif city_state == "RichmondNY":
+		dir_path = "S:/Projects/1940Census/RichmondNY"
+	else:
+		dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+
+	paths = [r_path, dir_path]
 	geo_path = dir_path + '/GIS_edited/'
 	
-	
 	# Step 1: Get addresses, create physical blocks
-	
 	# Create addresses
 	create_addresses(city_info, paths)
-
 	# Create blocks and block points
 	create_blocks_and_block_points(city_info, paths)
 

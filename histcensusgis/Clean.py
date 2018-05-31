@@ -44,20 +44,19 @@ version = 7
 
 datestr = time.strftime("%Y_%m_%d")
 
-def clean_microdata(city_info, ed_map=True, debug=False, file_path = '/home/s4-data/LatestCities'):
+def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
+
+	city_name, state_abbr, decade = city_info
 
 	#
 	# Step 0: Initialize a bunch of variables for use throughout
 	#
 
-	city = city_info[0]
-	state = city_info[1]
-	year = city_info[2]
 	start_total = time.time()
 
-	city_file_name = city.replace(' ','') + state
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
-	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(year), city_file_name, 'V'+str(version))
+	city_file_name = city_name.replace(' ','') + state_abbr
+	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(decade), city_file_name, 'V'+str(version))
+	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(decade), city_file_name, 'V'+str(version))
 
  #	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
  #		print("%s is done" % (city))
@@ -68,72 +67,72 @@ def clean_microdata(city_info, ed_map=True, debug=False, file_path = '/home/s4-d
 
 	#Save to logfile
  	#init()
- 	#sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(year), city.replace(' ','')+state, datestr),'wb')
+ 	#sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(decade), city.replace(' ','')+state, datestr),'wb')
 
-	print('%s Automated Cleaning\n' % (city))
+	print('%s Automated Cleaning\n' % (city_name))
 
 	#
 	# Step 1: Load city and standardize variable names
 	#
 
-	df, load_time = load_city(city.replace(' ',''), state, year, file_path)
+	df, load_time = load_city(city_info, file_path)
 
 	#
 	# Step 2: Format raw street names and fill in blank street names
 	#
 
 	# Step 2a: Properly format street names and get Steve Morse street-ed information
-	df, preclean_info = preclean_street(df, city, state, year, file_path)  
+	df, preclean_info = preclean_street(df, city_info, file_path)  
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
 
 	# Step 2b: Use formatted street names to get house number sequences
-	if year != 1940:
+	if decade != 1940:
 		street_var = 'street_precleaned'
-		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier1', year, HN_SEQ, ED_ST_HN_dict)
+		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier1', decade, HN_SEQ, ED_ST_HN_dict)
 
 	# Step 2c: Use house number sequences to fill in blank street names
-	if year != 1940:
-		df, fix_blanks_info1 = fix_blank_st(df, city, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
+	if decade != 1940:
+		df, fix_blanks_info1 = fix_blank_st(df, city_name, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
 
 	#
 	# Step 3: Identify exact matches
 	#
 
-	if year == 1940:
+	if decade == 1940:
 		preclean_var = 'street_precleaned'
 	else:
 		preclean_var = 'street_precleanedHN'
 
 	# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
-	df, exact_info = find_exact_matches(df, city, preclean_var, sm_all_streets, sm_st_ed_dict, source='sm')
+	df, exact_info = find_exact_matches(df, city_name, preclean_var, sm_all_streets, sm_st_ed_dict, street_source)
 
 	#
 	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
 	#
 
 	# Step 4a: Search for fuzzy matches
-	df, fuzzy_info = find_fuzzy_matches(df, city, state, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map)
+	df, fuzzy_info = find_fuzzy_matches(df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map)
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df[preclean_var]
 	df.loc[df['current_match_bool'],street_var] = df['current_match']
 
 	# Step 4b: Use fuzzy matches to get house number sequences
-	if year != 1940:
-		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier2', year, HN_SEQ, ED_ST_HN_dict)
+	if decade != 1940:
+		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier2', decade, HN_SEQ, ED_ST_HN_dict)
 
 	# Step 4c: Use house number sequences to fill in blank street names
-	if year != 1940:
-		df, fix_blanks_info2 = fix_blank_st(df, city, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
+	if decade != 1940:
+		df, fix_blanks_info2 = fix_blank_st(df, city_name, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
 
 	#	
 	# Step 5: Create overall match and all check variables
 	#
 
-	if year == 1940:
+	if decade == 1940:
 		post_var = 'street_post_fuzzy'
 	else:
 		post_var = 'street_post_fuzzyHN'
-	df = create_overall_match_variables(df, year)
+	df = create_overall_match_variables(df, decade)
 
 	print("\nOverall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n")
 
@@ -147,24 +146,27 @@ def clean_microdata(city_info, ed_map=True, debug=False, file_path = '/home/s4-d
 	# Step 7: Save full dataset and generate dashboard information 
 	#
 
-	city_file_name = city.replace(' ','') + state
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(year), city_file_name, 'V'+str(version))
+	city_state = city_name.replace(' ','') + state_abbr
+	autoclean_path file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
+	if ~os.path.exists(autoclean_path):
+	    os.makedirs(autoclean_path)
+	file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
 	df.to_csv(file_name_all)
 
 	end_total = time.time()
 	total_time = round(float(end_total-start_total)/60,1)
-	print("Total processing time for %s: %s\n" % (city, total_time))
+	print("Total processing time for %s: %s\n" % (city_name, total_time))
 
 	'''
 	#Generate dashbaord info
 	times = [load_time, total_time]
-	if year != 1940:
-		info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1, fix_blanks_info2)
+	if decade != 1940:
+		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1, fix_blanks_info2)
 	else:
-		info = gen_dashboard_info(df, city, state, year, exact_info, fuzzy_info, preclean_info, times)
+		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times)
 	'''
 	
-	print("%s %s complete" % (city, year))
+	print("%s %s, %s complete" % (decade, city_name, state_abbr))
 
 # Example: clean_microdata(['Flint','MI',1930],ed_map=False)
 
@@ -181,16 +183,16 @@ city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
 exclude = ['Manhattan','Bronx','Queens','Staten Island','Norfolk']
 city_info_list = [i for i in city_info_list if i[0] not in exclude]
 
-# Get year and add it to city list information
-#year = int(sys.argv[1])
-year = 1940
+# Get decade and add it to city list information
+#decade = int(sys.argv[1])
+decade = 1940
 for i in city_info_list:
-	i.append(year)
+	i.append(decade)
 
 # Check if all raw files exist
 missing_raw = []
 for i in city_info_list:
-	city, state, year = i
+	city, state, decade = i
 
 	if city == "StatenIsland":
 		c = "Richmond"
@@ -198,7 +200,7 @@ for i in city_info_list:
 		c = city.replace(' ','')
 
 	file_name = c + state.upper()
-	file = file_path + '/%s/%s.dta' % (str(year), file_name)
+	file = file_path + '/%s/%s.dta' % (str(decade), file_name)
 	if os.path.exists(file):
 		continue
 	else:
@@ -216,9 +218,9 @@ pool.close()
 # Build dashboard for decade and save
 
 city_state = ['City','State']
-header_names = ['Year'] + city_state + ['NumCases']
+header_names = ['decade'] + city_state + ['NumCases']
 
-if year != 1940:
+if decade != 1940:
 	STprop_names = ['propExactMatchesStGrid','propFuzzyMatches','propBlankSTfixed']
 	STnum_names = city_state + ['numExactMatchesStGrid','numFuzzyMatches','numBlankSTfixed']
 	ED_names = city_state + ['ProblemEDs']
@@ -256,6 +258,6 @@ else:
 	dashboard = pd.concat([dfSTprop, dfSTnum, dfTime],axis=1)
 
 dashboard['version'] = version
-csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(year),str(year),datestr)
+csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(decade),str(decade),datestr)
 dashboard.to_csv(csv_file,index=False)
 '''
