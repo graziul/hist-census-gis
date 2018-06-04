@@ -52,16 +52,6 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	# Step 0: Initialize a bunch of variables for use throughout
 	#
 
-	start_total = time.time()
-
-	city_file_name = city_name.replace(' ','') + state_abbr
-	file_name_all = file_path + '/%s/autocleaned/%s_AutoCleaned%s.csv' % (str(decade), city_file_name, 'V'+str(version))
-	file_name_stata = file_path + '/%s/forstudents/%s_ForStudents%s.dta' % (str(decade), city_file_name, 'V'+str(version))
-
- #	if os.path.isfile(file_name_all) & os.path.isfile(file_name_stata):
- #		print("%s is done" % (city))
- #		return None
-
 	HN_SEQ = {}
 	ED_ST_HN_dict = {}
 
@@ -86,22 +76,17 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
 
 	# Step 2b: Use formatted street names to get house number sequences
-	if decade != 1940:
-		street_var = 'street_precleaned'
-		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier1', decade, HN_SEQ, ED_ST_HN_dict)
+	street_var = 'street_precleaned'
+	df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier1', decade, HN_SEQ, ED_ST_HN_dict)
 
 	# Step 2c: Use house number sequences to fill in blank street names
-	if decade != 1940:
-		df, fix_blanks_info1 = fix_blank_st(df, city_name, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
+	df, fix_blanks_info1 = fix_blank_st(df, city_name, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
 
 	#
 	# Step 3: Identify exact matches
 	#
 
-	if decade == 1940:
-		preclean_var = 'street_precleaned'
-	else:
-		preclean_var = 'street_precleanedHN'
+	preclean_var = 'street_precleanedHN'
 
 	# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
 	df, exact_info = find_exact_matches(df, city_name, preclean_var, sm_all_streets, sm_st_ed_dict, street_source)
@@ -117,21 +102,16 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	df.loc[df['current_match_bool'],street_var] = df['current_match']
 
 	# Step 4b: Use fuzzy matches to get house number sequences
-	if decade != 1940:
-		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier2', decade, HN_SEQ, ED_ST_HN_dict)
+	df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier2', decade, HN_SEQ, ED_ST_HN_dict)
 
 	# Step 4c: Use house number sequences to fill in blank street names
-	if decade != 1940:
-		df, fix_blanks_info2 = fix_blank_st(df, city_name, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
+	df, fix_blanks_info2 = fix_blank_st(df, city_name, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
 
 	#	
 	# Step 5: Create overall match and all check variables
 	#
 
-	if decade == 1940:
-		post_var = 'street_post_fuzzy'
-	else:
-		post_var = 'street_post_fuzzyHN'
+	post_var = 'street_post_fuzzyHN'
 	df = create_overall_match_variables(df, decade)
 
 	print("\nOverall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n")
