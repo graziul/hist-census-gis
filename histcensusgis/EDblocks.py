@@ -5,15 +5,10 @@
 #
 
 from histcensusgis.microdata.misc import create_addresses
-from histcensusgis.lines.street import *
-from histcensusgis.polygons.blocknum import *
+from histcensusgis.polygons.block import *
 from histcensusgis.polygons.ed import *
-from histcensusgis.s4utils.AmoryUtils import *
-from histcensusgis.s4utils.IOutils import *
 
-r_path = "C:\Program Files\\R\\R-3.4.2\\bin\\Rscript"
-
-def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], just_desc=False):
+def get_ed_block_numbers(city_info, r_path="C:/Program Files/R/R-3.4.2/bin/Rscript", grid_street_var="FULLNAME", hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], just_desc=False):
 
 	city_name, state_abbr, decade = city_info 
 	city_spaces = city_name
@@ -29,7 +24,7 @@ def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges
 	elif city_state == "RichmondNY":
 		dir_path = "S:/Projects/1940Census/RichmondNY"
 	else:
-		dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+		dir_path = "S:/Projects/1940Census/" + city_name #TO DO: Directories need to be city_name+state_abbr
 
 	paths = [r_path, dir_path]
 	geo_path = dir_path + '/GIS_edited/'

@@ -12,6 +12,11 @@ Updated: Chris Graziul, 12/11/2017 (stripped down to functions only)
 """
 
 from histcensusgis.s4utils.AmoryUtils import *
+from histcensusgis.s4utils.IOutils import *
+import arcpy
+import os
+import pandas as pd
+arcpy.env.overwriteOutput=True
 
 # Performs initial geocode on contemporary grid
 def initial_geocode(city_info, geo_path, hn_ranges):
@@ -190,10 +195,10 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, dec
 	print "joining the swm"
 	# Process: Join field using Pandas and not ArcPy (since it's super slow)
 
-	df_fe = dbf2DF(fe)
+	df_fe = load_shp(fe)
 	del df_fe['Field1']
 
-	df_spatjoin = dbf2DF(spatjoin.replace('.shp','.dbf'))
+	df_spatjoin = load_shp(spatjoin)
 	try:
 		del df_spatjoin['contig_ed']
 	except:
@@ -212,48 +217,7 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, dec
 			'address','hn','fullname','type','state','city','ed','ed_1','is_touch']
 		df_merge = df_merge[vars_to_keep]
 
-	# Function to save Pandas DF as DBF file 
-	def save_dbf_geo(df, shapefile_name, field_map=False):
-		file_temp = shapefile_name.split('/')[-1]
-		rand_post = str(random.randint(1,100001))
-		csv_file = geo_path + "/temp_for_dbf"+rand_post+".csv"
-		df.to_csv(csv_file,index=False)
-		try:
-			os.remove(geo_path + "/schema.ini")
-		except:
-			pass
-
-		# Add a specific field mapping for a special case
-		if field_map:
-			file = csv_file
-			field_mapping = """index "index" true true false 10 Long 0 0 ,First,#,%s,index,-1,-1;
-			Match_addr "Match_addr" true true false 254 Text 0 0 ,First,#,%s,Match_addr,-1,-1;
-			Status "Status" true true false 1 Text 0 0 ,First,#,%s,Status,-1,-1;
-			mblk "mblk" true true false 10 Long 0 0 ,First,#,%s,mblk,-1,-1;
-			Ref_ID "Ref_ID" true true false 10 Long 0 0 ,First,#,%s,Ref_ID,-1,-1;
-			address "address" true true false 254 Text 0 0 ,First,#,%s,address,-1,-1;
-			hn "hn" true true false 10 Long 0 0 ,First,#,%s,hn,-1,-1;
-			fullname "fullname" true true false 254 Text 0 0 ,First,#,%s,fullname,-1,-1;
-			type "type" true true false 10 Text 0 10 ,First,#,%s,type,-1,-1;
-			state "state" true true false 2 Text 0 0 ,First,#,%s,state,-1,-1;
-			city "city" true true false 50 Text 0 0 ,First,#,%s,city,-1,-1;
-			ed "ed" true true false 10 Long 0 0 ,First,#,%s,ed,-1,-1;
-			ed_1 "ed_1" true true false 10 Long 0 0 ,First,#,%s,ed_1,-1,-1;
-			is_touch "is_touch" true true false 1 Long 0 0 ,First,#,%s,is_touch,-1,-1""" % tuple(14*[file])
-		else:
-			field_map = None
-
-		arcpy.TableToTable_conversion(in_rows=csv_file, 
-			out_path=geo_path, 
-			out_name="temp_for_shp"+rand_post+".dbf",
-			field_mapping=field_mapping)
-		os.remove(shapefile_name.replace('.shp','.dbf'))
-		#os.remove(csv_file)
-		os.rename(geo_path+"/temp_for_shp"+rand_post+".dbf",shapefile_name.replace('.shp','.dbf'))
-		os.remove(geo_path+"/temp_for_shp"+rand_post+".dbf.xml")
-		os.remove(geo_path+"/temp_for_shp"+rand_post+".cpg")
-
-	save_dbf_geo(df_merge, spatjoin, field_map=True)
+	save_shp(df_merge, spatjoin)
 
 	print "selecting the correct geocodes"
 	# Process: Select correct geocodes
@@ -267,7 +231,7 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, dec
 		arcpy.Select_analysis(in_features=spatjoin, 
 			out_feature_class=notcor, 
 			where_clause="\"is_touch\" = 0  OR \"Status\" = 'U'")
-		df_notcor = dbf2DF(notcor.replace('.shp','.dbf'))
+		df_notcor = load_shp(notcor)
 	else:
 		df_notcor = df_merge.loc[(df_merge['is_touch']==0)|(df_merge['Status']=='U')] 
 	# Process: Delete Fields and Save Table
@@ -276,7 +240,7 @@ def validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, dec
 	df_notcor_togeocode = df_notcor[vars_to_keep]
 
 	rand_post = str(random.randint(1,100001))
-	csv_file = geo_path+"temp"+rand_post+".csv"
+	csv_file = geo_path+"temp.csv"
 	df_notcor_togeocode.to_csv(csv_file,index=False)
 	residual_file_name = residual_file.split('/')[-1]
 	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=geo_path, out_name=residual_file_name)
@@ -291,9 +255,9 @@ def combine_geocodes(geo_path, city_name, state_abbr, list_of_shp, notcor, outfi
 	merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post)
 
 	# Create list of streets from ungeocoded points that are not in the grid
-	df_ungeocoded = dbf2DF(notcor)
+	df_ungeocoded = load_shp(notcor)
 	grid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
-	df_grid = dbf2DF(grid_file)
+	df_grid = load_shp(grid_file)
 	get_st_in_micro_not_grid(geo_path, df_ungeocoded, df_grid, city_name, state_abbr, decade, post)
 
 def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
@@ -312,7 +276,7 @@ def merge_and_tag_geocoded(geo_path, city_name, state_abbr, list_of_shp, post):
 				expression="'No'",
 				expression_type="PYTHON_9.3")
 	arcpy.Merge_management(list_of_shp, outfile)
-	df_merge = dbf2DF(outfile)
+	df_merge = load_shp(outfile)
 	try:
 		df_merge_collapse = df_merge.groupby(['fullname','address','Mblk','ed','ed_1','geocoded']).size().reset_index(name='count')
 	except:

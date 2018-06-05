@@ -285,10 +285,10 @@ def load_cleaned_microdata(city_info, dir_path, v=7):
 			try:
 				microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_AutoCleanedV" + str(version) + ".csv"
 				df = pd.read_csv(microdata_file, low_memory=False)
+				return df
 			except:
 				print("Error loading microdata for %s %s, %s" % (decade, city_name, state_abbr))
 				raise
-	return df
 
 # This function replaces Matt's R script but produces exactly the same file
 def create_addresses(city_info, paths, df=None):

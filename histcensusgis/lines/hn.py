@@ -4,6 +4,15 @@
 # Contents: Functions primarily associated with house numbers
 #
 
+from histcensusgis.s4utils.AmoryUtils import *
+from histcensusgis.s4utils.IOutils import *
+from histcensusgis.text.standardize import *
+from operator import itemgetter
+from itertools import groupby
+import os
+import arcpy
+arcpy.env.overwriteOutput=True
+
 # Amory's code for fixing duplicate address ranges
 def fix_dup_address_ranges(shp, hn_ranges, debug_flag=False):
 	# Set range names

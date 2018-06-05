@@ -4,9 +4,8 @@
 # EDguess.py - combines multiple automated approaches to identifying EDs into one shapefile
 #
 
+from histcensusgis.s4utils.AmoryUtils import *
 from arcpy import management
-import pandas as pd
-from __future__ import print_function
 from fuzzywuzzy import fuzz
 from codecs import open
 import multiprocessing
@@ -44,7 +43,7 @@ def get_adjacent_eds(city_info, geo_path):
 	fe = geo_path + city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
 	fe_file = city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
 
-	print "creating the swm"
+	print("creating the swm")
 	# Process: Feature Class to Feature Class
 	ftc_mapping = """OBJECTID \"OBJECTID\" true true false 10 Long 0 10 ,First,#,%s,OBJECTID,-1,-1;
 		ed \"ed\" true true false 19 Double 0 0 ,First,#,%s,ed,-1,-1;
@@ -1767,102 +1766,96 @@ def get_ed_guess_stats(city_info, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD
 	return info
 
 
-def run_ed_guess():
+def run_ed_guess(decade=1940, fullname_var="FULLNAME"):
 	
-# Full street name variable
-fullname_var = "FULLNAME"
+	city_info_list0 = [['Akron','OH'],
+		['Albany','NY'],
+		['Atlanta','GA'],
+		['Baltimore','MD'],
+		['Birmingham','AL'],
+		['Boston','MA'],
+		['Bridgeport','CT'],
+		['Bronx','NY'],
+		['Buffalo','NY'],
+		['Chicago','IL']]
 
-# Decade
-decade = 1940
+	city_info_list1 = [['Cincinnati','OH'],
+		['Columbus','OH'],
+		['Dallas','TX'],
+		['Dayton','OH'],
+		['Denver','CO'],
+		['Des Moines','IA'],
+		['Flint','MI'],
+		['Fort Worth','TX'],
+		['Grand Rapids','MI'],
+		['Hartford','CT']]
 
-city_info_list0 = [['Akron','OH'],
-	['Albany','NY'],
-	['Atlanta','GA'],
-	['Baltimore','MD'],
-	['Birmingham','AL'],
-	['Boston','MA'],
-	['Bridgeport','CT'],
-	['Bronx','NY'],
-	['Buffalo','NY'],
-	['Chicago','IL']]
+	city_info_list2 = [['Houston','TX'],
+		['Indianapolis','IN'],
+		['Jacksonville','FL'],
+		['Jersey City','NJ'],
+		['Kansas City','KS'],
+		['Kansas City','MO'],
+		['Miami','FL'],
+		['Milwaukee','WI'],
+		['Minneapolis','MN'],
+		['Nashville','TN']]
 
-city_info_list1 = [['Cincinnati','OH'],
-	['Columbus','OH'],
-	['Dallas','TX'],
-	['Dayton','OH'],
-	['Denver','CO'],
-	['Des Moines','IA'],
-	['Flint','MI'],
-	['Fort Worth','TX'],
-	['Grand Rapids','MI'],
-	['Hartford','CT']]
+	city_info_list3 = [['New Haven','CT'],
+		['New Orleans','LA'],
+		['Newark','NJ'],
+		['Oakland','CA'],
+		['Oklahoma City','OK'],
+		['Omaha','NE'],
+		['Paterson','NJ'],
+		['Pittsburgh','PA'],
+		['Portland','OR'],
+		['Providence','RI']]
 
-city_info_list2 = [['Houston','TX'],
-	['Indianapolis','IN'],
-	['Jacksonville','FL'],
-	['Jersey City','NJ'],
-	['Kansas City','KS'],
-	['Kansas City','MO'],
-	['Miami','FL'],
-	['Milwaukee','WI'],
-	['Minneapolis','MN'],
-	['Nashville','TN']]
+	city_info_list4 = [['San Antonio','TX'],
+		['San Diego','CA'],
+		['San Francisco','CA'],
+		['Scranton','PA'],
+		['Seattle','WA'],
+		['Spokane','WA'],
+		['Springfield','MA'],
+		['St Louis','MO'],
+		['St Paul','MN'],
+		['Syracuse','NY']]
 
-city_info_list3 = [['New Haven','CT'],
-	['New Orleans','LA'],
-	['Newark','NJ'],
-	['Oakland','CA'],
-	['Oklahoma City','OK'],
-	['Omaha','NE'],
-	['Paterson','NJ'],
-	['Pittsburgh','PA'],
-	['Portland','OR'],
-	['Providence','RI']]
-
-city_info_list4 = [['San Antonio','TX'],
-	['San Diego','CA'],
-	['San Francisco','CA'],
-	['Scranton','PA'],
-	['Seattle','WA'],
-	['Spokane','WA'],
-	['Springfield','MA'],
-	['St Louis','MO'],
-	['St Paul','MN'],
-	['Syracuse','NY']]
-
-city_info_list5 = [['Toledo','OH'],
-	['Trenton','NJ'],
-	['Tulsa','OK'],
-	['Washington','DC'],
-	['Worcester','MA'],
-	['Yonkers','NY']] 
+	city_info_list5 = [['Toledo','OH'],
+		['Trenton','NJ'],
+		['Tulsa','OK'],
+		['Washington','DC'],
+		['Worcester','MA'],
+		['Yonkers','NY']] 
 
 
-def do_city_list(city_info_list):
-	city_list = []
+	def do_city_list(city_info_list):
+		city_list = []
+		for city_info in city_info_list:
+			city_name, state_abbr, decade = city_info
+			city_list.append(city_info+[fullname_var])
+		for city_info in city_list:
+			try:
+				get_ed_guesses(city_info)
+			except:
+				continue
+
+	city_info_list = city_info_list0 + city_info_list1 + city_info_list2 + \
+		city_info_list3 + city_info_list4 + city_info_list5
+
+	info_list = []
 	for city_info in city_info_list:
-		city_name, state_abbr, decade = city_info
-		city_list.append(city_info+[fullname_var])
-	for city_info in city_list:
 		try:
-			get_ed_guesses(city_info)
+			info_list.append(get_ed_guess_stats(city_info,decade))
 		except:
 			continue
+	df = pd.concat(info_list)
+	df_to_write = pd.pivot_table(df, values='pblk_id', index=['city','state'], columns=['ed_conf'])
+	datestr = time.strftime("%Y_%m_%d")
+	df_to_write.to_csv('S:/Users/Chris/ed_guess_info'+str(decade)+'_'+datestr+'.csv')
 
-city_info_list = city_info_list0 + city_info_list1 + city_info_list2 + \
-	city_info_list3 + city_info_list4 + city_info_list5
+	num_finished = len(df_to_write)
 
-info_list = []
-for city_info in city_info_list:
-	try:
-		info_list.append(get_ed_guess_stats(city_info,decade))
-	except:
-		continue
-df = pd.concat(info_list)
-df_to_write = pd.pivot_table(df, values='pblk_id', index=['city','state'], columns=['ed_conf'])
-datestr = time.strftime("%Y_%m_%d")
-df_to_write.to_csv('S:/Users/Chris/ed_guess_info'+str(decade)+'_'+datestr+'.csv')
-
-num_finished = len(df_to_write)
-
-print("%s of %s cities processed for %s" % (str(num_finished), str(len(city_info_list)), str(decade)))
+	print("%s of %s cities processed for %s" % (str(num_finished), str(len(city_info_list)), str(decade)))

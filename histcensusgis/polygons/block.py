@@ -4,7 +4,11 @@
 # All the functions for performing block numbering (includes many things)
 #
 
-import pandas as pd
+from histcensusgis.lines.street import *
+from histcensusgis.points.geocode import *
+from histcensusgis.s4utils.IOutils import *
+import arcpy
+arcpy.env.overwriteOutput = True
 
 # Create physical blocks and block points
 def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], geocode_file=None):
@@ -27,7 +31,7 @@ def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MI
 
 	"""
 
-	city_name, _, decade = city_info
+	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 

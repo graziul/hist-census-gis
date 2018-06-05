@@ -106,6 +106,7 @@ def rename_variables(df, year):
 		df['street_raw'] = df['indexed_street']
 	if year == 1910:
 		df['street_raw'] = df['Street']
+	df['street_raw'] = df['street_raw'].astype(str)
 
 	# ED
 	if year == 1940:

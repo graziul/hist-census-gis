@@ -5,6 +5,15 @@
 #
 
 from histcensusgis.s4utils.AmoryUtils import *
+from histcensusgis.s4utils.IOutils import *
+from histcensusgis.text.standardize import *
+from histcensusgis.text.stevemorse import *
+from histcensusgis.microdata.misc import *
+from histcensusgis.lines.hn import *
+import os
+import fuzzyset
+import arcpy
+arcpy.env.overwriteOutput=True
 
 def grid_geo_fix(city_info, geo_path, hn_ranges=['LFROMADD','LTOADD','RFROMADD','RTOADD']):
 
@@ -40,14 +49,10 @@ def grid_geo_fix(city_info, geo_path, hn_ranges=['LFROMADD','LTOADD','RFROMADD',
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
-	_, _, dir_path = paths
-	geo_path = 
-
 	#NOTE: By defualt we are starting with 1940 cleaned grids then saving them as 19X0 grids!	
 	grid = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit.shp"
 	grid_orig = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
 	dissolve_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Dissolve.shp"
-	temp = geo_path + city_name + "_temp"+rand_post+".shp"
 	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
 	grid_uns =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns.shp"
 	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
@@ -98,11 +103,10 @@ def grid_geo_fix(city_info, geo_path, hn_ranges=['LFROMADD','LTOADD','RFROMADD',
 	arcpy.CalculateField_management(split_grid, "grid_id", expression, "PYTHON_9.3")
 
 	#Intersect with grid
-	temp = geo_path + "temp_step"+rand_post+".shp"
+	temp = geo_path + "temp_step.shp"
 	arcpy.CopyFeatures_management(grid, temp)
 	arcpy.Intersect_analysis([temp, split_grid], grid)
 	arcpy.DeleteFeatures_management(temp)
-	#arcpy.DeleteFeatures_management(split_grid)
 
 	#Second Dissolve St_Grid lines
 	arcpy.Dissolve_management(in_features=grid, 
