@@ -5,9 +5,12 @@
 #
 
 from histcensusgis.s4utils.AmoryUtils import *
+from histcensusgis.s4utils.IOutils import *
+from histcensusgis.text.standardize import *
 from arcpy import management
 from fuzzywuzzy import fuzz
 from codecs import open
+import os
 import multiprocessing
 
 # Identifies EDs and can be run independently (Matt's R script)
@@ -17,116 +20,100 @@ def ed_geocode_algo(city_info, paths):
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
+	# Ensure files exist for Matt's ED algorithm
+	pblocks_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	pblk_points_shp = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
+	if ~os.path.isfile(pblocks_shp) or ~os.path.isfile(pblk_points_shp):
+		run_initial_geocode(city_info, geo_path)
+	else:
+		pass
+
 	r_path, file_path = paths
 	print("Identifying " + str(decade) + " EDs\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 EDs.R',file_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla','Identify 1930 EDs.R',geo_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error identifying "+str(decade)+" EDs for "+city_name+"\n")
 	else:
 		print("OK!\n")
 
-# Get adjacent EDs (used for validation of geocoding)
-def get_adjacent_eds(city_info, geo_path):
-	
+# Draw ED maps (descriptions, intersections)
+def draw_EDs(city_info, paths, new_var_name, is_desc) :
+
 	city_name, state_abbr, decade = city_info
 
-	# Files
+	_, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/"
+	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
 
-	# "vm" is the verified map (e.g., ED or block map)
-	vm = geo_path + city_name + "_" + str(decade) + "_ED.shp"
-	# Feature Class to Feature Class file
-	fc = city_name + state_abbr + "_" + str(decade) + "_ED_Feature.shp"
-	# Spatial weights files:
-	swm_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_spatweight.swm"
-	swm_table = geo_path + city_name + state_abbr + "_" + str(decade) + "_swmTab.dbf"
-	# Amory's formatted EDs dbf
-	fe = geo_path + city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
-	fe_file = city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
+	targ = intermed_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2_spatial_join.shp"
+	targ1 = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 
-	print("creating the swm")
-	# Process: Feature Class to Feature Class
-	ftc_mapping = """OBJECTID \"OBJECTID\" true true false 10 Long 0 10 ,First,#,%s,OBJECTID,-1,-1;
-		ed \"ed\" true true false 19 Double 0 0 ,First,#,%s,ed,-1,-1;
-		Shape_Leng \"Shape_Leng\" true true false 19 Double 0 0 ,First,#,%s,Shape_Leng,-1,-1;
-		Shape_Area \"Shape_Area\" true true false 19 Double 0 0 ,First,#,%s,Shape_Area,-1,-1;
-		ED_int \"ED_int\" true true false 5 Long 0 5 ,First,#,%s,ED_int,-1,-1;
-		Ed_str \"Ed_str\" true true false 5 Text 0 0 ,First,#,%s,Ed_str,-1,-1""" % (vm, vm, vm, vm, vm, vm)
-	arcpy.FeatureClassToFeatureClass_conversion(in_features=vm, 
-		out_path=geo_path, 
-		out_name=fc, 
-		field_mapping=ftc_mapping)
+	inter = arcpy.Intersect_analysis(in_features=[targ,targ1],
+		out_feature_class=intermed_path + "intersectToGetEDs.shp",
+		join_attributes="ALL", 
+		cluster_tolerance="-1 Unknown", 
+		output_type="INPUT")
 
-		#Calculate some fields
-
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="Shape_Leng", 
-		expression="!SHAPE.LENGTH!",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="Shape_Area", 
-		expression="!SHAPE.AREA!",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="ED_int", 
-		expression="int(!ed!)",
-		expression_type="PYTHON_9.3")
-	arcpy.CalculateField_management(in_table=geo_path+fc, 
-		field="Ed_str", 
-		expression="str(int(!ed!))",
-		expression_type="PYTHON_9.3")
-
-	# Process: Generate Spatial Weights Matrix
-	arcpy.GenerateSpatialWeightsMatrix_stats(Input_Feature_Class=geo_path+fc, 
-		Unique_ID_Field="ED_int", 
-		Output_Spatial_Weights_Matrix_File=swm_file, 
-		Conceptualization_of_Spatial_Relationships="CONTIGUITY_EDGES_CORNERS", 
-		Distance_Method="EUCLIDEAN", 
-		Exponent=1,  
-		Number_of_Neighbors=0, 
-		Row_Standardization="NO_STANDARDIZATION")
-
-	# Process: Convert Spatial Weights Matrix to Table
-	arcpy.ConvertSpatialWeightsMatrixtoTable_stats(Input_Spatial_Weights_Matrix_File=swm_file, 
-		Output_Table=swm_table)
-
-	# Do the thing to create the lists for adjacent EDs (inclusive of the ED)
-
-	field_names = [x.name for x in arcpy.ListFields(swm_table)]
-	cursor = arcpy.da.SearchCursor(swm_table, field_names)
-	silly_dict = {}
-
+	field_names = [x.name for x in arcpy.ListFields(inter)]
+	cursor = arcpy.da.SearchCursor(inter, field_names)
+	inter_polyblk_dict = {}
+	polyblk_inter_dict = {} #polygon block ID -> intersections in block
+	
 	for row in cursor :
-		Dict_append_unique(silly_dict,row[2],row[3])
-		Dict_append_unique(silly_dict,row[2],row[2])
+		Dict_append_unique(inter_polyblk_dict, row[field_names.index("Interse_ID")], row[field_names.index("pblk_id")])
+		Dict_append_unique(polyblk_inter_dict, row[field_names.index("pblk_id")], row[field_names.index("Interse_ID")])
 
-	#Remove ED = 0 (unknown EDs)
-	silly_dict = {k:[i for i in v if v != 0] for k,v in silly_dict.items() if k != 0}
+	# If using Amory's ED description method do this
+	if is_desc:
 
-	#Formatted ED's from Amory's weights matrix formating script
-	if os.path.isfile(fe):
-		os.remove(fe)	
+		output_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp"
+		arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp")
+		blk_file = intermed_path+"fullname_dissolve_split.shp"
+		arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
+		arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
 
-	arcpy.CreateTable_management(out_path=geo_path, 
-		out_name=fe_file)
+		with arcpy.da.InsertCursor(output_shp, ("SHAPE@", "ed_desc")) as cursor:
+			for ED, inter in ED_Intersect_ID_dict.items() :
+				inter = inter.replace("(","").replace(")","").split(",") #convert intersect string to list 
+				block_list = []
+				for ind,i in enumerate(inter) :
+					i2 = inter[(ind+1)%len(inter)]
+					block_list.append(get_block_by_intersections(i,i2))
+				block_str = str(block_list).replace("'","").replace("[","(").replace("]",")")
+				arcpy.SelectLayerByAttribute_management ("blk_lyr", "NEW_SELECTION", '"FID" IN '+block_str)
+				#arcpy.CopyFeatures_management("blk_lyr", "lyr", "", "0", "0", "0")
+				arcpy.FeatureToPolygon_management("blk_lyr", intermed_path+"poly_lyr.shp", "", "ATTRIBUTES", "")
+				with arcpy.da.UpdateCursor(intermed_path+"poly_lyr.shp",("SHAPE@", "Id")) as icursor:
+					for irow in icursor:
+						irow[1]=ED
+						cursor.insertRow(irow)
+				#ASSIGN ED # TO POLYGON
+				arcpy.SelectLayerByAttribute_management("blk_lyr", "CLEAR_SELECTION")
+				#feature_to_polygon on the selected segments
+		arcpy.Delete_management(intermed_path+"poly_lyr.shp")
+	# If using Amory's intersection method do this...
+	elif ~is_desc:
+		blk_ed_dict = {}
+		for blk in polyblk_inter_dict.keys() :
+				#retrieve a slice of Intersect_Info_DICT for just the intersections associated with blk
+				blk_dict = {key: Intersect_Info_DICT[key] for key in Intersect_Info_DICT.viewkeys() if int(key) in polyblk_inter_dict[blk]}
+				result = aggregate_blk_inter_data(blk_dict)
+				blk_ed_dict[blk] = result
+		try :
+			arcpy.AddField_management (targ1, new_var_name, "TEXT")
+		except :
+			pass
+		with arcpy.da.UpdateCursor(targ1, ["pblk_id",new_var_name]) as up_cursor:
+			for row in up_cursor :
+				try:
+					row[1] = blk_ed_dict[row[0]]
+					if row[1] == None :
+						row[1] = 0
+					up_cursor.updateRow(row)
+				except KeyError:
+					print("Error in draw_EDs: pblk_id " + str(row[0]) + " not in blk_ed_dict")
+					pass
 
-	arcpy.AddField_management(in_table=fe, 
-		field_name="ed", 
-		field_type="SHORT")
-	arcpy.AddField_management(in_table=fe, 
-		field_name="contig_ed", 
-		field_type="TEXT")
-
-	rows = arcpy.InsertCursor(fe)
-
-	for k, v in silly_dict.items():
-		row = rows.newRow()
-		row.setValue("ed",k)
-		v = [str(x) for x in v]
-		row.setValue("contig_ed",";".join(v))
-		rows.insertRow(row)
-
-	del row
-	del rows
 
 #
 # Functions for using intersections to derive EDs
@@ -163,6 +150,114 @@ def get_adjacent_eds(city_info, geo_path):
 # Numbered Streets - fuzzy matching will match S 27th St with S 17th St instead of 27th St
 # ->->-> GO THRU CHRIS's fuzzy match, copy the code over
 
+# Prepare map intersections
+def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
+	print("Preparing Map Intersections File")
+
+	city_name, _ =  os.path.splitext(stgrid_file)
+	_, _, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/"
+	
+	if not os.path.exists(geo_path + "IntersectionsIntermediateFiles"):
+		os.makedirs(geo_path + "IntersectionsIntermediateFiles")
+	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
+
+	latest_stage = intermed_path + "fullname_dissolve.shp"
+	#dissolve all street segments based on FULLNAME
+	arcpy.Dissolve_management(in_features = geo_path + stgrid_file, 
+		out_feature_class = latest_stage,
+		dissolve_field=grid_street_var, 
+		statistics_fields="", 
+		multi_part="SINGLE_PART", 
+		unsplit_lines="DISSOLVE_LINES")
+
+	previous_stage = latest_stage
+	latest_stage =  intermed_path + "fullname_dissolve_split.shp"
+	#split street segments at their intersections
+	arcpy.FeatureToLine_management(in_features = previous_stage, 
+		out_feature_class = latest_stage,
+		cluster_tolerance="", 
+		attributes="ATTRIBUTES")
+
+	previous_stage = latest_stage
+	latest_stage = intermed_path + "split_endpoints.shp"
+	#create points at both ends of every split segment
+	arcpy.FeatureVerticesToPoints_management(in_features = previous_stage, 
+		out_feature_class = latest_stage,
+		point_location="BOTH_ENDS")
+
+	#calculate x and y coordinates of points
+	arcpy.AddGeometryAttributes_management(latest_stage, 
+		"POINT_X_Y_Z_M")
+
+	previous_stage = latest_stage
+	latest_stage = intermed_path+"xy_dissolve.shp"
+	#dissolve points based on x and y
+	arcpy.Dissolve_management(in_features = previous_stage, 
+		out_feature_class = latest_stage,
+		dissolve_field="POINT_X;POINT_Y", 
+		statistics_fields="", 
+		multi_part="MULTI_PART", 
+		unsplit_lines="DISSOLVE_LINES")
+
+	arcpy.AddField_management(in_table = latest_stage, 
+		field_name="Interse_ID", 
+		field_type="LONG", 
+		field_precision="", 
+		field_scale="", 
+		field_length="", 
+		field_alias="",
+		field_is_nullable="NULLABLE",
+		field_is_required="NON_REQUIRED", 
+		field_domain="")
+	#preserve intersection ID field
+	arcpy.CalculateField_management(in_table = latest_stage, 
+		field="Interse_ID", 
+		expression="!FID!", 
+		expression_type="PYTHON_9.3", 
+		code_block="")
+
+	previous_stage = latest_stage
+	latest_stage = intermed_path + city_name + "_spatial_join.shp"
+	target_feature_file = intermed_path + "split_endpoints.shp"
+	#join intersection ID back to points file with the rest of the data
+
+	field_mapping_ls = """FID_fullna "FID_fullna" true true false 10 Long 0 10 ,First,#,%s,FID_fullna,-1,-1;
+	%s "%s" true true false 100 Text 0 0 ,First,#,%s,%s,-1,-1;
+	ORIG_FID "ORIG_FID" true true false 10 Long 0 10 ,First,#,%s,ORIG_FID,-1,-1;
+	POINT_X "POINT_X" true true false 19 Double 0 0 ,First,#,%s,POINT_X,-1,-1;
+	POINT_Y "POINT_Y" true true false 19 Double 0 0 ,First,#,%s,POINT_Y,-1,-1;
+	POINT_X_1 "POINT_X_1" true true false 19 Double 0 0 ,First,#,%s,POINT_X,-1,-1;
+	POINT_Y_1 "POINT_Y_1" true true false 19 Double 0 0 ,First,#,%s,POINT_Y,-1,-1;
+	Interse_ID "Interse_ID" true true false 10 Long 0 10 ,First,#,%s,Interse_ID,-1,-1""" % \
+	(target_feature_file, 
+		grid_street_var, 
+		grid_street_var, 
+		target_feature_file, 
+		grid_street_var, 
+		target_feature_file, 
+		target_feature_file, 
+		target_feature_file, 
+		previous_stage, 
+		previous_stage, 
+		previous_stage)
+
+	arcpy.SpatialJoin_analysis(target_features = target_feature_file, 
+		join_features = previous_stage,
+		out_feature_class = latest_stage, 
+		join_operation="JOIN_ONE_TO_ONE", 
+		join_type="KEEP_ALL",
+		field_mapping=field_mapping_ls,
+		match_option="INTERSECT", 
+		search_radius="", 
+		distance_field_name="")
+
+	# EXPORT ATTRIBUTE TABLE
+	arcpy.ExportXYv_stats(Input_Feature_Class = latest_stage, 
+		Value_Field="FID;Join_Count;TARGET_FID;FID_fullna;"+grid_street_var+";ORIG_FID;POINT_X;POINT_Y;POINT_X_1;POINT_Y_1;Interse_ID", 
+		Delimiter="COMMA",
+		Output_ASCII_File = intermed_path + city_name + "_Intersections.txt", 
+		Add_Field_Names_to_Output="ADD_FIELD_NAMES")
 
 # returns list of all EDs shared by all streets in st_ed_dict_chk
 def ED_in_common(st_ed_dict_chk) :
@@ -350,7 +445,7 @@ def aggregate_blk_inter_data(inter_dict) :
 		return '|'.join([str(x) for x in mode])  
 
 # Main Program Loop - also outputs statistics and results to .txt files
-def RunAnalysisInt(city_name) :
+def run_inter_analysis(city_name) :
 	#Put this  on  hold until it can be standardized or discarded, as necessary (based on the decade comparison of SM 10/30/40)
 	#SM_st_corrections = pickle.load( open("SM_decade_compare_st_corrections.p","rb"))
 	print("Preparing Input for "+city_name+ " (intersections)")
@@ -526,7 +621,7 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 
 	city_name, state_abbr, decade = city_info
 	city_spaces = city_name
-	city = city.replace(' ','')
+	city_name = city_name.replace(' ','')
 
 	r_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
@@ -593,9 +688,9 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 	InterLines = Intersect_TXT.readlines()[1:]
 	MicroLines = Micro_TXT.readlines()[1:]
 
-	RunAnalysisInt(city)
+	run_inter_analysis(city_name)
 
-	print("Creating ED Map for %s (Intersections algorithm)" % (city))
+	print("Creating ED Map for %s (Intersections algorithm)" % (city_name))
 	draw_EDs(city_info=city_info, 
 		new_var_name="ED_inter", 
 		is_desc=False, 
@@ -603,240 +698,6 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 
 #
 # Functions for ED descriptions
-#
-
-# Standardize numbered street name
-def Num_Standardize(NAME) :
-
-	NAME = re.sub("^[Tt]enth","10th",NAME)
-	NAME = re.sub("^[Ee]leven(th)?","11th",NAME)
-	NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
-	NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
-	NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
-	NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
-	NAME = re.sub("^[Ss]ixt[h]?een(th)?","16th",NAME)
-	NAME = re.sub("^[Ss]event[h]?een(th)?","17th",NAME)
-	NAME = re.sub("^[eE]ighteen(th)?","18th",NAME)
-	NAME = re.sub("^[Nn]inet[h]?e+n(th)?","19th",NAME)
-	NAME = re.sub("^[Tt]went[iy]eth","20th",NAME)
-	NAME = re.sub("^[Tt]hirt[iy]eth","30th",NAME)
-	NAME = re.sub("^[Ff]o[u]?rt[iy]eth","40th",NAME)
-	NAME = re.sub("^[Ff]ift[iy]eth", "50th",NAME)
-	NAME = re.sub("^[Ss]ixt[iy]eth", "60th",NAME)
-	NAME = re.sub("^[Ss]event[iy]eth", "70th",NAME)
-	NAME = re.sub("^[Ee]ight[iy]eth", "80th",NAME)
-	NAME = re.sub("^[Nn]inet[iy]eth", "90th",NAME)
-
-	NAME = re.sub("[Tt]wenty[ \-]*","2",NAME)
-	NAME = re.sub("[Tt]hirty[ \-]*","3",NAME)
-	NAME = re.sub("[Ff]orty[ \-]*","4",NAME)
-	NAME = re.sub("[Ff]ifty[ \-]*","5",NAME)
-	NAME = re.sub("[Ss]ixty[ \-]*","6",NAME)
-	NAME = re.sub("[Ss]eventy[ \-]*","7",NAME)
-	NAME = re.sub("[Ee]ighty[ \-]*","8",NAME)
-	NAME = re.sub("[Nn]inety[ \-]*","9",NAME)
-	
-	if re.search("(^|[0-9]+.*)([Ff]irst|[Oo]ne)",NAME) : NAME = re.sub("([Ff]irst|[Oo]ne)","1st",NAME)
-	if re.search("(^|[0-9]+.*)([Ss]econd|[Tt]wo)",NAME) : NAME = re.sub("([Ss]econd|[Tt]wo)","2nd",NAME)
-	if re.search("(^|[0-9]+.*)([Tt]hird|[Tt]hree)",NAME) : NAME = re.sub("([Tt]hird|[Tt]hree)","3rd",NAME)
-	if re.search("(^|[0-9]+.*)[Ff]our(th)?",NAME) : NAME = re.sub("[Ff]our(th)?","4th",NAME)
-	if re.search("(^|[0-9]+.*)([Ff]ifth|[Ff]ive)",NAME) : NAME = re.sub("([Ff]ifth|[Ff]ive)","5th",NAME)
-	if re.search("(^|[0-9]+.*)[Ss]ix(th)?",NAME) : NAME = re.sub("[Ss]ix(th)?","6th",NAME)
-	if re.search("(^|[0-9]+.*)[Ss]even(th)?",NAME) : NAME = re.sub("[Ss]even(th)?","7th",NAME)
-	if re.search("(^|[0-9]+.*)[Ee]igh?th?",NAME) : NAME = re.sub("[Ee]igh?th?","8th",NAME)
-	if re.search("(^|[0-9]+.*)[Nn]in(th|e)+",NAME) : NAME = re.sub("[Nn]in(th|e)+","9th",NAME)
-	
-	return NAME
-
-# Prepare map intersections
-def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
-	print("Preparing Map Intersections File")
-
-	city_name, _ =  os.path.splitext(stgrid_file)
-	_, _, dir_path = paths
-	geo_path = dir_path + "/GIS_edited/"
-	
-	if not os.path.exists(geo_path + "IntersectionsIntermediateFiles"):
-		os.makedirs(geo_path + "IntersectionsIntermediateFiles")
-	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
-
-	latest_stage = intermed_path + "fullname_dissolve.shp"
-	#dissolve all street segments based on FULLNAME
-	arcpy.Dissolve_management(in_features = geo_path + stgrid_file, 
-		out_feature_class = latest_stage,
-		dissolve_field=grid_street_var, 
-		statistics_fields="", 
-		multi_part="SINGLE_PART", 
-		unsplit_lines="DISSOLVE_LINES")
-
-	previous_stage = latest_stage
-	latest_stage =  intermed_path + "fullname_dissolve_split.shp"
-	#split street segments at their intersections
-	arcpy.FeatureToLine_management(in_features = previous_stage, 
-		out_feature_class = latest_stage,
-		cluster_tolerance="", 
-		attributes="ATTRIBUTES")
-
-	previous_stage = latest_stage
-	latest_stage = intermed_path + "split_endpoints.shp"
-	#create points at both ends of every split segment
-	arcpy.FeatureVerticesToPoints_management(in_features = previous_stage, 
-		out_feature_class = latest_stage,
-		point_location="BOTH_ENDS")
-
-	#calculate x and y coordinates of points
-	arcpy.AddGeometryAttributes_management(latest_stage, 
-		"POINT_X_Y_Z_M")
-
-	previous_stage = latest_stage
-	latest_stage = intermed_path+"xy_dissolve.shp"
-	#dissolve points based on x and y
-	arcpy.Dissolve_management(in_features = previous_stage, 
-		out_feature_class = latest_stage,
-		dissolve_field="POINT_X;POINT_Y", 
-		statistics_fields="", 
-		multi_part="MULTI_PART", 
-		unsplit_lines="DISSOLVE_LINES")
-
-	arcpy.AddField_management(in_table = latest_stage, 
-		field_name="Interse_ID", 
-		field_type="LONG", 
-		field_precision="", 
-		field_scale="", 
-		field_length="", 
-		field_alias="",
-		field_is_nullable="NULLABLE",
-		field_is_required="NON_REQUIRED", 
-		field_domain="")
-	#preserve intersection ID field
-	arcpy.CalculateField_management(in_table = latest_stage, 
-		field="Interse_ID", 
-		expression="!FID!", 
-		expression_type="PYTHON_9.3", 
-		code_block="")
-
-	previous_stage = latest_stage
-	latest_stage = intermed_path + city_name + "_spatial_join.shp"
-	target_feature_file = intermed_path + "split_endpoints.shp"
-	#join intersection ID back to points file with the rest of the data
-
-	field_mapping_ls = """FID_fullna "FID_fullna" true true false 10 Long 0 10 ,First,#,%s,FID_fullna,-1,-1;
-	%s "%s" true true false 100 Text 0 0 ,First,#,%s,%s,-1,-1;
-	ORIG_FID "ORIG_FID" true true false 10 Long 0 10 ,First,#,%s,ORIG_FID,-1,-1;
-	POINT_X "POINT_X" true true false 19 Double 0 0 ,First,#,%s,POINT_X,-1,-1;
-	POINT_Y "POINT_Y" true true false 19 Double 0 0 ,First,#,%s,POINT_Y,-1,-1;
-	POINT_X_1 "POINT_X_1" true true false 19 Double 0 0 ,First,#,%s,POINT_X,-1,-1;
-	POINT_Y_1 "POINT_Y_1" true true false 19 Double 0 0 ,First,#,%s,POINT_Y,-1,-1;
-	Interse_ID "Interse_ID" true true false 10 Long 0 10 ,First,#,%s,Interse_ID,-1,-1""" % \
-	(target_feature_file, 
-		grid_street_var, 
-		grid_street_var, 
-		target_feature_file, 
-		grid_street_var, 
-		target_feature_file, 
-		target_feature_file, 
-		target_feature_file, 
-		previous_stage, 
-		previous_stage, 
-		previous_stage)
-
-	arcpy.SpatialJoin_analysis(target_features = target_feature_file, 
-		join_features = previous_stage,
-		out_feature_class = latest_stage, 
-		join_operation="JOIN_ONE_TO_ONE", 
-		join_type="KEEP_ALL",
-		field_mapping=field_mapping_ls,
-		match_option="INTERSECT", 
-		search_radius="", 
-		distance_field_name="")
-
-	# EXPORT ATTRIBUTE TABLE
-	arcpy.ExportXYv_stats(Input_Feature_Class = latest_stage, 
-		Value_Field="FID;Join_Count;TARGET_FID;FID_fullna;"+grid_street_var+";ORIG_FID;POINT_X;POINT_Y;POINT_X_1;POINT_Y_1;Interse_ID", 
-		Delimiter="COMMA",
-		Output_ASCII_File = intermed_path + city_name + "_Intersections.txt", 
-		Add_Field_Names_to_Output="ADD_FIELD_NAMES")
-
-# Draw ED maps (descriptions, intersections)
-def draw_EDs(city_info, paths, new_var_name, is_desc) :
-
-	city_name, state_abbr, decade = city_info
-
-	_, dir_path = paths
-	geo_path = dir_path + "/GIS_edited/"
-	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
-
-	targ = intermed_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2_spatial_join.shp"
-	targ1 = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
-
-	inter = arcpy.Intersect_analysis(in_features=[targ,targ1],
-		out_feature_class=intermed_path + "intersectToGetEDs.shp",
-		join_attributes="ALL", 
-		cluster_tolerance="-1 Unknown", 
-		output_type="INPUT")
-
-	field_names = [x.name for x in arcpy.ListFields(inter)]
-	cursor = arcpy.da.SearchCursor(inter, field_names)
-	inter_polyblk_dict = {}
-	polyblk_inter_dict = {} #polygon block ID -> intersections in block
-	
-	for row in cursor :
-		Dict_append_unique(inter_polyblk_dict, row[field_names.index("Interse_ID")], row[field_names.index("pblk_id")])
-		Dict_append_unique(polyblk_inter_dict, row[field_names.index("pblk_id")], row[field_names.index("Interse_ID")])
-
-	# If using Amory's ED description method do this
-	if is_desc:
-
-		output_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp"
-		arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp")
-		blk_file = intermed_path+"fullname_dissolve_split.shp"
-		arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
-		arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
-
-		with arcpy.da.InsertCursor(output_shp, ("SHAPE@", "ed_desc")) as cursor:
-			for ED, inter in ED_Intersect_ID_dict.items() :
-				inter = inter.replace("(","").replace(")","").split(",") #convert intersect string to list 
-				block_list = []
-				for ind,i in enumerate(inter) :
-					i2 = inter[(ind+1)%len(inter)]
-					block_list.append(get_block_by_intersections(i,i2))
-				block_str = str(block_list).replace("'","").replace("[","(").replace("]",")")
-				arcpy.SelectLayerByAttribute_management ("blk_lyr", "NEW_SELECTION", '"FID" IN '+block_str)
-				#arcpy.CopyFeatures_management("blk_lyr", "lyr", "", "0", "0", "0")
-				arcpy.FeatureToPolygon_management("blk_lyr", intermed_path+"poly_lyr.shp", "", "ATTRIBUTES", "")
-				with arcpy.da.UpdateCursor(intermed_path+"poly_lyr.shp",("SHAPE@", "Id")) as icursor:
-					for irow in icursor:
-						irow[1]=ED
-						cursor.insertRow(irow)
-				#ASSIGN ED # TO POLYGON
-				arcpy.SelectLayerByAttribute_management("blk_lyr", "CLEAR_SELECTION")
-				#feature_to_polygon on the selected segments
-		arcpy.Delete_management(intermed_path+"poly_lyr.shp")
-	# If using Amory's intersection method do this...
-	elif ~is_desc:
-		blk_ed_dict = {}
-		for blk in polyblk_inter_dict.keys() :
-				#retrieve a slice of Intersect_Info_DICT for just the intersections associated with blk
-				blk_dict = {key: Intersect_Info_DICT[key] for key in Intersect_Info_DICT.viewkeys() if int(key) in polyblk_inter_dict[blk]}
-				result = aggregate_blk_inter_data(blk_dict)
-				blk_ed_dict[blk] = result
-		try :
-			arcpy.AddField_management (targ1, new_var_name, "TEXT")
-		except :
-			pass
-		with arcpy.da.UpdateCursor(targ1, ["pblk_id",new_var_name]) as up_cursor:
-			for row in up_cursor :
-				try:
-					row[1] = blk_ed_dict[row[0]]
-					if row[1] == None :
-						row[1] = 0
-					up_cursor.updateRow(row)
-				except KeyError:
-					print("Error in draw_EDs: pblk_id " + str(row[0]) + " not in blk_ed_dict")
-					pass
-	
-#
-# Amory's ED descriptions script
 #
 
 # Created: Amory Kisch, 1/8/2018
@@ -851,6 +712,93 @@ def draw_EDs(city_info, paths, new_var_name, is_desc) :
 #               - if exact matches do not exist, match using just street NAME, and then try fuzzy matching
 #           3) create the ED polygon using feature_to_polygon on the selected segments
 #               - if correct polygon cannot be created, flag ED for manual checking
+
+def check_for_desc_files(city_info, geo_path, fullname_var):
+
+	city_name, state_abbr, decade = city_info
+	city_spaces = city_name
+	city_name = city_name.replace(' ','')
+
+	stgrid_file = geo_path + city_name + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
+
+	# Ensure street grid file exists
+	st_grid_exists = os.path.isfile(stgrid_file)
+	if ~st_grid_exists:
+		print("Missing stgrid file")
+		raise 
+
+	if decade == 1940:
+
+		global blk_lines
+		global ed_lines
+		global st_lines
+
+		block_lines_file = dir_path+"/Textfile/"+city_name+"_Block_lines_edit.txt"
+		ed_lines_file = dir_path+"/Textfile/"+city_name+"_ED_lines_edit.txt"
+		attr_file = dir_path+"/Textfile/"+city_name+"_attr.txt"
+
+		# Ensure that the block lines file exists
+		block_lines_exists = os.stat(block_lines_file).st_size != 0
+		if ~block_lines_exists:
+			print("No Block lines file found for " + city_spaces + state_abbr)
+			raise
+
+		# Ensure that the ed lines file exists
+		ed_lines_exists = os.stat(ed_lines_file).st_size != 0
+		if ~ed_lines_exists:
+			print("No ED lines file found for " + city_spaces + state_abbr)
+			raise
+
+		# Create the file needed to make st_lines
+		arcpy.ExportXYv_stats(Input_Feature_Class =stgrid_file, 
+			Value_Field=fullname_var, Delimiter="COMMA",
+			Output_ASCII_File=attr_file, 
+			Add_Field_Names_to_Output="NO_FIELD_NAMES")
+
+		with open(block_lines_file,'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
+			blk_lines = blk_txt_file.readlines()
+		with open(ed_lines_file,'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
+			ed_lines = ed_txt_file.readlines()
+		with open(attr_file,'r') as st_list_file :
+			st_lines = st_list_file.readlines()
+
+		for i in range(0,len(st_lines)) :
+			st_lines[i] = st_lines[i].split(',')[2].strip()
+		st_lines = list(np.unique(st_lines))
+
+		if block_lines_exists and ed_lines_exists:
+			return True
+		else:
+			print("Missing block lines or ED lines file in " + str(decade))
+			return False
+
+	elif decade == 1930:
+
+		global InterLines
+		global Descriptions
+
+		# Ensure intersections file exist
+		intersections_file = geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'
+		intersections_exists = os.path.isfile(intersections_file)
+		if ~intersections_exists:
+			prepare_map_intersections(stgrid_file, grid_street_var, paths)
+			intersections_exists = os.path.isfile(intersections_file)
+		Intersect_TXT = open(geo_path+"/IntersectionsIntermediateFiles/"+city_name+state_abbr+'_1930_stgrid_edit_Uns2_Intersections.txt')
+		InterLines = Intersect_TXT.readlines()[1:]
+
+		# Ensure desriptions file exist
+		descriptions_file = 'S:/Projects/1940Census/SMdescriptions/'+city_spaces+'_EDdraw_test.txt'
+		descriptions_exists = os.stat(descriptions_file).st_size != 0
+		if ~descriptions_exists:
+			print("No ED description data found for " + city_spaces + state_abbr)
+			raise
+		Descriptions = open(descriptions_file).readlines()
+
+		if intersections_exists and descriptions_exist:
+			return True
+		else:
+			print("Missing either intersections or descriptions data in " + str(decade))
+			return False
 
 # fuzzy matches a given fullname st string against the list of all streets from grid
 def fuzzy_match_list(st) :
@@ -1035,145 +983,152 @@ def find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = Fa
 
 	return finished,str(filter(None,predecessor_dict.values())).replace("'","").replace("[","(").replace("]",")")+" "+str(vertex)+" "+next_name
 
-def RunAnalysisDesc(city_name, state_abbr, paths, InterLines, Descriptions, shp_targ) :
+def run_desc_analysis(city_info, paths, InterLines, Descriptions, shp_targ) :
 
-	_, _, dir_path = paths
+	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
-	output = open(geo_path + city_name+"_EDs.txt","w+")
-	problem_EDs = open(geo_path + city_name+"_problem_EDs.txt","w+")
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
 
-	debug = False
+	if decade == 1930:
 
-	# Morse Dicts: #
-	global ED_Intersect_dict
-	global ED_NAME_description_dict
-	ED_description_dict = {} # lookup ED -> list streets in order of description
-	ED_NAME_description_dict = {} # lookup ED -> list street NAMEs in order of description
+		output = open(geo_path + city_name+"_EDs.txt","w+")
+		problem_EDs = open(geo_path + city_name+"_problem_EDs.txt","w+")
 
-	# Map Dicts: #
-	global Intersect_ST_dict
-	global Intersect_BLOCK_dict
-	global Intersect_NAME_dict
-	global ST_Intersect_dict
-	global BLOCK_Intersect_dict
-	global BLOCK_NAME_dict
-	Intersect_ST_dict = {} # lookup intersection -> which STs (phrases)
-	Intersect_BLOCK_dict = {} # lookup intersection -> which BLOCKs
-	Intersect_NAME_dict = {}  # lookup intersection -> which STs (NAMEs)
-	ST_Intersect_dict = {} # lookup ST -> which intersections
-	BLOCK_Intersect_dict = {} # lookup BLOCK ID -> which intersections
-	BLOCK_NAME_dict = {} # lookup BLOCK ID -> NAME of segment
+		debug = False
 
-	print("Preparing Input for "+city_name+ " (descriptions)")
+		# Morse Dicts: #
+		global ED_Intersect_dict
+		global ED_NAME_description_dict
+		ED_description_dict = {} # lookup ED -> list streets in order of description
+		ED_NAME_description_dict = {} # lookup ED -> list street NAMEs in order of description
 
-	# Create Map DICTs
-	for ind, iline in enumerate(InterLines) :
-		IList = iline.rstrip().split(",")
-		NAME = Num_Standardize(IList[6])
-		Dict_append(Intersect_ST_dict,IList[-1],NAME)
-		Dict_append(Intersect_NAME_dict,IList[-1],isolate_st_name(NAME))
-		Dict_append_unique(ST_Intersect_dict,NAME,IList[-1])
-		Dict_append_unique(Intersect_BLOCK_dict,IList[-1],IList[7])
-		Dict_append_unique(BLOCK_Intersect_dict,IList[7],IList[-1])
-		BLOCK_NAME_dict[IList[7]] = isolate_st_name(NAME)
+		# Map Dicts: #
+		global Intersect_ST_dict
+		global Intersect_BLOCK_dict
+		global Intersect_NAME_dict
+		global ST_Intersect_dict
+		global BLOCK_Intersect_dict
+		global BLOCK_NAME_dict
+		Intersect_ST_dict = {} # lookup intersection -> which STs (phrases)
+		Intersect_BLOCK_dict = {} # lookup intersection -> which BLOCKs
+		Intersect_NAME_dict = {}  # lookup intersection -> which STs (NAMEs)
+		ST_Intersect_dict = {} # lookup ST -> which intersections
+		BLOCK_Intersect_dict = {} # lookup BLOCK ID -> which intersections
+		BLOCK_NAME_dict = {} # lookup BLOCK ID -> NAME of segment
 
-	# Create Morse DICTs
-	for line in Descriptions :
-		line_list = line.split(',')
-		ED_description_dict[line_list[0]] = [x.strip('"\' \n') for x in line_list[1:]]
-		ED_NAME_description_dict[line_list[0]] = [isolate_st_name(x.strip('"\' \n')) for x in line_list[1:]]
+		print("Preparing Input for "+city_name+ " (descriptions)")
 
-	# Isolate St NAMEs
-	arcpy.AddField_management (shp_targ, "NAME", "TEXT")
-	with arcpy.da.UpdateCursor(shp_targ, [grid_street_var,"NAME"]) as up_cursor:
-		for row in up_cursor :
-			row[1] = isolate_st_name(str(row[0]))
-			up_cursor.updateRow(row)
+		# Create Map DICTs
+		for ind, iline in enumerate(InterLines) :
+			IList = iline.rstrip().split(",")
+			NAME = Num_Standardize(IList[6])
+			Dict_append(Intersect_ST_dict,IList[-1],NAME)
+			Dict_append(Intersect_NAME_dict,IList[-1],isolate_st_name(NAME))
+			Dict_append_unique(ST_Intersect_dict,NAME,IList[-1])
+			Dict_append_unique(Intersect_BLOCK_dict,IList[-1],IList[7])
+			Dict_append_unique(BLOCK_Intersect_dict,IList[7],IList[-1])
+			BLOCK_NAME_dict[IList[7]] = isolate_st_name(NAME)
 
-	# Isolate St NAMEs
+		# Create Morse DICTs
+		for line in Descriptions :
+			line_list = line.split(',')
+			ED_description_dict[line_list[0]] = [x.strip('"\' \n') for x in line_list[1:]]
+			ED_NAME_description_dict[line_list[0]] = [isolate_st_name(x.strip('"\' \n')) for x in line_list[1:]]
 
-	print("Analyzing ED Descriptions")
+		# Isolate St NAMEs
+		arcpy.AddField_management (shp_targ, "NAME", "TEXT")
+		with arcpy.da.UpdateCursor(shp_targ, [grid_street_var,"NAME"]) as up_cursor:
+			for row in up_cursor :
+				row[1] = isolate_st_name(str(row[0]))
+				up_cursor.updateRow(row)
 
-	good_EDs = []
-	try_fuzzy_EDs = []
+		# Isolate St NAMEs
 
-	for ED, descript in ED_description_dict.items() :
-		#if ED != "486" and ED!="225" and ED!='152':
-		#    continue
+		print("Analyzing ED Descriptions")
 
-		#keep only unique street names, but preserve order in description
-		descript_stripped,rem_list = f7(copy.copy(descript))
+		good_EDs = []
+		try_fuzzy_EDs = []
 
-		intersect = []
-		start_ind = 0
-		#find an exactly matching starting intersection
-		while start_ind <= len(descript_stripped) - 1:
-			start_streets = [descript_stripped[start_ind], descript_stripped[(start_ind+1)%len(descript_stripped)]]
-			if debug:print("start_streets: "+str(start_streets))
-			intersect = get_intersect_by_stnames(start_streets)
+		for ED, descript in ED_description_dict.items() :
+			#if ED != "486" and ED!="225" and ED!='152':
+			#    continue
+
+			#keep only unique street names, but preserve order in description
+			descript_stripped,rem_list = f7(copy.copy(descript))
+
+			intersect = []
+			start_ind = 0
+			#find an exactly matching starting intersection
+			while start_ind <= len(descript_stripped) - 1:
+				start_streets = [descript_stripped[start_ind], descript_stripped[(start_ind+1)%len(descript_stripped)]]
+				if debug:print("start_streets: "+str(start_streets))
+				intersect = get_intersect_by_stnames(start_streets)
+				if intersect == [] or start_streets[0] == start_streets[1] :
+					start_ind += 1
+				else :
+					break
 			if intersect == [] or start_streets[0] == start_streets[1] :
-				start_ind += 1
+				if debug:print("Could not find any exactly matching intersections out of "+str(descript_stripped))
 			else :
-				break
-		if intersect == [] or start_streets[0] == start_streets[1] :
-			if debug:print("Could not find any exactly matching intersections out of "+str(descript_stripped))
-		else :
-			#breadth-first search through block/intersection dicts to find
-			#path to intersection with next street in the description
-			#change descript to be just the NAMEs of the streets
+				#breadth-first search through block/intersection dicts to find
+				#path to intersection with next street in the description
+				#change descript to be just the NAMEs of the streets
 
-			descript_orig = copy.copy(ED_NAME_description_dict[ED])
-			#remove streets at the indices that were previously removed
-			for i in rem_list :
-				del descript_orig[i]
+				descript_orig = copy.copy(ED_NAME_description_dict[ED])
+				#remove streets at the indices that were previously removed
+				for i in rem_list :
+					del descript_orig[i]
 
-			success, string = find_descript_segments(descript_orig,intersect,start_ind,start_streets,debug=debug)
-			if success :
-				output.write(str(ED)+": "+string+"\n")
-				ED_Intersect_ID_dict[ED] = string
+				success, string = find_descript_segments(descript_orig,intersect,start_ind,start_streets,debug=debug)
+				if success :
+					output.write(str(ED)+": "+string+"\n")
+					ED_Intersect_ID_dict[ED] = string
+				else :
+					try_fuzzy_EDs.append(ED)
+		
+		
+		for ED in try_fuzzy_EDs :
+			descript = ED_description_dict[ED]
+			intersect = []
+			start_ind = 0
+
+			#keep only unique street names, but preserve order in description
+			descript_stripped,rem_list = f7(copy.copy(descript))
+			#find an exactly matching starting intersection
+			while start_ind <= len(descript_stripped) - 1:
+				start_streets = [descript_stripped[start_ind], descript_stripped[(start_ind+1)%len(descript_stripped)]]
+				if debug:print("start_streets: "+str(start_streets))
+				intersect = get_intersect_by_stnames(start_streets)
+				if intersect == [] or start_streets[0] == start_streets[1]:
+					start_ind += 1
+				else :
+					break
+			if intersect == [] :
+				if debug:print("Could not find any exactly matching intersections out of "+str(descript_stripped))
 			else :
-				try_fuzzy_EDs.append(ED)
-	
-	
-	for ED in try_fuzzy_EDs :
-		descript = ED_description_dict[ED]
-		intersect = []
-		start_ind = 0
+				#breadth-first search through block/intersection dicts to find
+				#path to intersection with next street in the description
 
-		#keep only unique street names, but preserve order in description
-		descript_stripped,rem_list = f7(copy.copy(descript))
-		#find an exactly matching starting intersection
-		while start_ind <= len(descript_stripped) - 1:
-			start_streets = [descript_stripped[start_ind], descript_stripped[(start_ind+1)%len(descript_stripped)]]
-			if debug:print("start_streets: "+str(start_streets))
-			intersect = get_intersect_by_stnames(start_streets)
-			if intersect == [] or start_streets[0] == start_streets[1]:
-				start_ind += 1
-			else :
-				break
-		if intersect == [] :
-			if debug:print("Could not find any exactly matching intersections out of "+str(descript_stripped))
-		else :
-			#breadth-first search through block/intersection dicts to find
-			#path to intersection with next street in the description
+				#change descript to be just the NAMEs of the streets
+				descript_orig = copy.copy(ED_NAME_description_dict[ED])
+				#remove streets at the indices that were previously removed
+				for i in rem_list :
+					del descript_orig[i]
+				if debug:print(str(ED)+": "+str(descript_orig))
 
-			#change descript to be just the NAMEs of the streets
-			descript_orig = copy.copy(ED_NAME_description_dict[ED])
-			#remove streets at the indices that were previously removed
-			for i in rem_list :
-				del descript_orig[i]
-			if debug:print(str(ED)+": "+str(descript_orig))
+				success, string = find_descript_segments(descript_orig,intersect,start_ind,start_streets,fuzzy = True,debug=debug)
+				if success :
+					if debug:print("FUZZY WORKED FOR "+str(ED)+"!!!!!!!!!!!!!!!!!!!!!")
+					output.write(str(ED)+": "+string+"\n")
+					ED_Intersect_ID_dict[ED] = string
+				else :
+					problem_EDs.write(str(ED)+": "+string+"\n")
 
-			success, string = find_descript_segments(descript_orig,intersect,start_ind,start_streets,fuzzy = True,debug=debug)
-			if success :
-				if debug:print("FUZZY WORKED FOR "+str(ED)+"!!!!!!!!!!!!!!!!!!!!!")
-				output.write(str(ED)+": "+string+"\n")
-				ED_Intersect_ID_dict[ED] = string
-			else :
-				problem_EDs.write(str(ED)+": "+string+"\n")
+		if debug:print("discovered_problem: "+str(discovered_problem))
 
-	if debug:print("discovered_problem: "+str(discovered_problem))
+	elif decade == 1940:
 
 def ed_desc_algo(city_info, paths, grid_street_var):
 
@@ -1187,76 +1142,27 @@ def ed_desc_algo(city_info, paths, grid_street_var):
 	global discovered_problem
 	discovered_problem = 0
 
-	stgrid_file = geo_path + city_name + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
-	# Ensure street grid file exists
-	st_grid_exists = os.path.isfile(stgrid_file)
-	if ~st_grid_exists:
-		print("Missing stgrid file")
-		raise 
+	print("Checking for files necessary to process %s %s, %s (Descriptions algorithm)" % (str(decade), city_name, state_abbr))
+	has_files = check_for_desc_files(city_info, geo_path, grid_street_var)
+
+	print("Processing %s (Descriptions algorithm)" % (city_name, state_abbr, str(decade)))
+	if has_files:
+		run_desc_analysis(city_info, paths, InterLines, Descriptions, shp_targ)
+	else :
+		print(city_name+": Error finding stgrid and/or descriptions")
+		raise
+
+	print("Creating ED Map for %s (Descriptions algorithm)" % (city_name, state_abbr, str(decade)))
+
+	draw_EDs(city_info=city_info, 
+		new_var_name="ED_desc", 
+		is_desc=True, 
+		decade=decade)
+
+
+	
 
 	if decade == 1940:
-
-		def preserve_chars(s) :
-			special_chars = u'\xa5'
-			string = ""
-			for char in s :
-				if not char in special_chars :
-					string += char.encode('ascii',errors='ignore')
-				else :
-					string += char
-			return string
-
-		def blk_fuzz_ratio(blk_st_list,stname_list) :
-			r_sum = 0
-			for blk_st in blk_st_list :
-			#find best match for each blk_st
-				best = ''
-				best_r = 0
-				for stname in stname_list :
-					r = fuzz.ratio(blk_st,stname)
-					if r > best_r :
-						best_r = r
-						best = stname
-				r_sum += best_r
-			r_avg = r_sum / max(len(blk_st_list),len(stname_list))
-			return r_avg
-
-		def find_blk_by_stnames(stname_list,use_fuzz=False) :
-			try :
-				return fullname_blk_dict[tuple(stname_list)]
-			except KeyError :
-				if not use_fuzz :
-					return None
-				else :
-					#find fuzzy match block
-					best_r_avg = 0
-					best_blk = None
-					for blk,blk_st_list in blk_fullname_dict.items() :
-						r_sum = 0
-						#keep track of which SM streets have been matched???
-						#match_list = copy.deepcopy(stname_list)
-						r_avg = blk_fuzz_ratio(blk_st_list,stname_list)
-						if r_avg > best_r_avg :
-							best_r_avg = r_avg
-							best_blk = blk
-					if best_r_avg >= 80 :
-						return best_blk
-
-		arcpy.ExportXYv_stats(Input_Feature_Class =stgrid_file, 
-			Value_Field=fullname_var, Delimiter="COMMA",
-			Output_ASCII_File=dir_path+"/Textfile/"+city_name+"_attr.txt", 
-			Add_Field_Names_to_Output="NO_FIELD_NAMES")
-
-		with open(dir_path+"/Textfile/"+city_name+"_Block_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as blk_txt_file :
-			blk_lines = blk_txt_file.readlines()
-		with open(dir_path+"/Textfile/"+city_name+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
-			ed_lines = ed_txt_file.readlines()
-		with open(dir_path+"/Textfile/"+city_name+"_attr.txt",'r') as st_list_file :
-			st_lines = st_list_file.readlines()
-
-		for i in range(0,len(st_lines)) :
-			st_lines[i] = st_lines[i].split(',')[2].strip()
-		st_lines = list(np.unique(st_lines))
 
 		line_blk_dict = {} #lookup line number -> blk descript
 		ed_line_dict = {} #lookup ed -> which line numbers
@@ -1539,21 +1445,117 @@ def ed_desc_algo(city_info, paths, grid_street_var):
 		ED_Intersect_ID_dict = {} # lookup ED -> string of Intersection IDs
 
 		if st_grid_exists and descriptions_exist:
-			RunAnalysisDesc(city_name, state_abbr, paths, InterLines, Descriptions, shp_targ)
+			RunAnalysisDesc(city_info, paths, InterLines, Descriptions, shp_targ)
 		else :
 			print(city_name+": Error finding stgrid ("+str(st_grid_exists)+") and/or descriptions ("+str(descriptions_exist)+")")
 	
-	print("Creating ED Map for %s (Descriptions algorithm)" % (city_name))
 
-	draw_EDs(city_info=city_info, 
-		new_var_name="ED_desc", 
-		is_desc=True, 
-		decade=decade)
+#
+# Misc ED functions
+#
 
-		
-##
-## Execute functions
-##
+# Get adjacent EDs (used for validation of geocoding)
+def get_adjacent_eds(city_info, geo_path):
+	
+	city_name, state_abbr, decade = city_info
+
+	# Files
+
+	# "vm" is the verified map (e.g., ED or block map)
+	vm = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+	# Feature Class to Feature Class file
+	fc = city_name + state_abbr + "_" + str(decade) + "_ED_Feature.shp"
+	# Spatial weights files:
+	swm_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_spatweight.swm"
+	swm_table = geo_path + city_name + state_abbr + "_" + str(decade) + "_swmTab.dbf"
+	# Amory's formatted EDs dbf
+	fe = geo_path + city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
+	fe_file = city_name + state_abbr + "_" + str(decade) + "_formattedEDs.dbf"
+
+	print("creating the swm")
+	# Process: Feature Class to Feature Class
+	ftc_mapping = """OBJECTID \"OBJECTID\" true true false 10 Long 0 10 ,First,#,%s,OBJECTID,-1,-1;
+		ed \"ed\" true true false 19 Double 0 0 ,First,#,%s,ed,-1,-1;
+		Shape_Leng \"Shape_Leng\" true true false 19 Double 0 0 ,First,#,%s,Shape_Leng,-1,-1;
+		Shape_Area \"Shape_Area\" true true false 19 Double 0 0 ,First,#,%s,Shape_Area,-1,-1;
+		ED_int \"ED_int\" true true false 5 Long 0 5 ,First,#,%s,ED_int,-1,-1;
+		Ed_str \"Ed_str\" true true false 5 Text 0 0 ,First,#,%s,Ed_str,-1,-1""" % (vm, vm, vm, vm, vm, vm)
+	arcpy.FeatureClassToFeatureClass_conversion(in_features=vm, 
+		out_path=geo_path, 
+		out_name=fc, 
+		field_mapping=ftc_mapping)
+
+		#Calculate some fields
+
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Shape_Leng", 
+		expression="!SHAPE.LENGTH!",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Shape_Area", 
+		expression="!SHAPE.AREA!",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="ED_int", 
+		expression="int(!ed!)",
+		expression_type="PYTHON_9.3")
+	arcpy.CalculateField_management(in_table=geo_path+fc, 
+		field="Ed_str", 
+		expression="str(int(!ed!))",
+		expression_type="PYTHON_9.3")
+
+	# Process: Generate Spatial Weights Matrix
+	arcpy.GenerateSpatialWeightsMatrix_stats(Input_Feature_Class=geo_path+fc, 
+		Unique_ID_Field="ED_int", 
+		Output_Spatial_Weights_Matrix_File=swm_file, 
+		Conceptualization_of_Spatial_Relationships="CONTIGUITY_EDGES_CORNERS", 
+		Distance_Method="EUCLIDEAN", 
+		Exponent=1,  
+		Number_of_Neighbors=0, 
+		Row_Standardization="NO_STANDARDIZATION")
+
+	# Process: Convert Spatial Weights Matrix to Table
+	arcpy.ConvertSpatialWeightsMatrixtoTable_stats(Input_Spatial_Weights_Matrix_File=swm_file, 
+		Output_Table=swm_table)
+
+	# Do the thing to create the lists for adjacent EDs (inclusive of the ED)
+
+	field_names = [x.name for x in arcpy.ListFields(swm_table)]
+	cursor = arcpy.da.SearchCursor(swm_table, field_names)
+	silly_dict = {}
+
+	for row in cursor :
+		Dict_append_unique(silly_dict,row[2],row[3])
+		Dict_append_unique(silly_dict,row[2],row[2])
+
+	#Remove ED = 0 (unknown EDs)
+	silly_dict = {k:[i for i in v if v != 0] for k,v in silly_dict.items() if k != 0}
+
+	#Formatted ED's from Amory's weights matrix formating script
+	if os.path.isfile(fe):
+		os.remove(fe)	
+
+	arcpy.CreateTable_management(out_path=geo_path, 
+		out_name=fe_file)
+
+	arcpy.AddField_management(in_table=fe, 
+		field_name="ed", 
+		field_type="SHORT")
+	arcpy.AddField_management(in_table=fe, 
+		field_name="contig_ed", 
+		field_type="TEXT")
+
+	rows = arcpy.InsertCursor(fe)
+
+	for k, v in silly_dict.items():
+		row = rows.newRow()
+		row.setValue("ed",k)
+		v = [str(x) for x in v]
+		row.setValue("contig_ed",";".join(v))
+		rows.insertRow(row)
+
+	del row
+	del rows
 
 def combine_ed_maps(city_info, geo_path, hn_ranges):
 
@@ -1711,8 +1713,7 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	save_shp(df_ed_guess, ed_guess_file)
 
 # Save information
-
-def get_ed_guess_stats(city_info, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
+def get_ed_guess_stats(city_info, hn_ranges):
 	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
 	city_state=city_name+state_abbr
@@ -1725,7 +1726,7 @@ def get_ed_guess_stats(city_info, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD
 	geo_path = dir_path + "/GIS_edited/"
 	# Load dbf data
 	ed_guess_file = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
-	df_ed_guess = load_shp(ed_guess_file, ranges)
+	df_ed_guess = load_shp(ed_guess_file, hn_ranges)
 	if decade == 1940:
 		# Get number of blocks in block description file
 		with open(geo_path + 'ed_blk_desc.txt','r') as blk_desc_file :
@@ -1764,7 +1765,6 @@ def get_ed_guess_stats(city_info, ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD
 		info['city'] = city_name
 		info['state'] = state_abbr		
 	return info
-
 
 def run_ed_guess(decade=1940, fullname_var="FULLNAME"):
 	

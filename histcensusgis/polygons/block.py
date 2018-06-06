@@ -10,11 +10,11 @@ from histcensusgis.s4utils.IOutils import *
 import arcpy
 arcpy.env.overwriteOutput = True
 
-# Create physical blocks and block points
-def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], geocode_file=None):
+# Fix grid and get physical blocks
+def get_pblks(city_info, paths, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], geocode_file=None):
 	
 	"""
-	Creates physical blocks, geocodes addresses, then intersects geocoded points with physical blocks
+	Creates physical blocks after re-running grid fixing function
 
 	Parameters
 	----------
@@ -49,6 +49,38 @@ def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MI
 	physical_blocks(city_info, geo_path)
 	print("The script has finished executing the 'physical_blocks' function and has now started executing 'geocode' function")
 
+# Creates physical blocks shapefile 
+def physical_blocks(city_info, geo_path):
+
+	city_name, _, decade = city_info
+	city_name = city_name.replace(' ','')
+
+	pblocks = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
+
+	#Create Physical Blocks# #####
+	arcpy.FeatureToPolygon_management(split_grid, pblocks)
+	#Add a Physical Block ID
+	expression="!FID! + 1"
+	arcpy.AddField_management(pblocks, "pblk_id", "LONG", 4, "", "","", "", "")
+	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
+
+#
+# Functions to run Matt's ED/block algorithms in R
+#
+
+# Check files for Matt's ED/block algorithms
+def run_initial_geocode(city_info, geo_path, geocode_file=None):
+
+	city_name, _, decade = city_info
+	city_name = city_name.replace(' ','')
+
+	# Check that address file exists
+	address_file = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
+	if ~exists(addressfile):
+		create_addresses(city_info, paths)
+
+	# Initial geocode
 	initial_geocode(city_info, geo_path, hn_ranges)
 	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
 
@@ -61,36 +93,16 @@ def create_blocks_and_block_points(city_info, paths, hn_ranges=['MIN_LFROMA','MI
 	attach_pblk_id(city_info, geo_path, points_shp)
 	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
-# Creates physical blocks shapefile 
-def physical_blocks(city_info, geo_path):
-
-	city_name, _, decade = city_info
-	city_name = city_name.replace(' ','')
-
-	pblocks = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
-	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
-
-	#if int(start_from) = 1930:
-	#arcpy.AddField_management(grid, 'FULLNAME', 'TEXT')
-	#arcpy.CalculateField_management(grid, "FULLNAME","!Strt_Fx!", "PYTHON_9.3")
-
-	#Create Physical Blocks# #####
-	arcpy.FeatureToPolygon_management(split_grid, pblocks)
-	#Add a Physical Block ID
-	expression="!FID! + 1"
-	arcpy.AddField_management(pblocks, "pblk_id", "LONG", 4, "", "","", "", "")
-	arcpy.CalculateField_management(pblocks, "pblk_id", expression, "PYTHON_9.3")
-
 # Attach physical block IDs to geocoded points 
 def attach_pblk_id(city_info, geo_path, points_shp):
 
-	city_name, _, decade = city_info
+	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
 	# Files
-	pblk_points_shp = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
 	pblocks_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	pblk_points_shp = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
 
 	#Attach Pblk ids to points
 	arcpy.SpatialJoin_analysis(points_shp, 
@@ -106,6 +118,9 @@ def attach_pblk_id(city_info, geo_path, points_shp):
 # Block numbering functions
 # 
 
+
+# Check for addresses and pblk_points files
+
 # Identifies block numbers and can be run independently (R script)
 # NOTE: Assigns block numbers using microdata blocks. Examines proportion of cases that geocode 
 # onto the same physical block and decides  
@@ -116,8 +131,16 @@ def identify_blocks_geocode(city_info, paths, script_path):
 
 	r_path, dir_path = paths
 
+	# Ensure files exist for Matt's block algorithm
+	pblocks_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	pblk_points_shp = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
+	if ~os.path.isfile(pblk_points_shp) or ~os.path.isfile(pblk_points_shp):
+		run_initial_geocode(city_info, geo_path)
+	else:
+		pass
+
 	print("Identifying " + str(decade) + " blocks\n")
-	t = subprocess.call([r_path,'--vanilla',script_path+'/blocknum/R/Identify 1930 Blocks.R',dir_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+	t = subprocess.call([r_path,'--vanilla','Identify 1930 Blocks.R',geo_path,city_name,str(decade)], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 	if t != 0:
 		print("Error identifying " + str(decade) + " blocks for "+city_name+"\n")
 	else:
