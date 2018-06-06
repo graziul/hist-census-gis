@@ -37,10 +37,14 @@ from histcensusgis.s4utils.IOutils import *
 # Step 1: Load city
 #
 
-def load_city(city_info, file_path):
+def load_city(city_info, file_path, sis_project):
 
 	city, state, year = city_info
-	city = city.replace(' ','')
+	if sis_project:
+		#city = city.replace(' ','_')
+		city = city.replace(' ','')
+	else:
+		city = city.replace(' ','')
 
 	start = time.time()
 
@@ -51,8 +55,14 @@ def load_city(city_info, file_path):
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
-		file_name = c + state.upper()
-		df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
+		if sis_project:
+			#file_name = city.upper() + '_' + state.upper() + '_' + str(year)
+			#df = pd.read_csv(file_path + '/RawData/%s/%s.csv' % (str(year), file_name), low_memory=False)
+			file_name = c + state.upper()
+			df = pd.read_stata(file_path + '/RawData/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
+		else:
+			file_name = c + state.upper()
+			df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
 	except:
 		print('Error loading %s raw data' % (city))
 
@@ -66,6 +76,13 @@ def load_city(city_info, file_path):
 	print('Loading data for %s took %s' % (city, load_time))
 
 	# Standardize variable names
+	#if sis_project:
+	#	df['street'] = df['street'].astype('str')
+	#	df = df.rename(columns = {'street' : 'street_raw'})
+	#	#df = df.rename(columns = {'hn' : 'hn_raw'})
+	#	df = df.rename(columns = {'enumdist' : 'ed'})
+	#	df['hn'] = pd.to_numeric(df['hn_raw'].str.replace(' ?1/2','.5'), 'coerce')
+	#else:
 	df = rename_variables(df, year)
 
 	# Remove duplicates
@@ -75,8 +92,11 @@ def load_city(city_info, file_path):
 		print("Remove duplicates failed")
 
 	# Sort by image_id and line_num (important for HN) 
-	df = df.sort_values(['image_id', 'line_num'])
-	df.index = range(0, len(df))
+	try: 
+		df = df.sort_values(['image_id', 'line_num'])
+		df.index = range(0, len(df))
+	except:
+		print('Not sorted, manuscript info is missing')
 
 	return df, load_time
 
@@ -110,12 +130,12 @@ def rename_variables(df, year):
 
 	# ED
 	if year == 1940:
- 		# New 1940 data (Summer 2016)
- 		try:
-	 		df['ed'] = df['derived_enumdist']
- 		except:
- 			df['ed'] = df['us1940b_0083']
- 		# Old 1940 data
+		# New 1940 data (Summer 2016)
+		try:
+			df['ed'] = df['derived_enumdist']
+		except:
+			df['ed'] = df['us1940b_0083']
+		# Old 1940 data
 		#df['ed'] = df['indexed_enumeration_district']
 	if year == 1930:
 		df['ed'] = df['indexed_enumeration_district']
@@ -329,84 +349,142 @@ def remove_duplicates(df):
 # Step 2a: Properly format street names and get Steve Morse street-ed information
 #
 
-def preclean_street(df, city_info, file_path):
+# Three functions are used withing the preclean_street() function
+
+def create_cleaning_street_dict(df, var):
+	temp = df[var].drop_duplicates().apply(standardize_street)
+	temp.index = df[var].drop_duplicates()
+	cleaning_dict = temp.to_dict()
+	return cleaning_dict
+
+def replace_singleton_names_w_st(st, NAME, TYPE):
+	try:
+		if num_NAME_versions[NAME] == 1 & TYPE == '':
+			TYPE = "St"
+			st = st + " St"
+		return st, TYPE    
+	except:
+		return st, TYPE
+
+def try_to_find_dir(st, DIR, ed):
+	#If st has DIR then do nothing 
+	if len(DIR) > 0:
+		return st, False, False
+	#Get streets in same ED
+	try:
+		streets = sm_ed_st_dict[ed]
+	except:
+		return st, True, False
+	#See if exact street name is in that ED
+	exact = st in streets
+	#See if street name contained in any other streets
+	contains = [i for i in streets if st in i]
+	#If exact street name is not in ED and only one street in 
+	if not exact and len(contains) == 1:
+		has_DIR = re.search(r'^([Nn]|[Ss]|[Ee]|[Ww])[\s]?([Nn]|[Ss]|[Ee]|[Ww])?[\s]', contains[0])
+		if has_DIR:
+			return contains[0], False, True
+		else:
+			return st, False, False
+	else:
+		#POSSIBLE: Add something to catch when only some cases are missing DIR (based on street-ED)?
+		return st, True, False
+
+# This is the higher level precleaning function (with SIS flag)
+
+def preclean_street(df, city_info, file_path, sis_project):
 
 	city_name, state_abbr, decade = city_info 
 
 	start = time.time()
 
 	#Create dictionary for (and run precleaning on) unique street names
-
-	def create_cleaning_street_dict(var):
-		temp = df[var].drop_duplicates().apply(standardize_street)
-		temp.index = df[var].drop_duplicates()
-		cleaning_dict = temp.to_dict()
-		return cleaning_dict
-
-	cleaning_dict = create_cleaning_street_dict('street_raw')
+	cleaning_dict = create_cleaning_street_dict(df, 'street_raw')
 	
 	#Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
 	df['street_precleaned'], df['DIR'], df['NAME'] ,df['TYPE'] = zip(*df['street_raw'].apply(lambda s: cleaning_dict[s]))
 
-	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path)
+	#process for Geocoding project
+	if sis_project == False:
+		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path)
 
-	#Create dictionary {NAME:num_NAME_versions}
-	num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
-	#Flatten for use elsewhere
-	sm_st_ed_dict = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
-	#For bookkeeping when validating matches using ED 
-	microdata_all_streets = df['street_precleaned'].unique()
-	for st in microdata_all_streets:
-		if st not in sm_all_streets:
-			sm_st_ed_dict[st] = None
+		#Create dictionary {NAME:num_NAME_versions}
+		num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
+		#Flatten for use elsewhere
+		sm_st_ed_dict = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
+		#For bookkeeping when validating matches using ED 
+		mirodata_all_streets = df['street_precleaned'].unique()
+		for st in microdata_all_streets:
+			if st not in sm_all_streets:
+				sm_st_ed_dict[st] = None
 
-	#If no TYPE, check if NAME is unique (and so we can assume TYPE = "St")
-	def replace_singleton_names_w_st(st, NAME, TYPE):
+		#If no TYPE, check if NAME is unique (and so we can assume TYPE = "St")
+		df['street_precleaned'], df['TYPE'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'], x['NAME'], x['TYPE']), axis=1))
+
+		#If no DIR, check Steve Mose ED for street to see if it should have a DIR
+		df['street_precleaned'], df['check_DIR'], df['DIR_added'] = zip(*df.apply(lambda x: try_to_find_dir(x['street_precleaned'], x['DIR'], x['ed']), axis=1))
+
+		# set same_year = True for later functions, this is always true for Geocoding project
+		same_year = True
+
+	#process for SIS project
+	else:
+		#Loading Steve Morse dicitonary
+		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path + '/RawData')
+
+		# if no dictionary in that year, find best one
+		while len(sm_all_streets) == 0:
+			year_try = decade
+			year_try = year_try + 10
+			sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, year_try, file_path + '/RawData')
+	
+		# was there a SM dictionary the first try?
 		try:
-			if num_NAME_versions[NAME] == 1 & TYPE == '':
-				TYPE = "St"
-				st = st + " St"
-			return st, TYPE    
-		except:
-			return st, TYPE
-
-	df['street_precleaned'], df['TYPE'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'], x['NAME'], x['TYPE']), axis=1))
-
-	#If no DIR, check Steve Mose ED for street to see if it should have a DIR
-	def try_to_find_dir(st, DIR, ed):
-		#If st has DIR then do nothing 
-		if len(DIR) > 0:
-			return st, False, False
-		#Get streets in same ED
-		try:
-			streets = sm_ed_st_dict[ed]
-		except:
-			return st, True, False
-		#See if exact street name is in that ED
-		exact = st in streets
-		#See if street name contained in any other streets
-		contains = [i for i in streets if st in i]
-		#If exact street name is not in ED and only one street in 
-		if not exact and len(contains) == 1:
-			has_DIR = re.search(r'^([Nn]|[Ss]|[Ee]|[Ww])[\s]?([Nn]|[Ss]|[Ee]|[Ww])?[\s]', contains[0])
-			if has_DIR:
-				return contains[0], False, True
-			else:
-				return st, False, False
+			year_try
+		except NameError:
+			same_year = True
 		else:
-			#POSSIBLE: Add something to catch when only some cases are missing DIR (based on street-ED)?
-			return st, True, False
+			same_year = False
 
-	df['street_precleaned'], df['check_DIR'], df['DIR_added'] = zip(*df.apply(lambda x: try_to_find_dir(x['street_precleaned'], x['DIR'], x['ed']), axis=1))
+		# process if SM dictionary exists in same year
+		if same_year:
+			#Print SM status
+			print('SM file exists for '+city_name+', '+state_abbr+' in '+str(decade))
+			num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
+			#Flatten for use elsewhere
+			sm_st_ed_dict = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
+			#For bookkeeping when validating matches using ED 
+			microdata_all_streets = df['street_precleaned'].unique()
+			for st in microdata_all_streets:
+				if st not in sm_all_streets:
+					sm_st_ed_dict[st] = None
+
+			#If no TYPE, check if NAME is unique (and so we can assume TYPE = "St")
+			df['street_precleaned'], df['TYPE'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'], x['NAME'], x['TYPE']), axis=1))
+
+			#If no DIR, check Steve Mose ED for street to see if it should have a DIR
+			df['street_precleaned'], df['check_DIR'], df['DIR_added'] = zip(*df.apply(lambda x: try_to_find_dir(x['street_precleaned'], x['DIR'], x['ed']), axis=1))
+
+		else:
+			#print SM status
+			print('SM file does not exist for '+city_name+', '+state_abbr+' in '+str(decade))
+			# delete the ED dictionaries, they are wrong
+			del sm_st_ed_dict_nested
+			sm_ed_st_dict = None
+			sm_st_ed_dict = None
+				
+			df['street_precleaned'], df['TYPE'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'], x['NAME'], x['TYPE']), axis=1))
+
 
 	end = time.time()
 	preclean_time = round(float(end-start)/60, 1)
 
 	print('Precleaning street names for %s took %s\n' % (city_name, str(preclean_time)))
 	
-	preclean_info = sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time
+	preclean_info = sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, preclean_time, same_year
 
 	return df, preclean_info
+
 
 #
 # Step 3a: Import street names from street grids  
@@ -565,8 +643,10 @@ def find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info):
 
 	return df, exact_info_stgrid
 
-#Function to run all exact matching and return results to Clean.py
-def find_exact_matches(df, city, street, sm_all_streets, sm_st_ed_dict, source):
+# Function to run all exact matching and return results to Clean.py
+# We are considering adding a step for exact matching within ED before checking the city
+# Will need a flag to check if same_year = True (if not, both ED-street dictionaries are 'None' values and can't be used)
+def find_exact_matches(df, city, street, sm_all_streets, source):
 
 	print("\nExact matching algorithm for %s \n" % (street))
 
@@ -685,6 +765,22 @@ def fuzzy_match_function(street, ed, ed_streets_dict, all_streets_fuzzyset, chec
 		else:
 			return [best_match_all[1], best_match_all[0], False]
 
+#Fuzzy matching algorithm when SM file is from a later year (same_year = False)
+def fuzzy_match_function_no_ed(street, all_streets_fuzzyset):
+	
+	nomatch = ['', '', False]
+	
+	#Return null if street is blank
+	if street == '':
+		return nomatch
+	
+	#Find best match among all streets
+	try:
+		best_match_all = sm_all_streets_fuzzyset[street][0]
+	except:
+		return nomatch
+	return [best_match_all[1], best_match_all[0], True]
+
 #Helper function (necessary since dictionary built only for cases without validated exact matches)
 def get_fuzzy_match(exact_match, fuzzy_match_dict, street, ed):
 	#Only look at cases without validated exact match
@@ -707,9 +803,7 @@ def update_current_match(current_match, current_match_bool, new_match, new_match
 		return current_match, current_match_bool
 
 #Function to do fuzzy matching using multiple sources
-def find_fuzzy_matches_module(df, grid_all_streets, grid_ed_st_dict, map_type,resid=0):
-
-	city_name, state_abbr, _ = city_info
+def find_fuzzy_matches_module(df, street, grid_all_streets, grid_ed_st_dict, map_type, same_year, resid=0):
 
 	start = time.time()
 
@@ -730,8 +824,12 @@ def find_fuzzy_matches_module(df, grid_all_streets, grid_ed_st_dict, map_type,re
 	df_no_exact_match = df[~(df['current_match_bool'+post])]
 	df_grouped = df_no_exact_match.groupby([street, 'ed'])
 	fuzzy_match_dict = {}
-	for st_ed, _ in df_grouped:
-		fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], grid_ed_st_dict, grid_all_streets_fuzzyset)
+	if same_year:
+		for st_ed, _ in df_grouped:
+			fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], grid_ed_st_dict, grid_all_streets_fuzzyset)
+	else:
+		for st_ed, _ in df_grouped:
+			fuzzy_match_dict[st_ed] = fuzzy_match_function_no_ed(st_ed[0], sm_all_streets_fuzzyset)
 
 	#Compute current number of residuals
 	num_records = len(df)
@@ -754,7 +852,7 @@ def find_fuzzy_matches_module(df, grid_all_streets, grid_ed_st_dict, map_type,re
 	return df, fuzzy_info, resid
 
 #Function to run all fuzzy matching and return results to Clean.py
-def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, file_path, ed_map=False):
+def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, file_path, same_year, ed_map=False):
 
 	city_name, state_abbr, _ = city_info
 
@@ -777,27 +875,27 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 		
 		#Get 1940 grid fuzzy matches
 		grid_1940_all_streets, grid_1940_ed_st_dict = get_stgrid_with_EDs(city_info, '1940', file_path)
-		df, fuzzy_info_1940_grid, resid = find_fuzzy_matches_module(df, grid_1940_all_streets, grid_1940_ed_st_dict, "1940")
+		df, fuzzy_info_1940_grid, resid = find_fuzzy_matches_module(df, street, grid_1940_all_streets, grid_1940_ed_st_dict, "1940", same_year = same_year)
 
 		#Get Contemporary grid fuzzy matches
 		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city_info, 'Contemp', file_path)
-		df, fuzzy_info_Contemp_grid, resid = find_fuzzy_matches_module(df, grid_Contemp_all_streets, grid_Contemp_ed_st_dict, "Contemp", resid)
+		df, fuzzy_info_Contemp_grid, resid = find_fuzzy_matches_module(df, street, grid_Contemp_all_streets, grid_Contemp_ed_st_dict, "Contemp", resid, same_year = same_year)
 
 		#Get Chicago group 1930 grid fuzzy matches
-		if city in ['Boston', 'Cincinnatti','Philadelphia']:
+		if city_name in ['Boston', 'Cincinnatti','Philadelphia']:
 			grid_1930_all_streets, grid_1930_ed_st_dict = get_stgrid_with_EDs(city_info, 'Chicago', file_path)
-			df, fuzzy_info_1930_grid, resid = find_fuzzy_matches_module(df, grid_1930_all_streets, grid_1930_ed_st_dict, "Chicago", resid)
+			df, fuzzy_info_1930_grid, resid = find_fuzzy_matches_module(df, street, grid_1930_all_streets, grid_1930_ed_st_dict, "Chicago", resid, same_year = same_year)
 			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid + fuzzy_info_1930_grid
 		else:
 			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid 
 
 		# Get Steve Morse fuzzy matches
-		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, sm_all_streets, sm_ed_st_dict, 'sm', resid)
+		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, street, sm_all_streets, sm_ed_st_dict, 'sm', same_year = same_year, resid = resid)
 
 		fuzzy_info = fuzzy_info + fuzzy_info_sm 
 
 	else:
-		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, sm_all_streets, sm_ed_st_dict, 'sm')
+		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df, street, sm_all_streets, sm_ed_st_dict, 'sm', same_year = same_year)
 		fuzzy_info = fuzzy_info_sm
 
 	return df, fuzzy_info
@@ -844,7 +942,7 @@ def fix_blank_st(df, city, HN_seq, street, sm_st_ed_dict):
 		# If sequence has only blank street names, leave street as blank
 		if len(seq_street_names) == 1:
 			continue
-		# If sequence has one street name, replace blanks with that street name:
+		# If sequence has one street name, replace blanks with that street name: (BUT ONLY IF SM IS FROM SAME YEAR)
 		if len(seq_street_names) == 2:
 			seq_street_names.remove('')
 			potential_street_name = seq_street_names[0]
@@ -892,10 +990,10 @@ def fix_blank_st(df, city, HN_seq, street, sm_st_ed_dict):
 	return df, fix_blanks_info
 
 def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
-    if (microdata_st is None) or (sm_st_ed_dict[microdata_st] is None):
-        return False
-    else:
-        if microdata_ed in sm_st_ed_dict[microdata_st]:
-            return True
-        else:
-            return False
+	if (microdata_st is None) or (sm_st_ed_dict is None) or (sm_st_ed_dict[microdata_st] is None):
+		return False
+	else:
+		if microdata_ed in sm_st_ed_dict[microdata_st]:
+			return True
+		else:
+			return False

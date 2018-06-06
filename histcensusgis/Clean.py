@@ -44,7 +44,12 @@ version = 7
 
 datestr = time.strftime("%Y_%m_%d")
 
-def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
+def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities', sis_project=False):
+
+	# Let's be sure SIS project never tries to use spatial files
+	if sis_project:
+		street_source = 'sm'
+		ed_map = False
 
 	city_name, state_abbr, decade = city_info
 
@@ -65,15 +70,15 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	# Step 1: Load city and standardize variable names
 	#
 
-	df, load_time = load_city(city_info, file_path)
+	df, load_time = load_city(city_info, file_path, sis_project)
 
 	#
 	# Step 2: Format raw street names and fill in blank street names
 	#
 
 	# Step 2a: Properly format street names and get Steve Morse street-ed information
-	df, preclean_info = preclean_street(df, city_info, file_path)  
-	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _ = preclean_info  
+	df, preclean_info = preclean_street(df, city_info, file_path, sis_project)  
+	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _, same_year  = preclean_info  
 
 	# Step 2b: Use formatted street names to get house number sequences
 	street_var = 'street_precleaned'
@@ -89,14 +94,14 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	preclean_var = 'street_precleanedHN'
 
 	# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
-	df, exact_info = find_exact_matches(df, city_name, preclean_var, sm_all_streets, sm_st_ed_dict, street_source)
+	df, exact_info = find_exact_matches(df, city_name, preclean_var, sm_all_streets, street_source)
 
 	#
 	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
 	#
 
 	# Step 4a: Search for fuzzy matches
-	df, fuzzy_info = find_fuzzy_matches(df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map)
+	df, fuzzy_info = find_fuzzy_matches(df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map = False, same_year = same_year)
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df[preclean_var]
 	df.loc[df['current_match_bool'],street_var] = df['current_match']
@@ -127,15 +132,17 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	#
 
 	city_state = city_name.replace(' ','') + state_abbr
-	autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
-	if ~os.path.exists(autoclean_path):
-	    os.makedirs(autoclean_path)
-	file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
-	df.to_csv(file_name_all)
 
-	end_total = time.time()
-	total_time = round(float(end_total-start_total)/60,1)
-	print("Total processing time for %s: %s\n" % (city_name, total_time))
+	if sis_project:
+		file_name = city_name.upper() + '_' + state_abbr.upper() + '_' + str(decade) + '_clean'
+		outfile = file_path + '/CleanData/%s/%s.csv' % (str(decade), file_name)
+		df.to_csv(outfile)
+	else:
+		autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
+		if ~os.path.exists(autoclean_path):
+			os.makedirs(autoclean_path)
+		file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
+		df.to_csv(file_name_all)
 
 	'''
 	#Generate dashbaord info
