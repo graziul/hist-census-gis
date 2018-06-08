@@ -853,7 +853,7 @@ def find_fuzzy_matches_module(df, street, grid_all_streets, grid_ed_st_dict, map
 	return df, fuzzy_info, resid
 
 #Function to run all fuzzy matching and return results to Clean.py
-def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, file_path, same_year, ed_map=False):
+def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, file_path, ed_map, same_year):
 
 	city_name, state_abbr, _ = city_info
 
