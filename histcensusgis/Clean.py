@@ -72,6 +72,13 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 
 	df, load_time = load_city(city_info, file_path, sis_project)
 
+	# Side step: If processing NYC all at once, run a separate process
+	# Process is identical to below, but must be applied to all boroughs separately
+
+	if city_name == 'new york':
+		clean_nyc(df, city_info, file_path, sis_project)
+		return
+
 	#
 	# Step 2: Format raw street names and fill in blank street names
 	#
@@ -130,13 +137,12 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	# Step 7: Save full dataset and generate dashboard information 
 	#
 
-	city_state = city_name.replace(' ','') + state_abbr
-
 	if sis_project:
 		file_name = city_name.upper() + '_' + state_abbr.upper() + '_' + str(decade) + '_clean'
 		outfile = file_path + '/CleanData/%s/%s.csv' % (str(decade), file_name)
 		df.to_csv(outfile)
 	else:
+		city_state = city_name.replace(' ','') + state_abbr
 		autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
 		if ~os.path.exists(autoclean_path):
 			os.makedirs(autoclean_path)
