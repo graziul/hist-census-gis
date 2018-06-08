@@ -406,6 +406,7 @@ def preclean_street(df, city_info, file_path, sis_project):
 
 	#process for Geocoding project
 	if sis_project == False:
+
 		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path)
 
 		#Create dictionary {NAME:num_NAME_versions}
@@ -413,7 +414,7 @@ def preclean_street(df, city_info, file_path, sis_project):
 		#Flatten for use elsewhere
 		sm_st_ed_dict = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
 		#For bookkeeping when validating matches using ED 
-		mirodata_all_streets = df['street_precleaned'].unique()
+		microdata_all_streets = df['street_precleaned'].unique()
 		for st in microdata_all_streets:
 			if st not in sm_all_streets:
 				sm_st_ed_dict[st] = None
@@ -429,6 +430,7 @@ def preclean_street(df, city_info, file_path, sis_project):
 
 	#process for SIS project
 	else:
+
 		#Loading Steve Morse dicitonary
 		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path + '/RawData')
 

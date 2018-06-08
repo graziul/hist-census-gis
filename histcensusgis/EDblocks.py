@@ -84,3 +84,35 @@ def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges
 
 	get_block_map(city_info, paths)
 
+# user = sys.argv[1]
+# pw = sys.argv[2]
+
+# Run get_pblks
+
+# Upload stgrid to unix server 
+
+# Run cleaning algorithm on unix server 
+
+# Download results to proper local directory
+# 	- Store overall_match
+#	- Count number of overall_matches
+
+# Run get_ed_map
+#	- Store pblk/ED
+# 	- Count number of pblks with ED guesses
+
+# Spatial join stgrid and ED map
+
+# Upload Spatial join file
+
+# Run cleaning algorithm on unix server 
+
+# Download results to proper local directory
+# 	- Store overall_match
+# 	- Count number of overall_matches
+
+# Run get_ed_map
+#	- Store pblk/ED
+# 	- Count number of pblks with ED guesses
+
+# Spatial join stgrid and ED map

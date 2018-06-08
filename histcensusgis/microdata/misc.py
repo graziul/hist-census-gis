@@ -23,6 +23,7 @@ import pickle
 import fuzzyset
 import pandas as pd
 import numpy as np
+from histcensusgis.microdata.street import create_cleaning_street_dict
 
 def set_priority(df):
 
@@ -153,7 +154,9 @@ def create_overall_match_variables(df):
 	# If no overall match, use best fuzzy match
 	df.loc[df['overall_match_bool']==False,'st_best_guess'] = df['fuzzy_match_boolHN']
 	# Re-add DIR if lost somewhere along the way
-	df.loc[(standardize_street(df['st_best_guess'])[1]=='') & (df['DIR']!=''),'st_best_guess'] = df['DIR'] + ' ' + df['st_best_guess']
+	cleaned_dict = create_cleaning_street_dict(df, 'st_best_guess')
+	_, df['DIR_post'], _, _ = zip(*df['st_best_guess'].apply(lambda s: cleaned_dict[s]))
+	df.loc[(df['DIR'] != df['DIR_post']) & (df['DIR_post'] == ''),'st_best_guess'] = df['DIR'] + ' ' + df['st_best_guess']
 
 	return df
 

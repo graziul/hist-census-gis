@@ -1081,6 +1081,9 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 	df_uns2.loc[:,('NameChng')] = df_uns2[grid_street_var+'_old'] != df_uns2[grid_street_var]
 
 	print("Number of street names changed: "+str(df_uns2['NameChng'].sum())+" of "+str(len(df_uns2))+" ("+'{:.1%}'.format(float(df_uns2['NameChng'].sum())/len(df_uns2))+") of cases")
+
+	save_shp(df_uns2, grid_uns2)
+
 	'''
 	# Function to save Pandas DF as DBF file 
 	def save_dbf_st(df, shapefile_name, field_map = False):
@@ -1122,4 +1125,4 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 
 	save_dbf_st(df_uns2, grid_uns2, field_map=True)
 	'''
-	save_shp(df_uns2, grid_uns2)
+

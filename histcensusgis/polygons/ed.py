@@ -42,7 +42,7 @@ def ed_geocode_algo(city_info, paths):
 		print("OK!\n")
 
 # Draw ED maps (descriptions, intersections)
-def draw_EDs(city_info, paths, new_var_name, is_desc) :
+def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 
 	city_name, state_abbr, decade = city_info
 
@@ -71,31 +71,211 @@ def draw_EDs(city_info, paths, new_var_name, is_desc) :
 	# If using Amory's ED description method do this
 	if is_desc:
 
-		output_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp"
-		arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp")
-		blk_file = intermed_path+"fullname_dissolve_split.shp"
-		arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
-		arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
+		if decade == 1930:
 
-		with arcpy.da.InsertCursor(output_shp, ("SHAPE@", "ed_desc")) as cursor:
-			for ED, inter in ED_Intersect_ID_dict.items() :
-				inter = inter.replace("(","").replace(")","").split(",") #convert intersect string to list 
-				block_list = []
-				for ind,i in enumerate(inter) :
-					i2 = inter[(ind+1)%len(inter)]
-					block_list.append(get_block_by_intersections(i,i2))
-				block_str = str(block_list).replace("'","").replace("[","(").replace("]",")")
-				arcpy.SelectLayerByAttribute_management ("blk_lyr", "NEW_SELECTION", '"FID" IN '+block_str)
-				#arcpy.CopyFeatures_management("blk_lyr", "lyr", "", "0", "0", "0")
-				arcpy.FeatureToPolygon_management("blk_lyr", intermed_path+"poly_lyr.shp", "", "ATTRIBUTES", "")
-				with arcpy.da.UpdateCursor(intermed_path+"poly_lyr.shp",("SHAPE@", "Id")) as icursor:
-					for irow in icursor:
-						irow[1]=ED
-						cursor.insertRow(irow)
-				#ASSIGN ED # TO POLYGON
-				arcpy.SelectLayerByAttribute_management("blk_lyr", "CLEAR_SELECTION")
-				#feature_to_polygon on the selected segments
-		arcpy.Delete_management(intermed_path+"poly_lyr.shp")
+			output_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp"
+			arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp")
+			blk_file = intermed_path+"fullname_dissolve_split.shp"
+			arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
+			arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
+
+			with arcpy.da.InsertCursor(output_shp, ("SHAPE@", "ed_desc")) as cursor:
+				for ED, inter in ED_Intersect_ID_dict.items() :
+					inter = inter.replace("(","").replace(")","").split(",") #convert intersect string to list 
+					block_list = []
+					for ind,i in enumerate(inter) :
+						i2 = inter[(ind+1)%len(inter)]
+						block_list.append(get_block_by_intersections(i,i2))
+					block_str = str(block_list).replace("'","").replace("[","(").replace("]",")")
+					arcpy.SelectLayerByAttribute_management ("blk_lyr", "NEW_SELECTION", '"FID" IN '+block_str)
+					#arcpy.CopyFeatures_management("blk_lyr", "lyr", "", "0", "0", "0")
+					arcpy.FeatureToPolygon_management("blk_lyr", intermed_path+"poly_lyr.shp", "", "ATTRIBUTES", "")
+					with arcpy.da.UpdateCursor(intermed_path+"poly_lyr.shp",("SHAPE@", "Id")) as icursor:
+						for irow in icursor:
+							irow[1]=ED
+							cursor.insertRow(irow)
+					#ASSIGN ED # TO POLYGON
+					arcpy.SelectLayerByAttribute_management("blk_lyr", "CLEAR_SELECTION")
+					#feature_to_polygon on the selected segments
+			arcpy.Delete_management(intermed_path+"poly_lyr.shp")
+
+		# We use a very different method for 1940 
+		elif decade == 1940:
+
+			def find_blk_by_stnames(stname_list,use_fuzz=False) :
+				try :
+					return fullname_blk_dict[tuple(stname_list)]
+				except KeyError :
+					if not use_fuzz :
+						return None
+					else :
+						#find fuzzy match block
+						best_r_avg = 0
+						best_blk = None
+						for blk,blk_st_list in blk_fullname_dict.items() :
+							r_sum = 0
+							#keep track of which SM streets have been matched???
+							#match_list = copy.deepcopy(stname_list)
+							r_avg = blk_fuzz_ratio(blk_st_list,stname_list)
+							if r_avg > best_r_avg :
+								best_r_avg = r_avg
+								best_blk = blk
+						if best_r_avg >= 80 :
+							return best_blk
+
+			def blk_fuzz_ratio(blk_st_list,stname_list) :
+				r_sum = 0
+				for blk_st in blk_st_list :
+				#find best match for each blk_st
+					best = ''
+					best_r = 0
+					for stname in stname_list :
+						r = fuzz.ratio(blk_st,stname)
+						if r > best_r :
+							best_r = r
+							best = stname
+					r_sum += best_r
+				r_avg = r_sum / max(len(blk_st_list),len(stname_list))
+				return r_avg
+
+			print("Matching block descriptions to physical blocks based on street grid...")
+
+			#spatial join target=pblk file, join=Uns2, share_a_LINE_SEGMENT, join the grid_ids of all street segments for each block
+			#format the joined grid ID field so it is like: (1047,1048,1081,168,197,218,219)
+
+			grid_id_var = "grid_id"
+			grid_id_str_var = "grid_id_s"
+
+			city_state = city_name + state_abbr
+
+			stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
+			pblk_shp = geo_path + city_state[:-2] + "_"+str(decade)+"_Pblk.shp"
+			if not os.path.isfile(pblk_shp) :
+				print("Missing Pblk file")
+				raise ValueError
+
+			# Have to convert .shp to .gdb here because of text field size limit for dBase files
+			if arcpy.Exists(geo_path+"scratch%s.gdb" % (city_name)):
+				arcpy.Delete_management(geo_path+"scratch%s.gdb" % (city_name))
+			arcpy.CreateFileGDB_management(geo_path, "scratch%s" % (city_name))
+			arcpy.env.workspace = geo_path+"scratch%s.gdb" % (city_name)
+			arcpy.FeatureClassToGeodatabase_conversion([pblk_shp, stgrid_shp], arcpy.env.workspace)
+			arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_stgrid_edit_Uns2"), "st_lyr")
+			arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state[:-2] + "_"+str(decade)+"_Pblk"), "pblk_lyr")
+
+			arcpy.AddField_management ('st_lyr', 'grid_id_s', "TEXT", 750)
+			arcpy.CalculateField_management ('st_lyr', 'grid_id_s', 'str(!'+grid_id_var+'!)+","', 
+				expression_type="PYTHON_9.3")
+
+			join_file = os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_ED_desc")
+
+			arcpy.SpatialJoin_analysis(target_features="pblk_lyr", 
+				join_features="st_lyr", 
+				out_feature_class=join_file, 
+				join_operation="JOIN_ONE_TO_ONE", 
+				join_type="KEEP_ALL",
+				field_mapping="""pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,pblk_lyr,pblk_id,-1,-1;
+				grid_id_s "grid_id_s" true true false 750 Text 0 0 ,Join,#,st_lyr,grid_id_s,-1,-1""", 
+				match_option="SHARE_A_LINE_SEGMENT_WITH")
+
+			with open(geo_path + 'ed_blk_desc.txt','r') as blk_desc_file :
+				blk_desc = blk_desc_file.readlines()
+
+			for ind,line in enumerate(blk_desc) :
+				blk_desc[ind] = line.strip()    
+
+			blk_desc_dict = {} # lookup SM ed_blk identifier -> SM description of block
+			blk_gridID_dict = {} # lookup pblk_id -> string of grid_ids of streets comprising boundary of block
+			blk_fullname_dict = {} # lookup pblk_id -> list of fullnames of streets comprising boundary of block
+			fullname_blk_dict = {} # lookup alphabetical, unique tuple of streets comprising boundary of block -> pblk_id of block
+			pblk_ed_blk_dict = {} # lookup pblk_id -> SM ed_blk identifier
+
+			for line in blk_desc :
+				line = line.split(', ')
+				try :
+					blk = line[1].split('-')[1]
+				except :
+					if line[1] :
+						blk = line[1]
+					else :
+						continue
+				blk_desc_dict[blk] = list(np.unique(line[2:]))
+
+			def foo_format(s) :
+				return '('+s[:-1]+')'
+
+			with arcpy.da.SearchCursor(join_file,['pblk_id',grid_id_str_var]) as b_cursor :
+				for b_row in b_cursor :
+					blk = b_row[0]
+					seg_str = foo_format(b_row[1])
+					blk_gridID_dict[blk] = seg_str
+					arcpy.SelectLayerByAttribute_management("st_lyr", 'NEW_SELECTION', '"'+grid_id_var+'" IN '+seg_str)
+					with arcpy.da.SearchCursor("st_lyr",[grid_id_var,grid_street_var]) as s_cursor :
+						stname_list = []
+						for s_row in s_cursor :
+							if city_state == "OklahomaCityOK" :
+								phrase = isolate_st_name(str(s_row[1]),whole_phrase = True)
+								if phrase[0] and re.search("^[A-Z][A-Z]$",phrase[0]):
+									try :
+										stname_list.append(' '.join(phrase[1:]))
+									except TypeError :
+										stname_list.append(str(s_row[1]))
+							else :
+								stname_list.append(str(s_row[1]))
+
+						else :
+							stname_list.append(str(s_row[1]))
+						stname_list = list(np.unique(stname_list))
+						blk_fullname_dict[blk] = stname_list
+						fullname_blk_dict[tuple(stname_list)] = blk
+
+			#dicts to keep track of which blocks need to be fuzzy-matched
+			fuzz_blk_fullname_dict = copy.deepcopy(blk_fullname_dict)
+			fuzz_blk_desc_dict = copy.deepcopy(blk_desc_dict)
+			#find exact block matches
+			print("Finding exact block matches...")
+			for ed_blk, stname_list in blk_desc_dict.items() :
+				pblk = find_blk_by_stnames(stname_list)
+				if pblk :
+					pblk_ed_blk_dict[pblk] = ed_blk
+					try :
+						fuzz_blk_fullname_dict.pop(pblk)
+					except KeyError :
+						print("Key "+str(pblk)+" already removed before matching "+str(stname_list))
+					fuzz_blk_desc_dict.pop(ed_blk)
+
+			#find fuzzy block matches
+			print("Finding fuzzy block matches...")
+			for ed_blk, stname_list in fuzz_blk_desc_dict.items() :
+				pblk = find_blk_by_stnames(stname_list,use_fuzz=True)
+				if pblk :
+					if pblk in pblk_ed_blk_dict :
+						prev_r = blk_fuzz_ratio(blk_fullname_dict[pblk],blk_desc_dict[pblk_ed_blk_dict[pblk]])
+						cur_r = blk_fuzz_ratio(blk_fullname_dict[pblk],stname_list)
+						if cur_r > prev_r :
+							print("pblk "+str(pblk)+str(blk_fullname_dict[pblk])+" already matched w/ "+str(pblk_ed_blk_dict[pblk])+"("+str(prev_r)+")"+str(blk_desc_dict[pblk_ed_blk_dict[pblk]])+", now "+str(ed_blk)+"("+str(cur_r)+")"+str(stname_list))
+							pblk_ed_blk_dict[pblk] = ed_blk
+					else :
+						pblk_ed_blk_dict[pblk] = ed_blk
+
+			#resolve duplicate block matches
+			print("Removing duplicate block matches...")
+			arcpy.AddField_management(join_file, "ed_desc", "TEXT", "", "", 20)
+			arcpy.AddField_management(join_file, "cblk_id", "TEXT", "", "", 20)
+			with arcpy.da.UpdateCursor(join_file,['pblk_id','ed_desc','cblk_id']) as b_cursor :
+				for row in b_cursor :
+					try :
+						ed_blk = pblk_ed_blk_dict[row[0]]
+						row[1] = ed_blk.split('_')[0]
+						row[2] = ed_blk.split('_')[1]
+						b_cursor.updateRow(row)
+					except KeyError :
+						continue
+					except IndexError:
+						continue
+
+			arcpy.FeatureClassToShapefile_conversion(join_file, geo_path)        
+
 	# If using Amory's intersection method do this...
 	else:
 		blk_ed_dict = {}
@@ -118,7 +298,6 @@ def draw_EDs(city_info, paths, new_var_name, is_desc) :
 				except KeyError:
 					print("Error in draw_EDs: pblk_id " + str(row[0]) + " not in blk_ed_dict")
 					pass
-
 
 #
 # Functions for using intersections to derive EDs
@@ -622,7 +801,7 @@ def run_inter_analysis(city_name) :
 		else :
 			Output_TXT.write(i+","+info[0]+"\n")
 
-def ed_inter_algo(city_info, paths, grid_street_var='FULLNAME'):
+def ed_inter_algo(city_info, paths, grid_street_var):
 
 	city_name, state_abbr, decade = city_info
 	city_spaces = city_name
@@ -701,7 +880,11 @@ def ed_inter_algo(city_info, paths, grid_street_var='FULLNAME'):
 	run_inter_analysis(city_name)
 
 	print("Creating ED Map for %s (Intersections algorithm)" % (city_name))
-	draw_EDs(city_info=city_info, paths=paths, new_var_name="ED_inter", is_desc=False)
+	draw_EDs(city_info=city_info, 
+		paths=paths, 
+		new_var_name="ED_inter", 
+		is_desc=False,
+		grid_street_var=grid_street_var)
 
 #
 # Functions for ED descriptions
@@ -983,9 +1166,6 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 
 	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
-	city_state = city_name + state_abbr
-
-	stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
 
 	if decade == 1930:
 
@@ -1129,42 +1309,6 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 
 	elif decade == 1940:
 
-		def find_blk_by_stnames(stname_list,use_fuzz=False) :
-			try :
-				return fullname_blk_dict[tuple(stname_list)]
-			except KeyError :
-				if not use_fuzz :
-					return None
-				else :
-					#find fuzzy match block
-					best_r_avg = 0
-					best_blk = None
-					for blk,blk_st_list in blk_fullname_dict.items() :
-						r_sum = 0
-						#keep track of which SM streets have been matched???
-						#match_list = copy.deepcopy(stname_list)
-						r_avg = blk_fuzz_ratio(blk_st_list,stname_list)
-						if r_avg > best_r_avg :
-							best_r_avg = r_avg
-							best_blk = blk
-					if best_r_avg >= 80 :
-						return best_blk
-
-		def blk_fuzz_ratio(blk_st_list,stname_list) :
-			r_sum = 0
-			for blk_st in blk_st_list :
-			#find best match for each blk_st
-				best = ''
-				best_r = 0
-				for stname in stname_list :
-					r = fuzz.ratio(blk_st,stname)
-					if r > best_r :
-						best_r = r
-						best = stname
-				r_sum += best_r
-			r_avg = r_sum / max(len(blk_st_list),len(stname_list))
-			return r_avg
-
 		line_blk_dict = {} #lookup line number -> blk descript
 		ed_line_dict = {} #lookup ed -> which line numbers
 		ed_tract_dict = {} #lookup ed -> which tract/area/precinct
@@ -1288,141 +1432,6 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 
 		# HERE BEGINS CODE FOR MATCHING DESCRIPTION BLOCKS TO STGRID BLOCKS #
 
-		print("Matching block descriptions to physical blocks based on street grid...")
-
-		#spatial join target=pblk file, join=Uns2, share_a_LINE_SEGMENT, join the grid_ids of all street segments for each block
-		#format the joined grid ID field so it is like: (1047,1048,1081,168,197,218,219)
-
-		grid_id_var = "grid_id"
-		grid_id_str_var = "grid_id_s"
-
-		pblk_shp = geo_path + city_state[:-2] + "_"+str(decade)+"_Pblk.shp"
-		if not os.path.isfile(pblk_shp) :
-			print("Missing Pblk file")
-			raise ValueError
-
-		# Have to convert .shp to .gdb here because of text field size limit for dBase files
-		if arcpy.Exists(geo_path+"scratch%s.gdb" % (city_name)):
-			arcpy.Delete_management(geo_path+"scratch%s.gdb" % (city_name))
-		arcpy.CreateFileGDB_management(geo_path, "scratch%s" % (city_name))
-		arcpy.env.workspace = geo_path+"scratch%s.gdb" % (city_name)
-		arcpy.FeatureClassToGeodatabase_conversion([pblk_shp, stgrid_shp], arcpy.env.workspace)
-		arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_stgrid_edit_Uns2"), "st_lyr")
-		arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state[:-2] + "_"+str(decade)+"_Pblk"), "pblk_lyr")
-
-		arcpy.AddField_management ('st_lyr', 'grid_id_s', "TEXT", 750)
-		arcpy.CalculateField_management ('st_lyr', 'grid_id_s', 'str(!'+grid_id_var+'!)+","', 
-			expression_type="PYTHON_9.3")
-
-		join_file = os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_ED_desc")
-
-		arcpy.SpatialJoin_analysis(target_features="pblk_lyr", 
-			join_features="st_lyr", 
-			out_feature_class=join_file, 
-			join_operation="JOIN_ONE_TO_ONE", 
-			join_type="KEEP_ALL",
-			field_mapping="""pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,pblk_lyr,pblk_id,-1,-1;
-			grid_id_s "grid_id_s" true true false 750 Text 0 0 ,Join,#,st_lyr,grid_id_s,-1,-1""", 
-			match_option="SHARE_A_LINE_SEGMENT_WITH")
-
-		with open(geo_path + 'ed_blk_desc.txt','r') as blk_desc_file :
-			blk_desc = blk_desc_file.readlines()
-
-		for ind,line in enumerate(blk_desc) :
-			blk_desc[ind] = line.strip()    
-
-		blk_desc_dict = {} # lookup SM ed_blk identifier -> SM description of block
-		blk_gridID_dict = {} # lookup pblk_id -> string of grid_ids of streets comprising boundary of block
-		blk_fullname_dict = {} # lookup pblk_id -> list of fullnames of streets comprising boundary of block
-		fullname_blk_dict = {} # lookup alphabetical, unique tuple of streets comprising boundary of block -> pblk_id of block
-		pblk_ed_blk_dict = {} # lookup pblk_id -> SM ed_blk identifier
-
-		for line in blk_desc :
-			line = line.split(', ')
-			try :
-				blk = line[1].split('-')[1]
-			except :
-				if line[1] :
-					blk = line[1]
-				else :
-					continue
-			blk_desc_dict[blk] = list(np.unique(line[2:]))
-
-		def foo_format(s) :
-			return '('+s[:-1]+')'
-
-		with arcpy.da.SearchCursor(join_file,['pblk_id',grid_id_str_var]) as b_cursor :
-			for b_row in b_cursor :
-				blk = b_row[0]
-				seg_str = foo_format(b_row[1])
-				blk_gridID_dict[blk] = seg_str
-				arcpy.SelectLayerByAttribute_management("st_lyr", 'NEW_SELECTION', '"'+grid_id_var+'" IN '+seg_str)
-				with arcpy.da.SearchCursor("st_lyr",[grid_id_var,grid_street_var]) as s_cursor :
-					stname_list = []
-					for s_row in s_cursor :
-						if city_state == "OklahomaCityOK" :
-							phrase = isolate_st_name(str(s_row[1]),whole_phrase = True)
-							if phrase[0] and re.search("^[A-Z][A-Z]$",phrase[0]):
-								try :
-									stname_list.append(' '.join(phrase[1:]))
-								except TypeError :
-									stname_list.append(str(s_row[1]))
-						else :
-							stname_list.append(str(s_row[1]))
-
-					else :
-						stname_list.append(str(s_row[1]))
-					stname_list = list(np.unique(stname_list))
-					blk_fullname_dict[blk] = stname_list
-					fullname_blk_dict[tuple(stname_list)] = blk
-
-		#dicts to keep track of which blocks need to be fuzzy-matched
-		fuzz_blk_fullname_dict = copy.deepcopy(blk_fullname_dict)
-		fuzz_blk_desc_dict = copy.deepcopy(blk_desc_dict)
-		#find exact block matches
-		print("Finding exact block matches...")
-		for ed_blk, stname_list in blk_desc_dict.items() :
-			pblk = find_blk_by_stnames(stname_list)
-			if pblk :
-				pblk_ed_blk_dict[pblk] = ed_blk
-				try :
-					fuzz_blk_fullname_dict.pop(pblk)
-				except KeyError :
-					print("Key "+str(pblk)+" already removed before matching "+str(stname_list))
-				fuzz_blk_desc_dict.pop(ed_blk)
-
-		#find fuzzy block matches
-		print("Finding fuzzy block matches...")
-		for ed_blk, stname_list in fuzz_blk_desc_dict.items() :
-			pblk = find_blk_by_stnames(stname_list,use_fuzz=True)
-			if pblk :
-				if pblk in pblk_ed_blk_dict :
-					prev_r = blk_fuzz_ratio(blk_fullname_dict[pblk],blk_desc_dict[pblk_ed_blk_dict[pblk]])
-					cur_r = blk_fuzz_ratio(blk_fullname_dict[pblk],stname_list)
-					if cur_r > prev_r :
-						print("pblk "+str(pblk)+str(blk_fullname_dict[pblk])+" already matched w/ "+str(pblk_ed_blk_dict[pblk])+"("+str(prev_r)+")"+str(blk_desc_dict[pblk_ed_blk_dict[pblk]])+", now "+str(ed_blk)+"("+str(cur_r)+")"+str(stname_list))
-						pblk_ed_blk_dict[pblk] = ed_blk
-				else :
-					pblk_ed_blk_dict[pblk] = ed_blk
-
-		#resolve duplicate block matches
-		print("Removing duplicate block matches...")
-		arcpy.AddField_management(join_file, "ed_desc", "TEXT", "", "", 20)
-		arcpy.AddField_management(join_file, "cblk_id", "TEXT", "", "", 20)
-		with arcpy.da.UpdateCursor(join_file,['pblk_id','ed_desc','cblk_id']) as b_cursor :
-			for row in b_cursor :
-				try :
-					ed_blk = pblk_ed_blk_dict[row[0]]
-					row[1] = ed_blk.split('_')[0]
-					row[2] = ed_blk.split('_')[1]
-					b_cursor.updateRow(row)
-				except KeyError :
-					continue
-				except IndexError:
-					continue
-
-		arcpy.FeatureClassToShapefile_conversion(join_file, geo_path)        
-
 def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME'):
 
 	city_name, state_abbr, decade = city_info
@@ -1442,7 +1451,11 @@ def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME'):
 
 	# Draw the ED map based on descriptions algorithm
 	print("Creating ED Map for %s (Descriptions algorithm)" % (city_name))
-	draw_EDs(city_info=city_info, paths=paths, new_var_name="ED_desc", is_desc=True)
+	draw_EDs(city_info=city_info, 
+		paths=paths, 
+		new_var_name="ED_desc", 
+		is_desc=True, 
+		grid_street_var=grid_street_var)
 
 #
 # Misc ED functions
