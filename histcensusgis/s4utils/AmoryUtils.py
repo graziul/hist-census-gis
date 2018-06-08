@@ -15,6 +15,15 @@ def Dict_append_unique(Dict, k, v) :
         if not v in Dict[k] :
             Dict[k].append(v)
 
+def preserve_chars(s) :
+    special_chars = u'\xa5'
+    string = ""
+    for char in s :
+        if not char in special_chars :
+            string += char.encode('ascii',errors='ignore')
+        else :
+            string += char
+    return string
 
 def Dict_append_flexible(Dict, k, v) :
     if not k in Dict :

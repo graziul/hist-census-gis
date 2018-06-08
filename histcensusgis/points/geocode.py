@@ -11,6 +11,9 @@ Created: 11/3/2017
 Updated: Chris Graziul, 12/11/2017 (stripped down to functions only)
 """
 
+from histcensusgis.microdata.misc import create_addresses
+from histcensusgis.lines.street import process_raw_grid
+from histcensusgis.polygons.block import attach_pblk_id, create_pblks
 from histcensusgis.s4utils.AmoryUtils import *
 from histcensusgis.s4utils.IOutils import *
 import arcpy
@@ -19,7 +22,7 @@ import pandas as pd
 arcpy.env.overwriteOutput=True
 
 # Performs initial geocode on contemporary grid
-def initial_geocode(city_info, geo_path, hn_ranges):
+def initial_geocode(city_info, geo_path, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
@@ -35,6 +38,10 @@ def initial_geocode(city_info, geo_path, hn_ranges):
 	reference_data = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp 'Primary Table'"
 
 	# Fix addresses for use in geocoding
+	try:
+		arcpy.Delete_management(geo_path + "temp.gdb")
+	except:
+		pass
 	arcpy.CreateFileGDB_management(geo_path,"temp.gdb")
 	df_addresses_csv = pd.read_csv(addresses)
 	df_addresses_dbf = df_addresses_csv.replace(np.nan,'',regex=True)
@@ -97,6 +104,43 @@ def initial_geocode(city_info, geo_path, hn_ranges):
 	arcpy.Delete_management(geo_path + "temp.gdb/" + city_name + "_" + str(decade) + "_Addresses")
 	arcpy.Delete_management(geo_path + "temp.gdb")
 	print("The script has finished executing the 'GeocodeAddress' tool and has begun executing the 'SpatialJoin' tool")
+
+# Ensure geocode data exist for Matt's ED/block algorithms
+def check_matt_dependencies(city_info, paths, geocode_file=None):
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+
+	_, dir_path = paths
+	geo_path = dir_path + "/GIS_edited/"
+
+	# Ensure that address file exists
+	address_file = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
+	if ~os.path.isfile(address_file):
+		create_addresses(city_info, paths)
+
+	# Ensure that processed street grid exists
+	grid_uns2 = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	if ~os.path.isfile(grid_uns2):
+		_ = process_raw_grid(city_info, geo_path)
+
+	# Ensure that physical block shapefile exists
+	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	if ~os.path.isfile(pblk_shp):
+		create_pblks(city_info, geo_path)	
+
+	# Call initial geocoding function
+	initial_geocode(city_info, geo_path)
+	print("The script has finished executing the 'geocode' function and has now started excuting 'attach_pblk_id'")
+
+	if geocode_file != None:
+		points = geocode_file
+		print("Different geocode")
+	else:
+		points_shp = geo_path + city_name + "_" + str(decade) + "_Points.shp"
+
+	attach_pblk_id(city_info, geo_path, points_shp)
+	print("The script has finished executing the 'attach_pblk_id' function and the entire script is complete")
 
 # Add and calculate check field, save the result
 def is_touch(ED, neighbor):

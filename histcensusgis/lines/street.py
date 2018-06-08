@@ -15,7 +15,8 @@ import fuzzyset
 import arcpy
 arcpy.env.overwriteOutput=True
 
-def grid_geo_fix(city_info, geo_path, hn_ranges=['LFROMADD','LTOADD','RFROMADD','RTOADD']):
+# Workhorse function for converting raw street grids into standardized street grids
+def process_raw_grid(city_info, geo_path, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	"""
 	Code to "fix up" street grid geometry (and duplicate ranges)
@@ -54,8 +55,8 @@ def grid_geo_fix(city_info, geo_path, hn_ranges=['LFROMADD','LTOADD','RFROMADD',
 	grid_orig = "S:/Projects/1940Census/DirAdd/" + city_name + state_abbr + "_1940_stgrid_diradd.shp"
 	dissolve_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Dissolve.shp"
 	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
-	grid_uns =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns.shp"
-	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	grid_uns = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns.shp"
+	grid_uns2 = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 
 	#Create copy of "diradd" file to use as grid
 	if not os.path.isfile(grid):
@@ -160,6 +161,86 @@ def grid_geo_fix(city_info, geo_path, hn_ranges=['LFROMADD','LTOADD','RFROMADD',
 
 	return problem_segments
 
+# Check for streets not in grid 
+def check_for_streets_not_grid(city_info, geo_path, df, grid_shp, df_street_var='st_best_guess', df_ed_var='ed', grid_street_var='FULLNAME'):
+
+	"""
+	Get street names in microdata but not in street grid
+
+	Compares microdata street names to grid street names, returns names in former but not latter.
+
+	Parameters
+	----------
+	city_info : list
+		List containing city name (e.g. "Hartford"), state abbreviation (e.g. "CT"), and decade (e.g. 1930)
+	geo_path : str
+		Path to GIS files
+	df : Pandas dataframe
+		Dataframe that includes street names
+	grid_shp : str
+		Filename (including path) to street grid shapefile
+	df_street_var : str (Optional)
+		Variable in Pandas dataframe containing street names 
+	df_ed_var : str (Optional)
+		Variable in Pandas dataframe containing ED numbers
+	grid_street_var : str (Optional)
+		Variable in street grid shapefile containing street names
+
+	Returns
+	-------
+	Excel file with list of streets for students to search for and (if possible) add to street grid
+
+	"""
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	state_abbr = state_abbr.upper()
+
+	# Load grid dataframe
+	df_grid = load_shp(grid_shp)
+	# Get street list from grid
+	grid_streets_list = df_grid[grid_street_var].drop_duplicates().tolist()
+
+	# Get street-ED combinations from df 
+	df_st_ed = df.loc[df[df_street_var]!='.',[df_street_var,df_ed_var]]
+	df_microdata_st_ed = df_ungeocoded_st_ed.groupby([df_street_var,df_ed_var]).size().reset_index(name='count')
+	# Select ungeocoded streets not in grid
+	df_st_ed_tocheck = df_st_ed[~df_st_ed[df_street_var].isin(grid_streets_list)].sort_values([df_ed_var])
+	# Remove streets with <50 people on them
+	thresh = 50
+	temp = df_st_ed_tocheck.groupby(df_street_var)['count'].aggregate(sum) >= thresh
+	temp = temp.reset_index(name='select_street')
+	st_list = temp.loc[temp['select_street'],df_street_var].tolist()
+	df_st_ed_tocheck_final = df_st_ed_tocheck[df_st_ed_tocheck[df_street_var].isin(st_list)]
+
+	# Create a Pandas Excel writer using XlsxWriter as the engine.
+	file_name = geo_path + '/' + city_name + state_abbr + '_' + str(decade) + '_st_not_in_grid'+post+'.xlsx'
+	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+	# Convert the dataframe to an XlsxWriter Excel object.
+	df_st_ed_tocheck_final.to_excel(writer, sheet_name='Missing from grid', index=False)
+	# Close the Pandas Excel writer and output the Excel file.
+	writer.save()
+
+# Process street grid and return list of streets in microdata but not grid
+def get_missing_streets(city_info, paths):
+
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+
+	_, dir_path = paths
+	geo_path = dir_path + '/GIS_edited/'
+	
+	# Fix grid
+	problem_segments = process_raw_grid(city_info, geo_path)
+
+	# Load microdata 	
+	df = load_cleaned_microdata(city_info, dir_path)
+
+	# Return streets missing from grid
+	grid_uns2 = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	check_for_streets_not_grid(city_info=city_info, geo_path=geo_path, df=df, grid_shp=grid_uns2)
+
+# Find consecutive segments
 def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 
 	"""
@@ -656,66 +737,7 @@ def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 
 	return name_sequence_dict, exact_next_dict
 
-# Check for streets not in grid 
-def check_for_streets_not_grid(geo_path, df, grid_shp, city_info, df_street_var, df_ed_var='ed', grid_street_var='FULLNAME'):
-
-	"""
-	Get street names in microdata but not in street grid
-
-	Compares microdata street names to grid street names, returns names in former but not latter.
-
-	Parameters
-	----------
-	geo_path : str
-		Path to GIS files
-	df : Pandas dataframe
-		Dataframe that includes street names
-	grid_shp : str
-		Filename (including path) to street grid shapefile
-	city_info : list
-		List containing city name (e.g. "Hartford"), state abbreviation (e.g. "CT"), and decade (e.g. 1930)
-	df_street_var : str
-		Variable in Pandas dataframe containing street names 
-	df_ed_var : str (Optional)
-		Variable in Pandas dataframe containing ED numbers
-	grid_street_var : str (Optional)
-		Variable in street grid shapefile containing street names
-
-	Returns
-	-------
-	Excel file with list of streets for students to search for and (if possible) add to street grid
-
-	"""
-
-	city_name, state_abbr, decade = city_info
-	city_name = city_name.replace(' ','')
-	state_abbr = state_abbr.upper()
-
-	# Load grid dataframe
-	df_grid = load_shp(grid_shp)
-	# Get street list from grid
-	grid_streets_list = df_grid[grid_street_var].drop_duplicates().tolist()
-
-	# Get street-ED combinations from df 
-	df_st_ed = df.loc[df[df_street_var]!='.',[df_street_var,df_ed_var]]
-	df_microdata_st_ed = df_ungeocoded_st_ed.groupby([df_street_var,df_ed_var]).size().reset_index(name='count')
-	# Select ungeocoded streets not in grid
-	df_st_ed_tocheck = df_st_ed[~df_st_ed[df_street_var].isin(grid_streets_list)].sort_values([df_ed_var])
-	# Remove streets with <50 people on them
-	thresh = 50
-	temp = df_st_ed_tocheck.groupby(df_street_var)['count'].aggregate(sum) >= thresh
-	temp = temp.reset_index(name='select_street')
-	st_list = temp.loc[temp['select_street'],df_street_var].tolist()
-	df_st_ed_tocheck_final = df_st_ed_tocheck[df_st_ed_tocheck[df_street_var].isin(st_list)]
-
-	# Create a Pandas Excel writer using XlsxWriter as the engine.
-	file_name = geo_path + '/' + city_name + state_abbr + '_' + str(decade) + '_st_not_in_grid'+post+'.xlsx'
-	writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
-	# Convert the dataframe to an XlsxWriter Excel object.
-	df_st_ed_tocheck_final.to_excel(writer, sheet_name='Missing from grid', index=False)
-	# Close the Pandas Excel writer and output the Excel file.
-	writer.save()
-
+# Fix street grid names using microdata
 def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro=None, v=7, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	"""

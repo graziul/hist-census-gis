@@ -126,33 +126,34 @@ def set_priority(df):
 
 	return df, priority_info
 
-def create_overall_match_variables(df, year):
+def create_overall_match_variables(df):
 
 	#Tabulate the fuzzy matches
  	df['fuzzy_match_bool'] = np.where(df['current_match_bool'] & ~df['exact_match_bool'],True,False)
  	#Make sure to include blank fixes (and changes due to house number sequences)
-	if year != 1940:
-		df['fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
-		df['fuzzy_match_boolHN'] = np.where(df['fuzzy_match_bool'] | df['fuzzy_match_blank_fix'],True,False)
+	df['fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
+	df['fuzzy_match_boolHN'] = np.where(df['fuzzy_match_bool'] | df['fuzzy_match_blank_fix'],True,False)
 
 	#Incorporate street names from blank fixing into current_match
-	if year != 1940:
-		df.loc[df['fuzzy_match_blank_fix'],'current_match'] = df['street_post_fuzzyHN']
-		df.loc[df['fuzzy_match_blank_fix'],'current_match_bool'] = True
+	df.loc[df['fuzzy_match_blank_fix'],'current_match'] = df['street_post_fuzzyHN']
+	df.loc[df['fuzzy_match_blank_fix'],'current_match_bool'] = True
 
 	#Create overall_match
 	df['overall_match'] = df['current_match']
 	df['overall_match_bool'] = df['current_match_bool']
 
 	df.loc[df['overall_match_bool'],'overall_match'] = df['current_match']
-	if year != 1940:
-		df.loc[df['fuzzy_match_boolHN'],'overall_match_type'] = 'Fuzzy'
-	else:
-		df.loc[df['fuzzy_match_bool'],'overall_match_type'] = 'Fuzzy'
+	df.loc[df['fuzzy_match_boolHN'],'overall_match_type'] = 'Fuzzy'
 	df.loc[df['exact_match_bool'],'overall_match_type'] = 'Exact'
 
 	del df['current_match']
 	del df['current_match_bool']
+
+	df['st_best_guess'] = df['overall_match']
+	# If no overall match, use best fuzzy match
+	df.loc[df['overall_match_bool']==False,'st_best_guess'] = df['fuzzy_match_boolHN']
+	# Re-add DIR if lost somewhere along the way
+	df.loc[(standardize_street(df['st_best_guess'])[1]=='') & (df['DIR']!=''),'st_best_guess'] = df['DIR'] + ' ' + df['st_best_guess']
 
 	return df
 

@@ -116,8 +116,7 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	# Step 5: Create overall match and all check variables
 	#
 
-	post_var = 'street_post_fuzzyHN'
-	df = create_overall_match_variables(df, decade)
+	df = create_overall_match_variables(df)
 
 	print("\nOverall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n")
 

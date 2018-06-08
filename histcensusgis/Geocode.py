@@ -8,23 +8,23 @@ from geocoding.GeocodeFunctions import *
 # overwrite output
 arcpy.env.overwriteOutput=True
 
-city_spaces = 'St Louis'
-city = city_spaces.replace(' ','')
-state = 'MO'
-micro_street_var = 'st_best_guess'
-grid_street_var = 'FULLNAME'
-decade = 1930
+#city_spaces = 'St Louis'
+#city = city_spaces.replace(' ','')
+#state = 'MO'
+#micro_street_var = 'st_best_guess'
+#grid_street_var = 'FULLNAME'
+#decade = 1930
 
-geocode_file = ""
-different_geocode = False
-if geocode_file != "":
-	different_geocode = True
+#geocode_file = ""
+#different_geocode = False
+#if geocode_file != "":
+#	different_geocode = True
 
 # Paths
-dir_path = "C:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
-r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
-paths = [r_path, dir_path]
-hn_ranges = ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD']
+#dir_path = "C:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+#r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
+#paths = [r_path, dir_path]
+#hn_ranges = ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD']
 
 start = time.time()
 

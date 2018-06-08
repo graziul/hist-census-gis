@@ -7,6 +7,7 @@
 from histcensusgis.microdata.misc import create_addresses
 from histcensusgis.polygons.block import *
 from histcensusgis.polygons.ed import *
+from histcensusgis.lines.street import *
 
 def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program Files/R/R-3.4.2/bin/Rscript"):
 
@@ -30,10 +31,10 @@ def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program
 
 	return paths
 
-def get_ed_map(city_info, paths, grid_street_var, hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
+def get_ed_map(city_info, paths, grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
 	city_name, state_abbr, decade = city_info
-	_, dir_path = paths
+	r_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 	
 	# Step 1: Run Amory's intersections-based algorithm
@@ -53,6 +54,9 @@ def get_ed_map(city_info, paths, grid_street_var, hn_ranges=['LTOADD','LFROMADD'
 
 def get_block_map(city_info, paths):
 
+	city_name, state_abbr, decade = city_info
+	r_path, dir_path = paths
+
 	if decade != 1940:
 		# Identify blocks using geocoding
 		identify_blocks_geocode(city_info, paths)
@@ -70,8 +74,9 @@ def get_block_map(city_info, paths):
 		# Set confidence in block number guess [NEEDS TO BE GENERALIZED]
 		set_blocknum_confidence(city_name, paths)
 	
-
 def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], just_desc=False):
+
+	get_missing_streets(city_info, paths)
 
 	get_pblks(city_info, paths)
 

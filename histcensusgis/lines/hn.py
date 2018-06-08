@@ -582,7 +582,7 @@ def fix_blanks(name, group, hn_ranges, blanks_dict):
 ##
 ## Strategy: Produce renamed grids after filling blanks, use those to do geocoding, preserve orig
 ##
-
+'''
 city_name = 'StLouis'
 state_abbr = 'MO'
 dir_path = "S:/Projects/1940Census/" + city_name #TO DO: Directories need to be city_name+state_abbr
@@ -598,6 +598,7 @@ grid_street_var = 'FULLNAME'
 
 old_grid_file=geo_path + city_name + state_abbr + "_1930_stgrid_renumbered.shp"
 #old_grid_file = geo_path + city_name + state_abbr + "_1930_stgrid_edit_Uns2.shp"
+'''
 
 def fill_blank_segs(dir_path, city_name, state_abbr, hn_ranges, old_grid_file, grid_street_var):
 

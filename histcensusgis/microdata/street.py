@@ -497,9 +497,10 @@ def specials(error):
 codecs.register_error('specials', specials)
 
 #Function to load 1940 street grid data (no or incomplete ED information)
-def get_streets_from_street_grid(city_info, file_path): 
+def get_streets_from_street_grid(city_info, paths): 
 
 	city_name, state_abbr, decade = city_info 
+	_, dir_path = paths
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',
@@ -514,7 +515,7 @@ def get_streets_from_street_grid(city_info, file_path):
 	# Try to load file, return error if can't load or file has no cases
 	try:
 		file_name_st_grid = c + state_abbr + '_' + str(decade) + '_stgrid_diradd.dbf'
-		st_grid_path = file_path + '/' + str(decade) + '/stgrid/' + c + state_abbr + '/'
+		st_grid_path = dir_path + '/' + str(decade) + '/stgrid/' + c + state_abbr + '/'
 	#TODO: AltSt has street name if FULLNAME/standardized == "City limits" (actually "City limit")
 		if city_name in special_cities.keys():
 			var = special_cities[city_name]
@@ -555,20 +556,20 @@ def get_stgrid_with_EDs(city_info, map_type, file_path, use_1940=True):
 
 	#Map from 1940 street grid (student edited to 1940 black/white map - in future may be 1930)
 	if map_type == "1940":
-		file_name_st_grid = st_grid_path + c + state_abbr + '_1940_stgrid_ED_sj.shp' 
+		stgrid_ED_sj_shp = st_grid_path + c + state_abbr + '_1940_stgrid_ED_sj.shp' 
 		street = 'FULLNAME'
 
 	#Map from Tiger/Line 2012 (clipped to approximate city boundary)
 	if map_type == "Contemp":
-		file_name_st_grid = st_grid_path + c + state_abbr + '_Contemp_stgrid_ED_sj.shp'
+		stgrid_ED_sj_shp = st_grid_path + c + state_abbr + '_Contemp_stgrid_ED_sj.shp'
 		street = 'FULL2012'
 
 	#Map from Chicago group (only very certain cities)
 	if map_type == "Chicago":
-		file_name_st_grid = st_grid_path + c + state_abbr + '_1930_stgrid_ED_sj.shp'
+		stgrid_ED_sj_shp = st_grid_path + c + state_abbr + '_1930_stgrid_ED_sj.shp'
 		street = 'FULLNAME'
 
-	df = load_shp(file_name_st_grid) 
+	df = load_shp(stgrid_ED_sj_shp) 
 
 	all_streets = df[street].drop_duplicates().tolist()
 
