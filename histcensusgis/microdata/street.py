@@ -998,3 +998,114 @@ def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
 			return True
 		else:
 			return False
+
+### Side-step for NYC files
+# Since SM dictionaries are for the 5 boroughs, the process must be done for each
+# This function is identical to the clean_microdata() process for other cities, but includes this loop and append
+
+def clean_nyc(df, city_info, file_path, sis_project):
+
+	boros = {50:'bronx', 470:'brooklyn', 610:'manhattan', 810:'queens', 850:'staten island'}
+	codes = df['county'].unique()
+	for code in codes:
+		boro = boros[code]
+
+		city_info[0] = boro
+				
+		print('Begin cleaning ' + boro)
+				
+		boro_df = df.loc[df['county'] == code]
+
+		#
+		# Step 2: Format raw street names and fill in blank street names
+		#
+
+		# Step 2a: Properly format street names and get Steve Morse street-ed information
+		boro_df, preclean_info = preclean_street(boro_df, city_info, file_path, sis_project)  
+		sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _, same_year  = preclean_info  
+
+		# Step 2b: Use formatted street names to get house number sequences
+		street_var = 'street_precleaned'
+		boro_df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(boro_df, street_var, 'hn_outlier1', decade, HN_SEQ, ED_ST_HN_dict)
+
+		# Step 2c: Use house number sequences to fill in blank street names
+		boro_df, fix_blanks_info1 = fix_blank_st(boro_df, boro, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
+
+		#
+		# Step 3: Identify exact matches
+		#
+
+		preclean_var = 'street_precleanedHN'
+
+		# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
+		boro_df, exact_info = find_exact_matches(boro_df, city_name, preclean_var, sm_all_streets, street_source)
+
+		#
+		# Step 4: Search for fuzzy matches and use result to fill in more blank street names
+		#
+
+		# Step 4a: Search for fuzzy matches
+		boro_df, fuzzy_info = find_fuzzy_matches(boro_df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map = False, same_year = same_year)
+		street_var = 'street_post_fuzzy'
+		boro_df[street_var] = boro_df[preclean_var]
+		boro_df.loc[boro_df['current_match_bool'],street_var] = boro_df['current_match']
+
+		# Step 4b: Use fuzzy matches to get house number sequences
+		boro_df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(boro_df, street_var, 'hn_outlier2', decade, HN_SEQ, ED_ST_HN_dict)
+
+		# Step 4c: Use house number sequences to fill in blank street names
+		boro_df, fix_blanks_info2 = fix_blank_st(boro_df, boro, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
+
+		#	
+		# Step 5: Create overall match and all check variables
+		#
+
+		post_var = 'street_post_fuzzyHN'
+		boro_df = create_overall_match_variables(boro_df, decade)
+
+		print("\nOverall matches: "+str(boro_df['overall_match_bool'].sum())+" of "+str(len(boro_df))+" total cases ("+str(round(100*float(boro_df['overall_match_bool'].sum())/len(boro_df),1))+"%)\n")
+
+		# Append all the borough files together
+
+		try:
+            nyc
+        except NameError:
+            nyc = new_df
+        else:            
+            nyc = nyc.append(new_df)
+                
+        print(boro + ' is done!')
+
+
+	#
+	# Step 6: Set priority level for residual cases
+	#
+
+	#df, priority_info = set_priority(df)
+
+	#
+	# Step 7: Save full dataset and generate dashboard information 
+	#
+
+	if sis_project:
+		file_name = city_name.upper() + '_' + state_abbr.upper() + '_' + str(decade) + '_clean'
+		outfile = file_path + '/CleanData/%s/%s.csv' % (str(decade), file_name)
+		df.to_csv(outfile)
+	else:
+		city_state = city_name.replace(' ','') + state_abbr
+		autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
+		if ~os.path.exists(autoclean_path):
+			os.makedirs(autoclean_path)
+		file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
+		df.to_csv(file_name_all)
+
+	'''
+	#Generate dashbaord info
+	times = [load_time, total_time]
+	if decade != 1940:
+		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1, fix_blanks_info2)
+	else:
+		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times)
+	'''
+	
+	print("%s %s, %s complete" % (decade, city_name, state_abbr))
