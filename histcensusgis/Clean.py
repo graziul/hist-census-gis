@@ -1,6 +1,7 @@
 from histcensusgis.microdata import *
 from histcensusgis.s4utils import *
-
+import os
+import pandas as pd
 
 # Version number 
 version = 7
@@ -77,7 +78,7 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 
 	if city_name == 'new york':
 		clean_nyc(df, city_info, file_path, sis_project)
-		return
+		return 
 
 	#
 	# Step 2: Format raw street names and fill in blank street names

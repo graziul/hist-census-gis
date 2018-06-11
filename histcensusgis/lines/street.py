@@ -230,9 +230,6 @@ def get_missing_streets(city_info, paths):
 	_, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 	
-	# Fix grid
-	problem_segments = process_raw_grid(city_info, geo_path)
-
 	# Load microdata 	
 	df = load_cleaned_microdata(city_info, dir_path)
 

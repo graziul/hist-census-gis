@@ -5,6 +5,7 @@
 #
 
 from histcensusgis.points.geocode import check_matt_dependencies, initial_geocode
+from histcensusgis.microdata.misc import create_addresses
 from histcensusgis.s4utils.AmoryUtils import *
 from histcensusgis.s4utils.IOutils import *
 from histcensusgis.text.standardize import *
@@ -17,6 +18,7 @@ import os
 import copy
 import subprocess
 import multiprocessing
+arcpy.env.overwriteOutput = True
 
 # Identifies EDs and can be run independently (Matt's R script)
 def ed_geocode_algo(city_info, paths):
@@ -809,6 +811,11 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 
 	r_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
+
+	# Ensure that address file exists
+	address_file = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
+	if ~os.path.isfile(address_file):
+		create_addresses(city_info, paths)
 
 	global SMLines
 	global SMLines1

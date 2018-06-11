@@ -130,8 +130,8 @@ def set_priority(df):
 def create_overall_match_variables(df):
 
 	#Tabulate the fuzzy matches
- 	df['fuzzy_match_bool'] = np.where(df['current_match_bool'] & ~df['exact_match_bool'],True,False)
- 	#Make sure to include blank fixes (and changes due to house number sequences)
+	df['fuzzy_match_bool'] = np.where(df['current_match_bool'] & ~df['exact_match_bool'],True,False)
+	#Make sure to include blank fixes (and changes due to house number sequences)
 	df['fuzzy_match_blank_fix'] = (df['street_post_fuzzy'] == '') & (df['street_post_fuzzyHN'] != df['street_post_fuzzy'])
 	df['fuzzy_match_boolHN'] = np.where(df['fuzzy_match_bool'] | df['fuzzy_match_blank_fix'],True,False)
 
@@ -152,7 +152,7 @@ def create_overall_match_variables(df):
 
 	df['st_best_guess'] = df['overall_match']
 	# If no overall match, use best fuzzy match
-	df.loc[df['overall_match_bool']==False,'st_best_guess'] = df['fuzzy_match_boolHN']
+	df.loc[df['overall_match_bool']==False,'st_best_guess'] = df['street_post_fuzzyHN']
 	# Re-add DIR if lost somewhere along the way
 	cleaned_dict = create_cleaning_street_dict(df, 'st_best_guess')
 	_, df['DIR_post'], _, _ = zip(*df['st_best_guess'].apply(lambda s: cleaned_dict[s]))

@@ -1070,13 +1070,13 @@ def clean_nyc(df, city_info, file_path, sis_project):
 		# Append all the borough files together
 
 		try:
-            nyc
-        except NameError:
-            nyc = new_df
-        else:            
-            nyc = nyc.append(new_df)
-                
-        print(boro + ' is done!')
+			nyc
+		except NameError:
+			nyc = new_df
+		else:            
+			nyc = nyc.append(new_df)
+				
+		print(boro + ' is done!')
 
 
 	#

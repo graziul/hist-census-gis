@@ -8,6 +8,8 @@ from histcensusgis.microdata.misc import create_addresses
 from histcensusgis.polygons.block import *
 from histcensusgis.polygons.ed import *
 from histcensusgis.lines.street import *
+import arcpy
+arcpy.env.overwriteOutput = True
 
 def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program Files/R/R-3.4.2/bin/Rscript"):
 
@@ -76,43 +78,122 @@ def get_block_map(city_info, paths):
 	
 def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], just_desc=False):
 
-	get_missing_streets(city_info, paths)
+	_, dir_path = paths
+	geo_path = dir_path + '/GIS_edited/'
 
 	get_pblks(city_info, paths)
+
+	get_missing_streets(city_info, paths)
 
 	get_ed_map(city_info, paths, grid_street_var, hn_ranges)
 
 	get_block_map(city_info, paths)
 
-# user = sys.argv[1]
-# pw = sys.argv[2]
+import getpass
+import paramiko
 
-# Run get_pblks
+user = raw_input("Username:")
+passwd = getpass.getpass("Password for " + user + ":")
 
-# Upload stgrid to unix server 
+def run_cleaning_w_ed(user, passwd, city_info, paths, unix_path='/home/s4-data/LatestCities'):
 
-# Run cleaning algorithm on unix server 
+	# user = sys.argv[1]
+	# pw = sys.argv[2]
+	city_name, state_abbr, decade = city_info
+	city_name_ns = city_name.replace(' ','')
+	_, dir_path = paths
+	geo_path = dir_path + '/GIS_edited/'
 
-# Download results to proper local directory
-# 	- Store overall_match
-#	- Count number of overall_matches
+	def upload_file(user, passwd, local_file_name, remote_file_name):
+		# Connect to server via SSH
+		ssh = paramiko.SSHClient()
+		ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+		ssh.load_system_host_keys
+		ssh.connect('pstc-cs1.pstc.brown.edu',username=user,password=passwd)
+		sftp = ssh.open_sftp()
+		# Make sure the target directory exists (or else create it)
+		target_path = '/'.join(remote_file_name.split('/')[:-1])
+		try:
+			sftp.listdir(target_path)
+		except IOError:
+			sftp.mkdir(target_path)
+		# Upload the file
+		local_path = '/'.join(local_file_name.split('/')[:-1])
+		if local_file_name.split('.')[-1] == 'shp':
+			map_files = [x for x in os.listdir(local_path) if x.split('.')[0]==local_file_name.split('/')[-1].split('.')[0]]
+			for item in map_files:
+				remote_file_name = '%s/%s' % (target_path, item)
+				local_file_name = '%s/%s' % (local_path, item)
+				if os.path.isfile(remote_file_name):
+					#Try to remove old file if it exist
+					try: 
+						sftp.remove(remote_file_name)
+					except IOError:
+						pass
+					sftp.put(local_file_name, remote_file_name)
+		else:
+			sftp.put(local_file_name, remote_file_name)
+		# Close the connection
+		sftp.close()
+		ssh.close()
 
-# Run get_ed_map
-#	- Store pblk/ED
-# 	- Count number of pblks with ED guesses
+	def download_file(user, passwd, remote_file_name, local_directory):
+		# Connect to server via SSH
+		ssh = paramiko.SSHClient()
+		ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+		ssh.load_system_host_keys
+		ssh.connect('pstc-cs1.pstc.brown.edu',username=user,password=passwd)
+		sftp = ssh.open_sftp()
+		sftp.get(remote_file_name, local_directory)
 
-# Spatial join stgrid and ED map
 
-# Upload Spatial join file
+	# Run get_pblks
+	get_pblks(city_info, paths)
 
-# Run cleaning algorithm on unix server 
+	# Upload street grid to server
+	grid_local_file_name = geo_path + city_name_ns + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	grid_remote_file_name = unix_path + '/%s/stgrid/%s%s/%s' % (str(decade), city_name_ns, state_abbr, grid_shp.split('/')[-1])
+	upload_file(user, passwd, grid_local_file_name, grid_remote_file_name)
 
-# Download results to proper local directory
-# 	- Store overall_match
-# 	- Count number of overall_matches
+	# Loop to iteratively run cleaning (unix server) and ED mapping (local) until thresholds met
+	first = True
+	while num_new_street_labels >= 100 and num_new_ed_guesses >= 10:
 
-# Run get_ed_map
-#	- Store pblk/ED
-# 	- Count number of pblks with ED guesses
+		# Run cleaning algorithm on unix server 
 
-# Spatial join stgrid and ED map
+
+		# Download results to proper local directory
+		# 	- Store overall_match
+		#	- Count number of overall_matches
+		version = 7
+		microdata_remote_filename = unix_path + '/%s/autocleaned/V%s/%s%s_AutoCleanedV%s.csv' % (str(decade), str(version), city_name_ns, state_abbr, str(version))
+		local_directory = dir_path + "/StataFiles_Other/" + str(decade) + "/"
+		download_file(user, passwd, microdata_remote_filename, local_directory)
+		df_micro = load_cleaned_microdata(city_info, dir_path)
+		cases_w_street_label = 
+		
+		# Run get_ed_map
+		#	- Store pblk/ED
+		# 	- Count number of pblks with ED guesses
+		get_ed_map(city_info, paths, grid_street_var, hn_ranges)
+		df_ed_map = 
+		cases_w_ed_label = 
+
+		# Spatial join stgrid and ED map
+		sj_shp = 
+		arcpy.SpatialJoin_()
+
+		# Upload Spatial join file
+		sj_remote_file_name = unix_path + '/%s/stgrid/%s%s/%s' % (str(decade), city_name_ns, state_abbr, sj_shp.split('/')[-1])
+		upload_file(user, passwd, sj_shp, sj_remote_file_name)
+
+		if first:
+			num_new_street_labels = cases_w_street_label
+			num_new_ed_guesses = cases_w_ed_label
+			first = False
+		else:
+			num_new_street_labels = cases_w_street_label - num_new_street_labels
+			num_new_ed_guesses = cases_w_ed_label - num_new_ed_guesses
+
+	
+
