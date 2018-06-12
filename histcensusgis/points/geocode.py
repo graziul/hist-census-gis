@@ -116,17 +116,17 @@ def check_matt_dependencies(city_info, paths, geocode_file=None):
 
 	# Ensure that address file exists
 	address_file = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
-	if ~os.path.isfile(address_file):
+	if not os.path.isfile(address_file):
 		create_addresses(city_info, paths)
 
 	# Ensure that processed street grid exists
 	grid_uns2 = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
-	if ~os.path.isfile(grid_uns2):
+	if not os.path.isfile(grid_uns2):
 		_ = process_raw_grid(city_info, geo_path)
 
 	# Ensure that physical block shapefile exists
 	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
-	if ~os.path.isfile(pblk_shp):
+	if not os.path.isfile(pblk_shp):
 		create_pblks(city_info, geo_path)	
 
 	# Call initial geocoding function

@@ -50,38 +50,25 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 
 	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
-	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
 
-	targ = intermed_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2_spatial_join.shp"
-	targ1 = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
-
-	inter = arcpy.Intersect_analysis(in_features=[targ,targ1],
-		out_feature_class=intermed_path + "intersectToGetEDs.shp",
-		join_attributes="ALL", 
-		cluster_tolerance="-1 Unknown", 
-		output_type="INPUT")
-
-	field_names = [x.name for x in arcpy.ListFields(inter)]
-	cursor = arcpy.da.SearchCursor(inter, field_names)
-	inter_polyblk_dict = {}
-	polyblk_inter_dict = {} #polygon block ID -> intersections in block
-	
-	for row in cursor :
-		Dict_append_unique(inter_polyblk_dict, row[field_names.index("Interse_ID")], row[field_names.index("pblk_id")])
-		Dict_append_unique(polyblk_inter_dict, row[field_names.index("pblk_id")], row[field_names.index("Interse_ID")])
+	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 
 	# If using Amory's ED description method do this
 	if is_desc:
 
+		ed_desc_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ed_desc.shp"
+		if os.path.isfile(ed_desc_shp):
+			arcpy.Delete_management(ed_desc_shp)
+
 		if decade == 1930:
 
-			output_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp"
-			arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ED_desc.shp")
+			ed_desc_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ed_desc.shp"
+			arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ed_desc.shp")
 			blk_file = intermed_path+"fullname_dissolve_split.shp"
 			arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
-			arcpy.AddField_management(output_shp, "ed_desc", "TEXT", "", "", 20)
+			arcpy.AddField_management(ed_desc_shp, "ed_desc", "TEXT", "", "", 20)
 
-			with arcpy.da.InsertCursor(output_shp, ("SHAPE@", "ed_desc")) as cursor:
+			with arcpy.da.InsertCursor(ed_desc_shp, ("SHAPE@", "ed_desc")) as cursor:
 				for ED, inter in ED_Intersect_ID_dict.items() :
 					inter = inter.replace("(","").replace(")","").split(",") #convert intersect string to list 
 					block_list = []
@@ -99,6 +86,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 					#ASSIGN ED # TO POLYGON
 					arcpy.SelectLayerByAttribute_management("blk_lyr", "CLEAR_SELECTION")
 					#feature_to_polygon on the selected segments
+					# AMORY: DID I MISS SOMETHING HERE?
 			arcpy.Delete_management(intermed_path+"poly_lyr.shp")
 
 		# We use a very different method for 1940 
@@ -151,7 +139,6 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 			city_state = city_name + state_abbr
 
 			stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
-			pblk_shp = geo_path + city_state[:-2] + "_"+str(decade)+"_Pblk.shp"
 			if not os.path.isfile(pblk_shp) :
 				print("Missing Pblk file")
 				raise ValueError
@@ -169,7 +156,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 			arcpy.CalculateField_management ('st_lyr', 'grid_id_s', 'str(!'+grid_id_var+'!)+","', 
 				expression_type="PYTHON_9.3")
 
-			join_file = os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_ED_desc")
+			join_file = os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_ed_desc")
 
 			arcpy.SpatialJoin_analysis(target_features="pblk_lyr", 
 				join_features="st_lyr", 
@@ -280,6 +267,31 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 
 	# If using Amory's intersection method do this...
 	else:
+
+		intermed_path = geo_path + "IntersectionsIntermediateFiles/"
+		ed_inter_shp = geo_path + city_name + "_" + str(decade) + "_ed_inter.shp"
+		if os.path.isfile(ed_inter_shp):
+			arcpy.Delete_management(ed_inter_shp)
+
+		targ = intermed_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2_spatial_join.shp"
+		arcpy.CopyFeatures_management(pblk_shp, ed_inter_shp)
+
+		inter = arcpy.Intersect_analysis(in_features=[targ,ed_inter_shp],
+			out_feature_class=intermed_path + "intersectToGetEDs.shp",
+			join_attributes="ALL", 
+			cluster_tolerance="-1 Unknown", 
+			output_type="INPUT")
+
+		field_names = [x.name for x in arcpy.ListFields(inter)]
+		cursor = arcpy.da.SearchCursor(inter, field_names)
+		# AMORY: This dict is never used?
+		#inter_polyblk_dict = {} 
+		polyblk_inter_dict = {} #polygon block ID -> intersections in block
+		
+		for row in cursor :
+			#Dict_append_unique(inter_polyblk_dict, row[field_names.index("Interse_ID")], row[field_names.index("pblk_id")])
+			Dict_append_unique(polyblk_inter_dict, row[field_names.index("pblk_id")], row[field_names.index("Interse_ID")])
+
 		blk_ed_dict = {}
 		for blk in polyblk_inter_dict.keys() :
 				#retrieve a slice of Intersect_Info_DICT for just the intersections associated with blk
@@ -287,10 +299,10 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 				result = aggregate_blk_inter_data(blk_dict)
 				blk_ed_dict[blk] = result
 		try :
-			arcpy.AddField_management (targ1, new_var_name, "TEXT")
+			arcpy.AddField_management (ed_inter_shp, new_var_name, "TEXT")
 		except :
 			pass
-		with arcpy.da.UpdateCursor(targ1, ["pblk_id",new_var_name]) as up_cursor:
+		with arcpy.da.UpdateCursor(ed_inter_shp, ["pblk_id",new_var_name]) as up_cursor:
 			for row in up_cursor :
 				try:
 					row[1] = blk_ed_dict[row[0]]
@@ -889,7 +901,7 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 	print("Creating ED Map for %s (Intersections algorithm)" % (city_name))
 	draw_EDs(city_info=city_info, 
 		paths=paths, 
-		new_var_name="ED_inter", 
+		new_var_name="ed_inter", 
 		is_desc=False,
 		grid_street_var=grid_street_var)
 
@@ -1600,12 +1612,12 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 
 		# List of EDs guessed
 		ed_list = list(set(ed_desc + ed_inter + ed_geocode))
-		ed_list = [i for i in ed_list if i != '0']
+		ed_list = [i for i in ed_list if i != '']
 
 		# List of ED guesses by confidence
 		ed_guess_list = []
 		# Initialize guess to be missing, confidence -1 
-		ed_guess_conf = [-1, '0']
+		ed_guess_conf = [-1, '']
 		
 		def check_ed_num(ed_n, ed_list):
 			for ed in ed_list:
@@ -1654,7 +1666,6 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 		elif len(df_ed_guess[df_ed_guess['count']>1]) > 0:
 			df_two_plus_ed_guess = df_ed_guess[df_ed_guess['count']>1]
 			for ed in df_two_plus_ed_guess['ed'].tolist():
-				# If we have description guesses, do this... (revisit)
 				if ed in ed_desc:
 					if (ed in ed_inter) or (ed in ed_geocode):
 						ed_guess_conf = [2, ed]
@@ -1662,12 +1673,22 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 					else:
 						ed_guess_conf = [3, ed]
 						return ed_guess_conf
+				elif ed in ed_inter:
+					if ed in ed_geocode:
+						ed_guess_conf = [2, ed]
+						return ed_guess_conf
+					else:
+						ed_guess_conf = [4, ed]
+						return ed_guess_conf
+				elif ed in ed_geocode:
+					ed_guess_conf = [5, ed]
+					return ed_guess_conf
 
 		return ed_guess_conf
 
-	def replace_blanks(ed):
+	def format_ed_desc(ed):
 		if ed == '':
-			return '0'
+			return ed
 		for c in ed:
 			if c.islower():
 				ed = ed.replace(c,c.upper())
@@ -1675,9 +1696,9 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 			return ed
 
 	def get_ed_geocode(eds):
-		eds = [ed for ed in eds if ed != '0']
+		eds = [ed for ed in eds if ed != '']
 		if len(eds) == 0:
-			return '0'
+			return ''
 		elif len(eds) == 1:
 			return eds[0]
 		else:
@@ -1687,29 +1708,46 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
-	ed_inter_geo_shp = geo_path + city_name + '_' + str(decade) + '_ED_Choice_map.shp'
-	ed_desc_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_desc.shp'
-	ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
+	ed_inter_shp = geo_path + city_name + '_' + str(decade) + '_ed_inter.shp'
+	df_ed_inter = load_shp(ed_inter_shp)
+	df_ed_inter.loc[:,'ed_inter'] = df_ed_inter['ed_inter'].astype(str).replace('0','')
+	df_ed_inter.loc[:,'pblk_id'] = df_ed_inter['pblk_id'].astype(int)
+
+	ed_geo_shp = geo_path + city_name + '_' + str(decade) + '_ed_geo.shp'
+	df_ed_geo = load_shp(ed_geo_shp)
+	df_ed_geo.loc[:,'pblk_id'] = df_ed_geo['pblk_id'].astype(int)
+	df_ed_geo.loc[:,['ED_ID','ED_ID2','ED_ID3']]= df_ed_geo[['ED_ID','ED_ID2','ED_ID3']].astype(object).replace(np.nan,0).astype(int).astype(str).replace('0','')
+
+	ed_desc_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_desc.shp'
+	df_ed_desc= load_shp(ed_desc_shp)
+	df_ed_desc.loc[:,'ed_desc'] = df_ed_desc['ed_desc'].astype(str).replace('None','')
+	df_ed_desc.loc[:,'cblk_id'] = df_ed_desc['cblk_id'].astype(str).replace('None','')
+	df_ed_desc.loc[:,'pblk_id'] = df_ed_desc['pblk_id'].astype(int)
+
+	df_ed_inter_geo = df_ed_inter.merge(df_ed_geo.drop(['geometry'], axis=1), on='pblk_id')
+	df = df_ed_inter_geo.merge(df_ed_desc.drop(['geometry'], axis=1), on='pblk_id')
+
+	#save_shp(df_ed_inter_geo, ed_guess_shp)
 
 	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
-	arcpy.SpatialJoin_analysis(target_features=ed_inter_geo_shp, 
-		join_features=ed_desc_shp, 
-		out_feature_class=ed_guess_shp, 
-		join_operation="JOIN_ONE_TO_ONE", 
-		join_type="KEEP_ALL",
-		match_option="HAVE_THEIR_CENTER_IN")
+	#arcpy.SpatialJoin_analysis(target_features=ed_inter_geo_shp, 
+	#	join_features=ed_desc_shp, 
+	#	out_feature_class=ed_guess_shp, 
+	#	join_operation="JOIN_ONE_TO_ONE", 
+	#	join_type="KEEP_ALL",
+	#	match_option="HAVE_THEIR_CENTER_IN")
 
 	# Select relevant variables and extract best ED guesses
-	df = load_shp(ed_guess_shp, hn_ranges)
+	#df = load_shp(ed_guess_shp, hn_ranges)
 
-	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].astype(int).astype(str).apply(lambda x: get_ed_geocode(x), axis=1)
-	df.loc[:,'ed_desc'] = df.apply(lambda x: replace_blanks(x['ed_desc']), axis=1)
+	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].apply(lambda x: get_ed_geocode(x), axis=1)
+	df.loc[:,'ed_desc'] = df.apply(lambda x: format_ed_desc(x['ed_desc']), axis=1)
 	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str)
 	if decade == 1940:
 		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode','cblk_id']
 	else:
 		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode']
-	df_ed_guess = df[relevant_vars]
+	df_ed_guess = df.loc[:,relevant_vars]
 	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
 
 	# Relabel confidence variable descriptively 
@@ -1723,8 +1761,9 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	label_conf[5] = "5. Geocoding only"
 
 	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)
-	
-	save_shp(df_ed_guess, ed_guess_file)
+
+	ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess_map.shp'
+	save_shp(df_ed_guess, ed_guess_shp)
 
 # Save information
 def get_ed_guess_stats(city_info, paths, hn_ranges):

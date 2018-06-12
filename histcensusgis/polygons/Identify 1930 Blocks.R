@@ -1,3 +1,7 @@
+list.of.packages <- c("Hmisc","DataCombine","readstata13","gmodels","foreign","car","plyr","dplyr","seg","reshape","reshape2","maptools","rgdal","rJava","xlsx","magrittr")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
 #Load Neccessary Libraries
   library(Hmisc)
   library(DataCombine)
@@ -179,7 +183,7 @@ shift<-function(x,shift_by){
 
 #Export Map
   dir_path_export<-substr(dir_path,1,nchar(dir_path)-1)
-  writeOGR(BlockMap, dsn=dir_path_export,layer=paste(city_name,"_",decade,"_Block_Choice_Map",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
+  writeOGR(BlockMap, dsn=dir_path_export,layer=paste(city_name,"_",decade,"_block_geo",sep=""), driver="ESRI Shapefile", overwrite_layer = TRUE)
   
 #########################################
   
