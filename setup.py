@@ -4,12 +4,15 @@ https://packaging.python.org/en/latest/distributing.html
 https://github.com/pypa/sampleproject
 """
 
-# Always prefer setuptools over distutils
+from setuptools.command.install import install as _install
 from setuptools import setup, find_packages
+from distutils.sysconfig import get_python_lib
+import subprocess
+import sys
 
 setup(
  	name='histcensusgis',
- 	version='1.0.0a82',
+ 	version='1.0.0a87',
  	description='Tools for cleaning and geocoding full count census data (1900-1940)',
  	author='Historical GIS Project, Spatial Structures in the Social Sciences, Brown University',
  	author_email='christopher_graziul@brown.edu',
@@ -22,7 +25,7 @@ setup(
  	'pysal',
  	'openpyxl',
  	'pandas',
- 	'shapely',
+ 	'xlrd',
  	'fiona',
  	'pyproj',
  	'geopandas',
@@ -33,6 +36,6 @@ setup(
  	package_data={
  	'':['*.pickle','*.R']
  	},
- 	url='http://www.github.com/graziul/hist-census-gis',
+	url='http://www.github.com/graziul/hist-census-gis',
   	zip_safe=False,
   	)

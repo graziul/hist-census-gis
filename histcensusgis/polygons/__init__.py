@@ -19,5 +19,5 @@ from shutil import copyfile
 import arcpy
 arcpy.env.overwriteOutput = True
 
-from .blocknum import *
+from .block import *
 from .ed import *
