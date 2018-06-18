@@ -100,169 +100,182 @@ def load_city(city_info, file_path, sis_project):
 
 	return df, load_time
 
-def rename_variables(df, year):
-
-	year = int(year)
-
-	# Street
-	'''
-	def pick_best_raw_street(st1, st2, st_match):
-		if st_match: 
-			return st1  
-		else:
-			if st1 == '' or st1 == None:
-				return st2
-			if st2 == '' or st2 == None:
-				return st1
-			else:
-				return ''
-	'''
-	if year == 1940:
-		# New 1940 data (Summer 2016)
-		df['street_raw'] = df['street']		
-		# Old 1940 data
-		#df['street_raw'] = df['indexed_street']
-	if year == 1930:
-		df['street_raw'] = df['self_residence_place_streetaddre'].str.lower()
-	if year == 1920:
-		df['street_raw'] = df['indexed_street']
-	if year == 1910:
-		df['street_raw'] = df['Street']
-	df['street_raw'] = df['street_raw'].astype(str)
-
-	# ED
-	if year == 1940:
-		# New 1940 data (Summer 2016)
-		try:
-			df['ed'] = df['derived_enumdist']
-		except:
-			df['ed'] = df['us1940b_0083']
-		# Old 1940 data
-		#df['ed'] = df['indexed_enumeration_district']
-	if year == 1930:
-		df['ed'] = df['indexed_enumeration_district']
-	if year == 1920:
-		df['ed'] = df['general_enumeration_district']
-	if year == 1910:
-		df['ed'] = df['EnumerationDistrict']
-
-		#Strip leading zeroes from EDs
-	if year != 1940:
-		df['ed'] = df['ed'].astype(str)
-		df['ed'] = df['ed'].str.split('.').str[0]
-		df['ed'] = df['ed'].str.lstrip('0')
-
-	# Some years/cities have ED as a combination of [city code]-[ED number]
-	def remove_dash(ed):
-		if '-' in ed:
-			return ed.split('-')[1]
-		else:
-			return ed
-	df['ed'] = df['ed'].apply(lambda x: remove_dash(x))
-
-	# House number
-	'''
-	def pick_best_raw_hn(hn1, hn2, hn_match):
-		if hn_match: 
-			return hn1  
-		else:
-			if hn1 == '' or hn1 == None:
-				return hn2
-			if hn2 == '' or hn2 == None:
-				return hn1
-			else:
-				return ''
-	'''
-	if year == 1940:
-		# New 1940 data (Summer 2016)
-		try:
-			df['hn_raw'] = df['housenum']
-		except:
-			df['hn_raw'] = df['us1940b_0078']
-		# Old 1940 data
-		#df['hn_raw'] = df['general_house_number']
-	if year == 1930:
-		df['hn_raw'] = df['general_house_number_in_cities_o']
-	if year == 1920:
-		df['hn_raw'] = df['general_housenumber']
-	if year == 1910:
-		df['hn_raw'] = df['HouseNumber']    
-
-	df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
-	df['hn'] = df['hn'].apply(make_int)  
-   
-	# Image ID
-	if year==1940:
-		# New 1940 data (Summer 2016)
-		df['image_id'] = None
-		# Old 1940 data
-		#df['image_id'] = df['stableurl']
-	if year==1930:
-		df['image_id'] = df['imageid']
-
-	# Line number
-	if year==1940:
-		df['line_num'] = df['linep']
-	if year==1930:
-		df['line_num'] = df['general_line_number'].apply(make_int)
-
-	# Dwelling number
-	if year==1940:
-		df['dn'] = None    
-	if year==1930:
-		df['dn'] = df['general_dwelling_number']
-
-	# Family ID
-	if year==1940:
-		df['fam_id'] = None
-	if year==1930:
-		df['fam_id'] = df['general_family_number']
-
-	# Block ID
-	if year==1930:
-		df['block'] = df['general_block']
-
-	# Institution (name)
-	if year==1940:
-		# New 1940 data (Summer 2016)
-		df['institution'] = None
-		# Old 1940 data
-		#df['institution'] = df['general_institution']
-	if year==1930:
-		df['institution'] = df['general_institution']
-
-	# Rel ID
-	if year==1940:
-		df['rel_id'] = None
-	if year==1930:
-		df['rel_id'] = df['general_RelID']
-
-	# Household ID
-	if year==1940:
-		# New 1940 data (Summer 2016)
-		df['hhid'] = df['serial']		
-		# Old 1940 data
-		#df['hhid_raw'] = df['hhid']
-		#df['hhid'] = df['hhid_numeric']
-	if year==1930:
-		df['hhid'] = df['general_HOUSEHOLD_ID']
-
-	# PID
-	if year==1940:
-		df['pid'] = df['histid']
-	if year==1930:
-		df['pid'] = df['pid']
-
-	# Name
-	if year==1940:
-		# New 1940 data (Summer 2016)
-		df['name_last'] = df['namelast']
-		df['name_first'] = df['namefrst']
-	if year==1930:
-		df['name_last'] = df['self_empty_name_surname']
-		df['name_first'] = df['self_empty_name_given']
-
+def rename_variables(df, year) :
+	var_names_ref = csv.reader(open("/home/s4-data/LatestCities/VariableRecodes.csv","rb"))
+	columns = var_names_ref.next()
+	for row in var_names_ref :
+		std_name = row[0]
+		for ind, name in enumerate(row) :
+			if name == "NONE" or name == "" :
+				continue
+			# if the correct decade is found in csv column label, and the corresponding var name is in df...
+			if re.search(str(year),columns[ind]) and name in df.columns :
+				df[std_name] = df[name]
 	return df
+
+##def rename_variables(df, year):
+##
+##	year = int(year)
+##
+##	# Street
+##	'''
+##	def pick_best_raw_street(st1, st2, st_match):
+##		if st_match: 
+##			return st1  
+##		else:
+##			if st1 == '' or st1 == None:
+##				return st2
+##			if st2 == '' or st2 == None:
+##				return st1
+##			else:
+##				return ''
+##	'''
+##	if year == 1940:
+##		# New 1940 data (Summer 2016)
+##		df['street_raw'] = df['street']		
+##		# Old 1940 data
+##		#df['street_raw'] = df['indexed_street']
+##	if year == 1930:
+##		df['street_raw'] = df['self_residence_place_streetaddre'].str.lower()
+##	if year == 1920:
+##		df['street_raw'] = df['indexed_street']
+##	if year == 1910:
+##		df['street_raw'] = df['Street']
+##	df['street_raw'] = df['street_raw'].astype(str)
+##
+##	# ED
+##	if year == 1940:
+##		# New 1940 data (Summer 2016)
+##		try:
+##			df['ed'] = df['derived_enumdist']
+##		except:
+##			df['ed'] = df['us1940b_0083']
+##		# Old 1940 data
+##		#df['ed'] = df['indexed_enumeration_district']
+##	if year == 1930:
+##		df['ed'] = df['indexed_enumeration_district']
+##	if year == 1920:
+##		df['ed'] = df['general_enumeration_district']
+##	if year == 1910:
+##		df['ed'] = df['EnumerationDistrict']
+##
+##		#Strip leading zeroes from EDs
+##	if year != 1940:
+##		df['ed'] = df['ed'].astype(str)
+##		df['ed'] = df['ed'].str.split('.').str[0]
+##		df['ed'] = df['ed'].str.lstrip('0')
+##
+##	# Some years/cities have ED as a combination of [city code]-[ED number]
+##	def remove_dash(ed):
+##		if '-' in ed:
+##			return ed.split('-')[1]
+##		else:
+##			return ed
+##	df['ed'] = df['ed'].apply(lambda x: remove_dash(x))
+##
+##	# House number
+##	'''
+##	def pick_best_raw_hn(hn1, hn2, hn_match):
+##		if hn_match: 
+##			return hn1  
+##		else:
+##			if hn1 == '' or hn1 == None:
+##				return hn2
+##			if hn2 == '' or hn2 == None:
+##				return hn1
+##			else:
+##				return ''
+##	'''
+##	if year == 1940:
+##		# New 1940 data (Summer 2016)
+##		try:
+##			df['hn_raw'] = df['housenum']
+##		except:
+##			df['hn_raw'] = df['us1940b_0078']
+##		# Old 1940 data
+##		#df['hn_raw'] = df['general_house_number']
+##	if year == 1930:
+##		df['hn_raw'] = df['general_house_number_in_cities_o']
+##	if year == 1920:
+##		df['hn_raw'] = df['general_housenumber']
+##	if year == 1910:
+##		df['hn_raw'] = df['HouseNumber']    
+##
+##	df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
+##	df['hn'] = df['hn'].apply(make_int)  
+##   
+##	# Image ID
+##	if year==1940:
+##		# New 1940 data (Summer 2016)
+##		df['image_id'] = None
+##		# Old 1940 data
+##		#df['image_id'] = df['stableurl']
+##	if year==1930:
+##		df['image_id'] = df['imageid']
+##
+##	# Line number
+##	if year==1940:
+##		df['line_num'] = df['linep']
+##	if year==1930:
+##		df['line_num'] = df['general_line_number'].apply(make_int)
+##
+##	# Dwelling number
+##	if year==1940:
+##		df['dn'] = None    
+##	if year==1930:
+##		df['dn'] = df['general_dwelling_number']
+##
+##	# Family ID
+##	if year==1940:
+##		df['fam_id'] = None
+##	if year==1930:
+##		df['fam_id'] = df['general_family_number']
+##
+##	# Block ID
+##	if year==1930:
+##		df['block'] = df['general_block']
+##
+##	# Institution (name)
+##	if year==1940:
+##		# New 1940 data (Summer 2016)
+##		df['institution'] = None
+##		# Old 1940 data
+##		#df['institution'] = df['general_institution']
+##	if year==1930:
+##		df['institution'] = df['general_institution']
+##
+##	# Rel ID
+##	if year==1940:
+##		df['rel_id'] = None
+##	if year==1930:
+##		df['rel_id'] = df['general_RelID']
+##
+##	# Household ID
+##	if year==1940:
+##		# New 1940 data (Summer 2016)
+##		df['hhid'] = df['serial']		
+##		# Old 1940 data
+##		#df['hhid_raw'] = df['hhid']
+##		#df['hhid'] = df['hhid_numeric']
+##	if year==1930:
+##		df['hhid'] = df['general_HOUSEHOLD_ID']
+##
+##	# PID
+##	if year==1940:
+##		df['pid'] = df['histid']
+##	if year==1930:
+##		df['pid'] = df['pid']
+##
+##	# Name
+##	if year==1940:
+##		# New 1940 data (Summer 2016)
+##		df['name_last'] = df['namelast']
+##		df['name_first'] = df['namefrst']
+##	if year==1930:
+##		df['name_last'] = df['self_empty_name_surname']
+##		df['name_first'] = df['self_empty_name_given']
+##
+##	return df
 
 def remove_duplicates(df):
 
