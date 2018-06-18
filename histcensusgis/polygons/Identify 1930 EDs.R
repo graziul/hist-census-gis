@@ -5,6 +5,7 @@ if(length(new.packages)) install.packages(new.packages)
 
 #Load Neccessary Libraries
 library(Hmisc)
+library(foreign)
 library(DataCombine)
 library(readstata13)
 library(gmodels)

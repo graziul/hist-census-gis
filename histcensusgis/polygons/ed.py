@@ -20,6 +20,14 @@ import subprocess
 import multiprocessing
 arcpy.env.overwriteOutput = True
 
+# Clear locks involving .gdb's
+def clearWSLocks(inputWS):
+  '''Attempts to clear locks on a workspace, returns stupid message.'''
+  if all([arcpy.Exists(inputWS), arcpy.Compact_management(inputWS), arcpy.Exists(inputWS)]):
+    return 'Workspace (%s) clear to continue...' % inputWS
+  else:
+    return '!!!!!!!! ERROR WITH WORKSPACE %s !!!!!!!!' % inputWS
+
 # Identifies EDs and can be run independently (Matt's R script)
 def ed_geocode_algo(city_info, paths):
 
@@ -52,6 +60,8 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 	geo_path = dir_path + "/GIS_edited/"
 
 	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	stgrid_shp = geo_path + city_name.replace(' ','') + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
+	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
 
 	# If using Amory's ED description method do this
 	if is_desc:
@@ -62,8 +72,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 
 		if decade == 1930:
 
-			ed_desc_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ed_desc.shp"
-			arcpy.CreateFeatureclass_management(geo_path,city_name+state_abbr+"_"+str(decade)+"_ed_desc.shp")
+			arcpy.CreateFeatureclass_management(ed_desc_shp)
 			blk_file = intermed_path+"fullname_dissolve_split.shp"
 			arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
 			arcpy.AddField_management(ed_desc_shp, "ed_desc", "TEXT", "", "", 20)
@@ -138,16 +147,12 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 
 			city_state = city_name + state_abbr
 
-			stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
-			if not os.path.isfile(pblk_shp) :
-				print("Missing Pblk file")
-				raise ValueError
-
 			# Have to convert .shp to .gdb here because of text field size limit for dBase files
-			if arcpy.Exists(geo_path+"scratch%s.gdb" % (city_name)):
-				arcpy.Delete_management(geo_path+"scratch%s.gdb" % (city_name))
+			gdb_path = geo_path+"scratch%s.gdb" % (city_name)
+			if arcpy.Exists(gdb_path):
+				arcpy.Delete_management(gdb_path)
 			arcpy.CreateFileGDB_management(geo_path, "scratch%s" % (city_name))
-			arcpy.env.workspace = geo_path+"scratch%s.gdb" % (city_name)
+			arcpy.env.workspace = gdb_path
 			arcpy.FeatureClassToGeodatabase_conversion([pblk_shp, stgrid_shp], arcpy.env.workspace)
 			arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_stgrid_edit_Uns2"), "st_lyr")
 			arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state[:-2] + "_"+str(decade)+"_Pblk"), "pblk_lyr")
@@ -264,6 +269,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 						continue
 
 			arcpy.FeatureClassToShapefile_conversion(join_file, geo_path)        
+			print(clearWSlocks(gdb_path))
 
 	# If using Amory's intersection method do this...
 	else:
@@ -349,21 +355,23 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 # ->->-> GO THRU CHRIS's fuzzy match, copy the code over
 
 # Prepare map intersections
-def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
+def prepare_map_intersections(city_info, grid_street_var, paths) :
 	print("Preparing Map Intersections File")
 
-	city_name, _ =  os.path.splitext(stgrid_file)
+	city_name, state_abbr, decade = city_info
 	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 	
+	stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2.shp'
+
 	if not os.path.exists(geo_path + "IntersectionsIntermediateFiles"):
 		os.makedirs(geo_path + "IntersectionsIntermediateFiles")
 	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
 
 	latest_stage = intermed_path + "fullname_dissolve.shp"
 	#dissolve all street segments based on FULLNAME
-	arcpy.Dissolve_management(in_features = geo_path + stgrid_file, 
-		out_feature_class = latest_stage,
+	arcpy.Dissolve_management(in_features=stgrid_shp, 
+		out_feature_class=latest_stage,
 		dissolve_field=grid_street_var, 
 		statistics_fields="", 
 		multi_part="SINGLE_PART", 
@@ -372,16 +380,16 @@ def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
 	previous_stage = latest_stage
 	latest_stage =  intermed_path + "fullname_dissolve_split.shp"
 	#split street segments at their intersections
-	arcpy.FeatureToLine_management(in_features = previous_stage, 
-		out_feature_class = latest_stage,
+	arcpy.FeatureToLine_management(in_features=previous_stage, 
+		out_feature_class=latest_stage,
 		cluster_tolerance="", 
 		attributes="ATTRIBUTES")
 
 	previous_stage = latest_stage
 	latest_stage = intermed_path + "split_endpoints.shp"
 	#create points at both ends of every split segment
-	arcpy.FeatureVerticesToPoints_management(in_features = previous_stage, 
-		out_feature_class = latest_stage,
+	arcpy.FeatureVerticesToPoints_management(in_features=previous_stage, 
+		out_feature_class=latest_stage,
 		point_location="BOTH_ENDS")
 
 	#calculate x and y coordinates of points
@@ -391,14 +399,14 @@ def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
 	previous_stage = latest_stage
 	latest_stage = intermed_path+"xy_dissolve.shp"
 	#dissolve points based on x and y
-	arcpy.Dissolve_management(in_features = previous_stage, 
-		out_feature_class = latest_stage,
+	arcpy.Dissolve_management(in_features=previous_stage, 
+		out_feature_class=latest_stage,
 		dissolve_field="POINT_X;POINT_Y", 
 		statistics_fields="", 
 		multi_part="MULTI_PART", 
 		unsplit_lines="DISSOLVE_LINES")
 
-	arcpy.AddField_management(in_table = latest_stage, 
+	arcpy.AddField_management(in_table=latest_stage, 
 		field_name="Interse_ID", 
 		field_type="LONG", 
 		field_precision="", 
@@ -409,7 +417,7 @@ def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
 		field_is_required="NON_REQUIRED", 
 		field_domain="")
 	#preserve intersection ID field
-	arcpy.CalculateField_management(in_table = latest_stage, 
+	arcpy.CalculateField_management(in_table=latest_stage, 
 		field="Interse_ID", 
 		expression="!FID!", 
 		expression_type="PYTHON_9.3", 
@@ -440,9 +448,9 @@ def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
 		previous_stage, 
 		previous_stage)
 
-	arcpy.SpatialJoin_analysis(target_features = target_feature_file, 
-		join_features = previous_stage,
-		out_feature_class = latest_stage, 
+	arcpy.SpatialJoin_analysis(target_features=target_feature_file, 
+		join_features=previous_stage,
+		out_feature_class=latest_stage, 
 		join_operation="JOIN_ONE_TO_ONE", 
 		join_type="KEEP_ALL",
 		field_mapping=field_mapping_ls,
@@ -451,7 +459,7 @@ def prepare_map_intersections(stgrid_file, grid_street_var, paths) :
 		distance_field_name="")
 
 	# EXPORT ATTRIBUTE TABLE
-	arcpy.ExportXYv_stats(Input_Feature_Class = latest_stage, 
+	arcpy.ExportXYv_stats(Input_Feature_Class=latest_stage, 
 		Value_Field="FID;Join_Count;TARGET_FID;FID_fullna;"+grid_street_var+";ORIG_FID;POINT_X;POINT_Y;POINT_X_1;POINT_Y_1;Interse_ID", 
 		Delimiter="COMMA",
 		Output_ASCII_File = intermed_path + city_name + "_Intersections.txt", 
@@ -829,6 +837,12 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 	if ~os.path.isfile(address_file):
 		create_addresses(city_info, paths)
 
+	# Ensure street grid file exists (for now use 1940)
+	stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2.shp'
+	if not os.path.isfile(stgrid_shp):
+		print("Missing stgrid file")
+		raise ValueError
+
 	global SMLines
 	global SMLines1
 	global InterLines
@@ -885,7 +899,7 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 	print("Checking for files necessary to process %s (Intersections algorithm)" % (city_name))
 	intersections_file = geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'
 	if ~os.path.isfile(intersections_file):
-		prepare_map_intersections(city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2.shp', grid_street_var, paths)
+		prepare_map_intersections(city_info, grid_street_var, paths)
 
 	Intersect_TXT = open(geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.txt')
 	SMLines = csv.reader(SM_ED_TXT)
@@ -931,8 +945,8 @@ def check_for_desc_files(city_info, paths, grid_street_var):
 	_, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 
-	# Ensure street grid file exists
-	stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
+	# Ensure street grid file exists 
+	stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2.shp'
 	if not os.path.isfile(stgrid_shp):
 		print("Missing stgrid file")
 		raise ValueError
@@ -984,7 +998,7 @@ def check_for_desc_files(city_info, paths, grid_street_var):
 		# Ensure intersections file exist
 		intersections_file = geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'
 		if not os.path.isfile(intersections_file):
-			prepare_map_intersections(stgrid_file, grid_street_var, paths)
+			prepare_map_intersections(city_info, grid_street_var, paths)
 		Intersect_TXT = open(intersections_file.replace('.shp','.txt'))
 		InterLines = Intersect_TXT.readlines()[1:]
 
@@ -1185,6 +1199,8 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 
 	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
+
+	stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2.shp'
 
 	if decade == 1930:
 

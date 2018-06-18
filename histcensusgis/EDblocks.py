@@ -199,7 +199,17 @@ def do_geocode():
 	combine_geocodes(geo_path, city, state, decade)
 
 
-def run_cleaning_w_ed(city_info, paths, overwrite=False, iterate=True, unix_path='/home/s4-data/LatestCities', server='pstc-cs1.pstc.brown.edu'):
+def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix_path='/home/s4-data/LatestCities', server='pstc-cs1.pstc.brown.edu', grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
+
+	#overwrite=False
+	#iterate=False
+	#unix_path='/home/s4-data/LatestCities'
+	#server='pstc-cs1.pstc.brown.edu'
+	#grid_street_var='FULLNAME'
+	#hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']
+	#city_info = ['Omaha','NE',1930]
+	if paths is None:
+		paths = get_paths(city_info)
 
 	user = raw_input("Username:")
 	passwd = getpass.getpass("Password for " + user + ":")
@@ -256,19 +266,38 @@ def run_cleaning_w_ed(city_info, paths, overwrite=False, iterate=True, unix_path
 		sftp.close()
 		ssh.close()
 
-	# Run get_pblks
+	# Step 0: Fix stgrid and get pblks (make this a check when iterative function working)
 	get_pblks(city_info, paths)
 
-	# Upload street grid to server
+	# Step 1: Run ED descriptions-based algorithm once (does not change with microdata changes)
+	ed_desc_algo(city_info, paths, grid_street_var)	
+
+	# Step 2: Function to run intersections and geocoding-baseds algorithms, thencombine results 
+	def get_ed_inter_geo_combine():
+		# Run Amory's intersections-based algorithm
+		ed_inter_algo(city_info, paths, grid_street_var)
+		# Run Matt's geocoding algorithm
+		ed_geocode_algo(city_info, paths)
+		# Combine results and print relevant informatino
+		combine_ed_maps(city_info, geo_path, hn_ranges)
+		print(get_ed_guess_stats(city_info, paths, hn_ranges))
+
+	# Step 3: Upload street grid to server (prepare to clean microdata)
 	grid_local_file_name = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 	grid_remote_file_name = unix_path + '/%s/shp/%s%s/%s' % (str(decade), city_name, state_abbr, grid_local_file_name.split('/')[-1])
 	upload_file(user, passwd, grid_local_file_name, grid_remote_file_name)
 
+	# Step 4: Set information for microdata cleaning
 	version = 7
 	microdata_remote_filename = unix_path + '/%s/autocleaned/V%s/%s%s_AutoCleanedV%s.csv' % (str(decade), str(version), city_name, state_abbr, str(version))
 	microdata_local_filename = dir_path + '/StataFiles_Other/%s/%s%s_AutoCleanedV%s.csv' % (str(decade), city_name, state_abbr, str(version))
 
-	# If no iteration, run once
+	def print_cleaning_results(ssh_stdout):
+		exit_status = ssh_stdout.channel.recv_exit_status()
+		for line in iter(ssh_stdout.readline,""):
+			print(line)
+
+	# Step 5a: If no iteration, run through once (clean -> ed guess -> clean -> ed guess)
 	if not iterate:
 		# Run cleaning algorithm on unix server 
 		ssh.connect(server, username=username, password=password)
@@ -278,21 +307,20 @@ def run_cleaning_w_ed(city_info, paths, overwrite=False, iterate=True, unix_path
 			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, False))
 		for line in iter(ssh_stdout.readline):
 			print(line)
-		ssh.close()		# Download results to proper local directory
-		# 	- Store overall_match
-		#	- Count number of overall_matches
+		ssh.close()		
+		# Download cleaned microdata 
 		download_file(user, passwd, microdata_remote_filename, microdata_local_directory)
+		# Tabulate results
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 		tot_micro = len(df_micro)
 		cases_w_street_label = len(df_micro[df_micro['overall_match']!=''])
-		# Run get_ed_map
-		#	- Store pblk/ED
-		# 	- Count number of pblks with ED guesses
-		get_ed_map(city_info, paths, grid_street_var, hn_ranges)
+		# Run get_ed_inter_geo_combine
+		get_ed_inter_geo_combine()
+		# Tabulate results
 		ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
 		df_ed_guess = load_shp(ed_guess_shp)
 		tot_pblks = len(df_ed_guess)
-		cases_w_ed_label = len(df_ed_guess[df_ed_guess['ed_conf']!='-1. No guess'])
+		cases_w_ed_guess = len(df_ed_guess[df_ed_guess['ed_conf']!='-1. No guess'])
 		# Spatial join stgrid and ED map
 		pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 		sj_shp = geo_path + city_name + state_abbr + '_1940_stgrid_ED_sj.shp' 
@@ -302,7 +330,7 @@ def run_cleaning_w_ed(city_info, paths, overwrite=False, iterate=True, unix_path
 			join_operation="JOIN_ONE_TO_MANY", 
 			join_type="KEEP_ALL",
 			match_option="SHARE_A_LINE_SEGMENT_WITH")
-		# Upload Spatial join file
+		# Upload Spatial join file to unix server
 		sj_remote_file_name = unix_path + '/%s/shp/%s%s/%s' % (str(decade), city_name_ns, state_abbr, sj_shp.split('/')[-1])
 		upload_file(user, passwd, sj_shp, sj_remote_file_name)
 		# Run cleaning algorithm on unix server (with ED map)
@@ -310,81 +338,87 @@ def run_cleaning_w_ed(city_info, paths, overwrite=False, iterate=True, unix_path
 		ssh.connect(server, username=username, password=password)
 		ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, True))
 		ssh.close()
+		print_cleaning_results(ssh_stdout)
 		# Get final cleaned microdata
 		download_file(user, passwd, microdata_remote_filename, microdata_local_directory)
-		# Run get_ed_map one final time
-		#	- Store pblk/ED
-		# 	- Count number of pblks with ED guesses
-		get_ed_map(city_info, paths, grid_street_var, hn_ranges)
+		# Tabulate results
+		df_micro = load_cleaned_microdata(city_info, dir_path)
+		tot_micro = len(df_micro)
+		cases_w_street_label2 = len(df_micro[df_micro['overall_match']!=''])
+		# Run get_ed_inter_geo_combine
+		get_ed_inter_geo_combine()
+		# Tabulate results
 		ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
 		df_ed_guess = load_shp(ed_guess_shp)
-		cases_w_ed_label = len(df_ed_guess[df_ed_guess['ed_conf']!='-1. No guess'])
-		# Account for improvement??
+		cases_w_ed_guess2 = len(df_ed_guess[df_ed_guess['ed_conf']!='-1. No guess'])
+		# Report improvement
+		print("\nOverall matches gained %s" % (str(cases_w_street_label2-cases_w_street_label)))
+		print("ED guesses gained %s" % (str(cases_w_ed_guess2-cases_w_ed_guess)))
 		# Report how well we did
 		print("\nOverall match found for %s of %s cases (%s%)" % (str(cases_w_street_label), str(tot_micro), float(cases_w_street_label)/tot_micro))
 		print("ED guess found for %s of %s physical blocks (%s%)\n" % (str(cases_w_ed_label), str(tot_pblks), float(cases_w_ed_label)/tot_pblks))
 		return
 
-	# Loop to iteratively run cleaning (unix server) and ED mapping (local) until thresholds met
-	first = True
-	num_new_street_labels = 999999
-	num_new_ed_guesses = 999999
-
-	while num_new_street_labels >= 100 and num_new_ed_guesses >= 10:
-
-		# Run cleaning algorithm on unix server 
-		ssh.connect(server, username=user, password=passwd)
-		if first:
-			if overwrite:
-				ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, False), get_pty=True)
-			else:
-				try:
-					print(sftp.stat(microdata_remote_filename))
-				except:
+	# Step 6b: Loop to iteratively run cleaning (unix server) and ED mapping (local) until thresholds met
+	else:
+		first = True
+		num_new_street_labels = 999999
+		num_new_ed_guesses = 999999
+		# Keep looping until number of new streets labeled and number of new ED guesses fall below threshold
+		while num_new_street_labels >= 100 and num_new_ed_guesses >= 10:
+			# Run cleaning algorithm on unix server 
+			ssh.connect(server, username=user, password=passwd)
+			if first:
+				if overwrite:
 					ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, False), get_pty=True)
-		else:
-			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, True), get_pty=True)
-		exit_status = ssh_stdout.channel.recv_exit_status()
-		for line in iter(ssh_stdout.readline):
-			print(line)
-		ssh.close()
-		# Download results to proper local directory
-		# 	- Store overall_match
-		#	- Count number of overall_matches
-		download_file(user, passwd, microdata_remote_filename, microdata_local_filename)
-		df_micro = load_cleaned_microdata(city_info, dir_path)
-		tot_micro = len(df_micro)
-		cases_w_street_label = len(df_micro[df_micro['overall_match']!=''])
-		# Run get_ed_map
-		#	- Store pblk/ED
-		# 	- Count number of pblks with ED guesses
-		get_ed_map(city_info, paths, grid_street_var, hn_ranges)
-		ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
-		df_ed_guess = load_shp(ed_guess_shp)
-		tot_pblks = len(df_ed_guess)
-		cases_w_ed_label = len(df_ed_guess[df_ed_guess['ed_conf']!='-1. No guess'])
-		# Spatial join stgrid and ED map
-		pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
-		sj_shp = geo_path + city_name + state_abbr + '_1940_stgrid_ED_sj.shp' 
-		arcpy.SpatialJoin_analysis(target_features=pblk_shp, 
-			join_features=grid_local_file_name, 
-			out_feature_class=sj_shp, 
-			join_operation="JOIN_ONE_TO_MANY", 
-			join_type="KEEP_ALL",
-			match_option="SHARE_A_LINE_SEGMENT_WITH")
-		# Upload Spatial join file
-		sj_remote_file_name = unix_path + '/%s/shp/%s%s/%s' % (str(decade), city_name_ns, state_abbr, sj_shp.split('/')[-1])
-		upload_file(user, passwd, sj_shp, sj_remote_file_name)
-		# Keep track of how we're doing
-		if first:
-			num_new_street_labels = cases_w_street_label
-			num_new_ed_guesses = cases_w_ed_label
-			first = False
-		else:
-			num_new_street_labels = cases_w_street_label - num_new_street_labels
-			num_new_ed_guesses = cases_w_ed_label - num_new_ed_guesses
-		print("Number new streets labeled " + str(num_new_street_labels))
-		print("Number new ED guesses " + str(num_new_ed_guesses) + "\n")
+					print_cleaning_results(ssh_stdout)
+				else:
+					try:
+						sftp = ssh.open_sftp()
+						print(sftp.stat(microdata_remote_filename))
+						sftp.close()
+					except:
+						ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, False), get_pty=True)
+						print_cleaning_results(ssh_stdout)
+			else:
+				ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, True), get_pty=True)
+				print_cleaning_results(ssh_stdout)
+			ssh.close()
+			# Download cleaned microdata file 
+			download_file(user, passwd, microdata_remote_filename, microdata_local_filename)
+			# Tabulate results
+			df_micro = load_cleaned_microdata(city_info, dir_path)
+			tot_micro = len(df_micro)
+			cases_w_street_label = len(df_micro[df_micro['overall_match']!=''])
+			# Run get_ed_inter_geo_combine
+			get_ed_inter_geo_combine()
+			# Tabulate results
+			ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
+			df_ed_guess = load_shp(ed_guess_shp)
+			tot_pblks = len(df_ed_guess)
+			cases_w_ed_guess = len(df_ed_guess[df_ed_guess['ed_conf']!='-1. No guess'])
+			# Spatial join stgrid and ED map
+			pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+			sj_shp = geo_path + city_name + state_abbr + '_1940_stgrid_ED_sj.shp' 
+			arcpy.SpatialJoin_analysis(target_features=pblk_shp, 
+				join_features=grid_local_file_name, 
+				out_feature_class=sj_shp, 
+				join_operation="JOIN_ONE_TO_MANY", 
+				join_type="KEEP_ALL",
+				match_option="SHARE_A_LINE_SEGMENT_WITH")
+			# Upload Spatial join file to unix server
+			sj_remote_file_name = unix_path + '/%s/shp/%s%s/%s' % (str(decade), city_name, state_abbr, sj_shp.split('/')[-1])
+			upload_file(user, passwd, sj_shp, sj_remote_file_name)
+			# Update label/guess stats
+			if first:
+				num_new_street_labels = cases_w_street_label
+				num_new_ed_guesses = cases_w_ed_guess
+				first = False
+			else:
+				num_new_street_labels = cases_w_street_label - num_new_street_labels
+				num_new_ed_guesses = cases_w_ed_guess - num_new_ed_guesses
+			print("Number new streets labeled: " + str(num_new_street_labels))
+			print("Number new ED guesses: " + str(num_new_ed_guesses) + "\n")
 
 	# Download final microdata after iterations
 	download_file(user, passwd, microdata_remote_filename, microdata_local_filename)
