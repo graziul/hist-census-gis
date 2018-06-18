@@ -101,12 +101,14 @@ def load_city(city_info, file_path, sis_project):
 	return df, load_time
 
 def rename_variables(df, year) :
-	var_names_ref = csv.reader(open("vars_csv","rb"))
+	var_names_ref = csv.reader(open("/home/s4-data/LatestCities/VariableRecodes.csv","rb"))
 	columns = var_names_ref.next()
 	for row in var_names_ref :
 		std_name = row[0]
 		for ind, name in enumerate(row) :
-			# if the correct decade is found in csv column label, and the corresponding var name is in df
+			if name == "NONE" or name == "" :
+				continue
+			# if the correct decade is found in csv column label, and the corresponding var name is in df...
 			if re.search(str(year),columns[ind]) and name in df.columns :
 				df[std_name] = df[name]
 	return df
