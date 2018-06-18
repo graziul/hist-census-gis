@@ -8,6 +8,7 @@ import pandas as pd
 import geopandas as gpd
 import csv
 import xlrd
+import os
 
 # Function to load large Stata files
 def load_large_dta(fname):
@@ -88,6 +89,16 @@ def csv_from_excel(excel_file, csv_name):
 					rowstr = rowstr+v+","
 				rowstr = rowstr[:-1] #remove trailing comma
 				your_csv_file.write(rowstr+"\n")
+
+def rename_raw(decade, file_path='/home/s4-data/LatestCities', city_extract_csv='CityExtractionList.csv'):
+	df = pd.read_csv(file_path + '/' + city_extract_csv)
+	df_extract = df[df['Status']>0]
+	temp_dict = df_extract[['Code','City']].set_index('Code').to_dict('dict')['City']
+	city_extract_dict = {str(k):v.replace(' ','').replace(',','') for k,v in temp_dict.items()}
+	for code, city in city_extract_dict.items():
+		old_file = '%s/%s/%sdta.dta' % (file_path, str(decade), code)
+		new_file = '%s/%s/%s.dta' % (file_path, str(decade), city)
+		os.rename(old_file, new_file)
 
 #
 # DEPRECATED 

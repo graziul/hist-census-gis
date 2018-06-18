@@ -102,6 +102,8 @@ def load_city(city_info, file_path, sis_project):
 
 def rename_variables(df, year):
 
+	year = int(year)
+
 	# Street
 	'''
 	def pick_best_raw_street(st1, st2, st_match):
@@ -517,7 +519,7 @@ def get_streets_from_street_grid(city_info, paths):
 	# Try to load file, return error if can't load or file has no cases
 	try:
 		file_name_st_grid = c + state_abbr + '_' + str(decade) + '_stgrid_diradd.dbf'
-		st_grid_path = dir_path + '/' + str(decade) + '/stgrid/' + c + state_abbr + '/'
+		st_grid_path = dir_path + '/' + str(decade) + '/shp/' + c + state_abbr + '/'
 	#TODO: AltSt has street name if FULLNAME/standardized == "City limits" (actually "City limit")
 		if city_name in special_cities.keys():
 			var = special_cities[city_name]
@@ -554,7 +556,7 @@ def get_stgrid_with_EDs(city_info, map_type, file_path, use_1940=True):
 	else:
 		c = city_name.replace(' ','')
 
-	st_grid_path = file_path + '/' + str(decade) + '/stgrid/' + c + state_abbr + '/'
+	st_grid_path = file_path + '/' + str(decade) + '/shp/' + c + state_abbr + '/'
 
 	#Map from 1940 street grid (student edited to 1940 black/white map - in future may be 1930)
 	if map_type == "1940":
@@ -874,8 +876,8 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 	df['current_match_bool'+post] = df['exact_match_bool']
 	df.loc[df['current_match_bool'+post],'current_match'+post] = df[street]
 
-	if ed_map:
-		
+	if ed_map==True:
+
 		#Get 1940 grid fuzzy matches
 		grid_1940_all_streets, grid_1940_ed_st_dict = get_stgrid_with_EDs(city_info, '1940', file_path)
 		df, fuzzy_info_1940_grid, resid = find_fuzzy_matches_module(df, street, grid_1940_all_streets, grid_1940_ed_st_dict, "1940", same_year = same_year)

@@ -199,7 +199,7 @@ def do_geocode():
 	combine_geocodes(geo_path, city, state, decade)
 
 
-def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/LatestCities'):
+def run_cleaning_w_ed(city_info, paths, overwrite=False, iterate=True, unix_path='/home/s4-data/LatestCities', server='pstc-cs1.pstc.brown.edu'):
 
 	user = raw_input("Username:")
 	passwd = getpass.getpass("Password for " + user + ":")
@@ -211,12 +211,14 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 	_, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 
+	ssh = paramiko.SSHClient()
+	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	ssh.load_system_host_keys
+	server = 'pstc-cs1.pstc.brown.edu'
+
 	def upload_file(user, passwd, local_file_name, remote_file_name):
 		# Connect to server via SSH
-		ssh = paramiko.SSHClient()
-		ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-		ssh.load_system_host_keys
-		ssh.connect('pstc-cs1.pstc.brown.edu',username=user,password=passwd)
+		ssh.connect(server,username=user,password=passwd)
 		sftp = ssh.open_sftp()
 		# Make sure the target directory exists (or else create it)
 		target_path = '/'.join(remote_file_name.split('/')[:-1])
@@ -237,22 +239,19 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 						sftp.remove(remote_file_name)
 					except IOError:
 						pass
-					sftp.put(local_file_name, remote_file_name)
+				sftp.put(local_file_name, remote_file_name)
 		else:
 			sftp.put(local_file_name, remote_file_name)
 		# Close the connection
 		sftp.close()
 		ssh.close()
 
-	def download_file(user, passwd, remote_file_name, local_directory):
+	def download_file(user, passwd, remote_file_name, local_file_name):
 		# Connect to server via SSH
-		ssh = paramiko.SSHClient()
-		ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-		ssh.load_system_host_keys
-		ssh.connect('pstc-cs1.pstc.brown.edu',username=user,password=passwd)
+		ssh.connect(server,username=user,password=passwd)
 		sftp = ssh.open_sftp()
 		# Download the file
-		sftp.get(remote_file_name, local_directory)
+		sftp.get(remote_file_name, local_file_name)
 		# Close the connection
 		sftp.close()
 		ssh.close()
@@ -262,23 +261,27 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 
 	# Upload street grid to server
 	grid_local_file_name = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
-	grid_remote_file_name = unix_path + '/%s/stgrid/%s%s/%s' % (str(decade), city_name, state_abbr, grid_shp.split('/')[-1])
+	grid_remote_file_name = unix_path + '/%s/shp/%s%s/%s' % (str(decade), city_name, state_abbr, grid_local_file_name.split('/')[-1])
 	upload_file(user, passwd, grid_local_file_name, grid_remote_file_name)
+
+	version = 7
+	microdata_remote_filename = unix_path + '/%s/autocleaned/V%s/%s%s_AutoCleanedV%s.csv' % (str(decade), str(version), city_name, state_abbr, str(version))
+	microdata_local_filename = dir_path + '/StataFiles_Other/%s/%s%s_AutoCleanedV%s.csv' % (str(decade), city_name, state_abbr, str(version))
 
 	# If no iteration, run once
 	if not iterate:
 		# Run cleaning algorithm on unix server 
-		ssh = paramiko.SSHClient()
 		ssh.connect(server, username=username, password=password)
-		ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, False))
-		ssh.close()
-		# Download results to proper local directory
+		try:
+			print(sftp.stat(microdata_remote_filename))
+		except:
+			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, False))
+		for line in iter(ssh_stdout.readline):
+			print(line)
+		ssh.close()		# Download results to proper local directory
 		# 	- Store overall_match
 		#	- Count number of overall_matches
-		version = 7
-		microdata_remote_filename = unix_path + '/%s/autocleaned/V%s/%s%s_AutoCleanedV%s.csv' % (str(decade), str(version), city_name, state_abbr, str(version))
-		local_directory = dir_path + "/StataFiles_Other/" + str(decade) + "/"
-		download_file(user, passwd, microdata_remote_filename, local_directory)
+		download_file(user, passwd, microdata_remote_filename, microdata_local_directory)
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 		tot_micro = len(df_micro)
 		cases_w_street_label = len(df_micro[df_micro['overall_match']!=''])
@@ -300,7 +303,7 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 			join_type="KEEP_ALL",
 			match_option="SHARE_A_LINE_SEGMENT_WITH")
 		# Upload Spatial join file
-		sj_remote_file_name = unix_path + '/%s/stgrid/%s%s/%s' % (str(decade), city_name_ns, state_abbr, sj_shp.split('/')[-1])
+		sj_remote_file_name = unix_path + '/%s/shp/%s%s/%s' % (str(decade), city_name_ns, state_abbr, sj_shp.split('/')[-1])
 		upload_file(user, passwd, sj_shp, sj_remote_file_name)
 		# Run cleaning algorithm on unix server (with ED map)
 		ssh = paramiko.SSHClient()
@@ -308,9 +311,7 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 		ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, True))
 		ssh.close()
 		# Get final cleaned microdata
-		microdata_remote_filename = unix_path + '/%s/autocleaned/V%s/%s%s_AutoCleanedV%s.csv' % (str(decade), str(version), city_name, state_abbr, str(version))
-		local_directory = dir_path + "/StataFiles_Other/" + str(decade) + "/"
-		download_file(user, passwd, microdata_remote_filename, local_directory)
+		download_file(user, passwd, microdata_remote_filename, microdata_local_directory)
 		# Run get_ed_map one final time
 		#	- Store pblk/ED
 		# 	- Count number of pblks with ED guesses
@@ -326,22 +327,31 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 
 	# Loop to iteratively run cleaning (unix server) and ED mapping (local) until thresholds met
 	first = True
+	num_new_street_labels = 999999
+	num_new_ed_guesses = 999999
+
 	while num_new_street_labels >= 100 and num_new_ed_guesses >= 10:
+
 		# Run cleaning algorithm on unix server 
-		ssh = paramiko.SSHClient()
-		ssh.connect(server, username=username, password=password)
+		ssh.connect(server, username=user, password=passwd)
 		if first:
-			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, False))
+			if overwrite:
+				ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, False), get_pty=True)
+			else:
+				try:
+					print(sftp.stat(microdata_remote_filename))
+				except:
+					ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, False), get_pty=True)
 		else:
-			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, True))
+			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, True), get_pty=True)
+		exit_status = ssh_stdout.channel.recv_exit_status()
+		for line in iter(ssh_stdout.readline):
+			print(line)
 		ssh.close()
 		# Download results to proper local directory
 		# 	- Store overall_match
 		#	- Count number of overall_matches
-		version = 7
-		microdata_remote_filename = unix_path + '/%s/autocleaned/V%s/%s%s_AutoCleanedV%s.csv' % (str(decade), str(version), city_name, state_abbr, str(version))
-		local_directory = dir_path + "/StataFiles_Other/" + str(decade) + "/"
-		download_file(user, passwd, microdata_remote_filename, local_directory)
+		download_file(user, passwd, microdata_remote_filename, microdata_local_filename)
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 		tot_micro = len(df_micro)
 		cases_w_street_label = len(df_micro[df_micro['overall_match']!=''])
@@ -363,7 +373,7 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 			join_type="KEEP_ALL",
 			match_option="SHARE_A_LINE_SEGMENT_WITH")
 		# Upload Spatial join file
-		sj_remote_file_name = unix_path + '/%s/stgrid/%s%s/%s' % (str(decade), city_name_ns, state_abbr, sj_shp.split('/')[-1])
+		sj_remote_file_name = unix_path + '/%s/shp/%s%s/%s' % (str(decade), city_name_ns, state_abbr, sj_shp.split('/')[-1])
 		upload_file(user, passwd, sj_shp, sj_remote_file_name)
 		# Keep track of how we're doing
 		if first:
@@ -373,11 +383,11 @@ def run_cleaning_w_ed(city_info, paths, iterate=True, unix_path='/home/s4-data/L
 		else:
 			num_new_street_labels = cases_w_street_label - num_new_street_labels
 			num_new_ed_guesses = cases_w_ed_label - num_new_ed_guesses
+		print("Number new streets labeled " + str(num_new_street_labels))
+		print("Number new ED guesses " + str(num_new_ed_guesses) + "\n")
 
 	# Download final microdata after iterations
-	microdata_remote_filename = unix_path + '/%s/autocleaned/V%s/%s%s_AutoCleanedV%s.csv' % (str(decade), str(version), city_name, state_abbr, str(version))
-	local_directory = dir_path + "/StataFiles_Other/" + str(decade) + "/"
-	download_file(user, passwd, microdata_remote_filename, local_directory)
+	download_file(user, passwd, microdata_remote_filename, microdata_local_filename)
 
 	# Report how well we did
 	print("\nOverall match found for %s of %s cases (%s%)" % (str(cases_w_street_label), str(tot_micro), float(cases_w_street_label)/tot_micro))

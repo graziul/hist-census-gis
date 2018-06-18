@@ -13,7 +13,7 @@ Updated: Chris Graziul, 12/11/2017 (stripped down to functions only)
 
 from histcensusgis.microdata.misc import create_addresses
 from histcensusgis.lines.street import process_raw_grid
-from histcensusgis.polygons.block import attach_pblk_id, create_pblks
+from histcensusgis.polygons.block import *
 from histcensusgis.s4utils.AmoryUtils import *
 from histcensusgis.s4utils.IOutils import *
 import arcpy

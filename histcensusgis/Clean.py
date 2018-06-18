@@ -109,7 +109,14 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	#
 
 	# Step 4a: Search for fuzzy matches
-	df, fuzzy_info = find_fuzzy_matches(df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map, same_year = same_year)
+	df, fuzzy_info = find_fuzzy_matches(df=df, 
+		city_info=city_info, 
+		street=preclean_var, 
+		sm_all_streets=sm_all_streets, 
+		sm_ed_st_dict=sm_ed_st_dict, 
+		file_path=file_path, 
+		ed_map=ed_map, 
+		same_year=same_year)
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df[preclean_var]
 	df.loc[df['current_match_bool'],street_var] = df['current_match']
