@@ -105,12 +105,17 @@ def rename_variables(df, year) :
 	columns = var_names_ref.next()
 	for row in var_names_ref :
 		std_name = row[0]
+		name_to_change = None
 		for ind, name in enumerate(row) :
 			if name == "NONE" or name == "" :
 				continue
 			# if the correct decade is found in csv column label, and the corresponding var name is in df...
 			if re.search(str(year),columns[ind]) and name in df.columns :
-				df[std_name] = df[name]
+				#if more than one contradictory var in df, throw assertion error
+				if name_to_change :
+					assert(name+" and "+name_to_change+" both found in microdata; resolve" == False)
+				name_to_change = name
+		df[std_name] = df[name_to_change]
 	return df
 
 ##def rename_variables(df, year):
