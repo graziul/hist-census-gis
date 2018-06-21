@@ -126,7 +126,10 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1930,1940]):
 											sm_st_ed_dict_city[NAME][st[0]].append(i)
 								else:    
 									#Split string of EDs into a list and assign to street name in dictionary
-									sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
+									if decade == 1920 :
+										sm_st_ed_dict_city[NAME].update({st[0]:list([x.split('[')[0] for x in st_str.split(",")])})
+									else :
+										sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
 				sm_st_ed_dict[decade][city_state] = sm_st_ed_dict_city
 
 		# Run get_sm_st_ed for all decades, save results
