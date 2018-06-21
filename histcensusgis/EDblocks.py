@@ -201,13 +201,13 @@ def do_geocode():
 
 def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix_path='/home/s4-data/LatestCities', server='pstc-cs1.pstc.brown.edu', grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
-	#overwrite=False
-	#iterate=False
-	#unix_path='/home/s4-data/LatestCities'
-	#server='pstc-cs1.pstc.brown.edu'
-	#grid_street_var='FULLNAME'
-	#hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']
-	#city_info = ['Omaha','NE',1930]
+	overwrite=False
+	iterate=False
+	unix_path='/home/s4-data/LatestCities'
+	server='pstc-cs1.pstc.brown.edu'
+	grid_street_var='FULLNAME'
+	hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']
+	city_info = ['Omaha','NE',1930]
 	if paths is None:
 		paths = get_paths(city_info)
 
@@ -235,7 +235,7 @@ def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix
 		try:
 			sftp.listdir(target_path)
 		except IOError:
-			sftp.mkdir(target_path)
+			mkdir_p(sftp, target_path)
 		# Upload the file
 		local_path = '/'.join(local_file_name.split('/')[:-1])
 		if local_file_name.split('.')[-1] == 'shp':
@@ -255,6 +255,25 @@ def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix
 		# Close the connection
 		sftp.close()
 		ssh.close()
+
+	def mkdir_p(sftp, remote_directory):
+	    """Change to this directory, recursively making new folders if needed.
+	    Returns True if any folders were created."""
+	    if remote_directory == '/':
+	        # absolute path so change directory to root
+	        sftp.chdir('/')
+	        return
+	    if remote_directory == '':
+	        # top-level relative directory must exist
+	        return
+	    try:
+	        sftp.chdir(remote_directory) # sub-directory exists
+	    except IOError:
+	        dirname, basename = os.path.split(remote_directory.rstrip('/'))
+	        mkdir_p(sftp, dirname) # make parent directories
+	        sftp.mkdir(basename) # sub-directory missing, so created it
+	        sftp.chdir(basename)
+	        return True
 
 	def download_file(user, passwd, remote_file_name, local_file_name):
 		# Connect to server via SSH
@@ -300,16 +319,20 @@ def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix
 	# Step 5a: If no iteration, run through once (clean -> ed guess -> clean -> ed guess)
 	if not iterate:
 		# Run cleaning algorithm on unix server 
-		ssh.connect(server, username=username, password=password)
-		try:
-			print(sftp.stat(microdata_remote_filename))
-		except:
-			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python RunClean %s %s %s %s" % (city_name, state_abbr, decade, False))
-		for line in iter(ssh_stdout.readline):
-			print(line)
-		ssh.close()		
+		ssh.connect(server, username=user, password=passwd)
+		if overwrite:
+			ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, False), get_pty=True)
+			print_cleaning_results(ssh_stdout)
+		else:
+			try:
+				sftp = ssh.open_sftp()
+				print(sftp.stat(microdata_remote_filename))
+				sftp.close()
+			except:
+				ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("python ~/.local/bin/RunClean.py %s %s %s %s" % (city_name, state_abbr, decade, False), get_pty=True)
+				print_cleaning_results(ssh_stdout)
 		# Download cleaned microdata 
-		download_file(user, passwd, microdata_remote_filename, microdata_local_directory)
+		download_file(user, passwd, microdata_remote_filename, microdata_local_filename)
 		# Tabulate results
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 		tot_micro = len(df_micro)
@@ -340,7 +363,7 @@ def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix
 		ssh.close()
 		print_cleaning_results(ssh_stdout)
 		# Get final cleaned microdata
-		download_file(user, passwd, microdata_remote_filename, microdata_local_directory)
+		download_file(user, passwd, microdata_remote_filename, microdata_local_filename)
 		# Tabulate results
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 		tot_micro = len(df_micro)

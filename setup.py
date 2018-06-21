@@ -12,7 +12,7 @@ import sys
 
 setup(
  	name='histcensusgis',
- 	version='1.0.0a101',
+ 	version='1.0.0a107',
  	description='Tools for cleaning and geocoding full count census data (1900-1940)',
  	author='Historical GIS Project, Spatial Structures in the Social Sciences, Brown University',
  	author_email='christopher_graziul@brown.edu',
@@ -34,7 +34,8 @@ setup(
  	'unicodecsv',
  	'dbf',
  	'argparse',
- 	'fuzzywuzzy'],
+ 	'fuzzywuzzy',
+ 	'netcdf4'],
  	package_data={
  	'':['*.pickle','*.R']
  	},

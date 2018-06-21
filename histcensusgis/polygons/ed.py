@@ -21,7 +21,7 @@ import multiprocessing
 arcpy.env.overwriteOutput = True
 
 # Clear locks involving .gdb's
-def clearWSLocks(inputWS):
+def clearWSlocks(inputWS):
   '''Attempts to clear locks on a workspace, returns stupid message.'''
   if all([arcpy.Exists(inputWS), arcpy.Compact_management(inputWS), arcpy.Exists(inputWS)]):
     return 'Workspace (%s) clear to continue...' % inputWS
@@ -46,6 +46,7 @@ def ed_geocode_algo(city_info, paths):
 	print("Identifying " + str(decade) + " EDs through geocoding\n")
 	package_path = os.path.dirname(histcensusgis.__file__)
 	t = subprocess.call([r_path,'--vanilla',package_path+'/polygons/Identify 1930 EDs.R',dir_path,city_name,str(decade)])
+	print(t)
 	if t != 0:
 		print("Error identifying "+str(decade)+" EDs for "+city_name+"\n")
 	else:
@@ -62,17 +63,14 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 	stgrid_shp = geo_path + city_name.replace(' ','') + state_abbr + '_' + str(decade) + "_stgrid_edit_Uns2.shp"
 	intermed_path = geo_path + "IntersectionsIntermediateFiles/"
+	ed_desc_shp = geo_path+city_name.replace(' ','')+state_abbr+"_"+str(decade)+"_ed_desc.shp"
 
 	# If using Amory's ED description method do this
 	if is_desc:
 
-		ed_desc_shp = geo_path+city_name+state_abbr+"_"+str(decade)+"_ed_desc.shp"
-		if os.path.isfile(ed_desc_shp):
-			arcpy.Delete_management(ed_desc_shp)
-
 		if decade == 1930:
 
-			arcpy.CreateFeatureclass_management(ed_desc_shp)
+			arcpy.CreateFeatureclass_management(geo_path, ed_desc_shp.split('/')[-1])
 			blk_file = intermed_path+"fullname_dissolve_split.shp"
 			arcpy.MakeFeatureLayer_management(blk_file,"blk_lyr")
 			arcpy.AddField_management(ed_desc_shp, "ed_desc", "TEXT", "", "", 20)
@@ -1284,6 +1282,7 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 					start_ind += 1
 				else :
 					break
+
 			if intersect == [] or start_streets[0] == start_streets[1] :
 				if debug:print("Could not find any exactly matching intersections out of "+str(descript_stripped))
 			else :

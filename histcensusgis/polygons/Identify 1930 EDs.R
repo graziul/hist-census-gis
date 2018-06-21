@@ -1,4 +1,4 @@
-
+chooseCRANmirror(ind=1)
 list.of.packages <- c("Hmisc","DataCombine","readstata13","gmodels","foreign","car","plyr","seg","reshape","reshape2","maptools","rgdal","shapefiles")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
