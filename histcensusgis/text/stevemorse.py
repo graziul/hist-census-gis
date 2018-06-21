@@ -1,4 +1,5 @@
 from openpyxl import Workbook
+from histcensusgis.text.standardize import *
 import urllib
 import pandas as pd
 import re
@@ -43,12 +44,12 @@ def create_ed_st_dict(sm_st_ed_dict):
 # Get the city_state abbreviation for Steve Morse    
 def get_sm_web_abbr(decade):
 
-	for city_state in city_state_iterator:
+	for i, city_state in city_state_iterator.iterrows():
 
 		city_name = city_state[0]
 		state_abbr = city_state[1]
 
-		sm_web_abbr_dict[decade][state_abbr][city_name] = []
+		sm_web_abbr_dict[decade][state_abbr][city_name.replace(' ','')] = []
 
 		url = "http://stevemorse.org/census/%sstates/%s.htm" % (str(decade),state_abbr) 
 		url_handle = urllib.urlopen(url)
@@ -74,24 +75,35 @@ def get_sm_web_abbr(decade):
 						city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
 						city_abbr = re.sub(r'\$[0-9]|\*[0-9]','',city_abbr)
 						sm_web_abbr = city_abbr + state_abbr
-						if sm_web_abbr not in sm_web_abbr_dict[decade][state_abbr][city_name]:
-							sm_web_abbr_dict[decade][state_abbr][city_name].append(sm_web_abbr)
-		time.sleep(2)
+						if sm_web_abbr not in sm_web_abbr_dict[decade][state_abbr][city_name.replace(' ','')]:
+							sm_web_abbr_dict[decade][state_abbr][city_name.replace(' ','')].append(sm_web_abbr)
+		time.sleep(1)
 
 # Get Steve Morse street-ed information for a single decade
-def get_sm_st_ed(decade, sm_st_ed_dict):
-		
-	for city_state in city_state_iterator:
+def get_sm_st_ed(decade, sm_st_ed_dict, package_path):
+
+	sm_web_abbr_dict = pickle.load(open(package_path + '/text/sm_web_abbr.pickle','rb'))
+
+	no_data = 0
+
+	for i, city_state in city_state_iterator.iterrows():
 
 		city_name = city_state[0]
 		state_abbr = city_state[1]
-  
+
+		city_state = list(city_state)
+		city_state[0] = city_state[0].replace(' ','')
+		city_state = tuple(city_state)
+
 		sm_st_ed_dict_city = {}
 
 		try:
-			sm_web_abbr = sm_web_abbr_dict[decade][state_abbr][city_name]
+			sm_web_abbr = sm_web_abbr_dict[decade][state_abbr][city_name.replace(' ','')]
 			if city_name == 'Springfield' and state_abbr == 'MA':
 				sm_web_abbr = ['spma'] # Algorithm picks up "West Springfield" as well
+			if sm_web_abbr == []:
+				no_data+=1
+				continue
 		except:
 			continue
 
@@ -134,8 +146,9 @@ def get_sm_st_ed(decade, sm_st_ed_dict):
 								sm_st_ed_dict_city[NAME].update({st[0]:list([x.split('[')[0] for x in st_str.split(",")])})
 							else :
 								sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
-			sm_st_ed_dict[decade][city_state] = sm_st_ed_dict_city
-		time.sleep(2)
+		sm_st_ed_dict[decade][city_state] = sm_st_ed_dict_city
+		time.sleep(0.5)
+	print("Missing Steve Morse street-ED data for %s cities in %s" % (str(no_data),str(decade)))
 
 # Output list usable by students
 def output_usable_list(sm_dict, decade):
@@ -193,39 +206,45 @@ def output_usable_list(sm_dict, decade):
 		wb.save(file_name)
 
 # Scrape Steve Morse street-ed data from website
-def scrape_sm_st_ed(file_path, decades=[1900,1910,1930,1940]):
+def scrape_sm_st_ed(file_path, decades=[1900,1910,1920,1930,1940]):
 
 	city_info_file = file_path + '/CityExtractionList.csv' 
 	city_info_df = pd.read_csv(city_info_file)
 	city_info_df = city_info_df[city_info_df['Status']>0]
 	city_info_df.loc[:,'city_name'], city_info_df.loc[:,'state_abbr'] = zip(*city_info_df['City'].str.split(','))
-	city_info_df['city_name'] = city_info_df['city_name'].str.replace(' ','').replace('Saint','St').replace('.','')
-	city_info_df['state_abbr'] = city_info_df['state_abbr'].str.replace(' ','')
+	city_info_df['city_name'] = city_info_df['city_name'].str.replace('Saint','St').replace('.','')
+	city_info_df['state_abbr'] = city_info_df['state_abbr'].str.replace(' ','').str.lower()
 
-	state_list = city_info_df['state_abbr'].str.lower().unique().tolist()
-	city_list = city_info_df['city_name'].tolist()
+	state_list = city_info_df['state_abbr'].tolist()
 
 	global city_state_iterator
-	city_state_iterator = zip(city_list,state_list)
+	city_state_iterator = city_info_df[['city_name','state_abbr']]
 
 	# Download and save Steve Morse web abbreviations
+	print("Downloading Steve Morse web abbreviations")
 	sm_web_abbr_dict = {}
 	for decade in decades:
 		sm_web_abbr_dict[decade] = {}
 		for state_abbr in state_list:
 			sm_web_abbr_dict[decade][state_abbr] = {}
 		get_sm_web_abbr(decade)
+	print("Saving Steve Morse web abbreviations")
 	pickle.dump(sm_web_abbr_dict,open(package_path + '/text/sm_web_abbr.pickle','wb'))
 
 	# Download and save Steve Morse street-ed information
+	print("Downloading Steve Morse street-ed information")
 	sm_st_ed_dict ={}
 	for decade in decades:
 		sm_st_ed_dict[decade] = {}
-		for city_state in city_state_iterator:
-			sm_st_ed_dict[decade][city_state] = {}
-		get_sm_st_ed(decade, sm_st_ed_dict)
+		for i, row in city_state_iterator.iterrows():
+			row = list(row)
+			row[0] = row[0].replace(' ','')
+			row = tuple(row)
+			sm_st_ed_dict[decade][row] = {}
+		get_sm_st_ed(decade, sm_st_ed_dict, package_path)
 		#pickle.dump(sm_st_ed_dict[decade],open(file_path + '/%s/sm_st_ed_dict%s.pickle' % (str(decade),str(decade)),'wb'))
-	pickle.dump(sm_st_ed_dict,open(package_path + '/text/sm_st_ed_dict.pickle' % (str(decade),str(decade)),'wb'))
+	print("Saving Steve Morse street-ed information")
+	pickle.dump(sm_st_ed_dict,open(package_path + '/text/sm_st_ed_dict.pickle','wb'))
 
 	# Output lists for use by students
 	sm_st_ed_dict = pickle.load(open(package_path + '/text/sm_st_ed_dict.pickle','rb'))
