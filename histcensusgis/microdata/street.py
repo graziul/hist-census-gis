@@ -428,6 +428,7 @@ def try_to_find_dir(st, DIR, ed):
 def preclean_street(df, city_info, file_path, sis_project):
 
 	city_name, state_abbr, decade = city_info 
+	city_info = [city_name.replace(' ',''), state_abbr, decade]
 
 	start = time.time()
 
@@ -460,8 +461,8 @@ def preclean_street(df, city_info, file_path, sis_project):
 	else:
 		same_year = False
 		# Try other decades until we find data
+		year_try = decade
 		while len(sm_all_streets) == 0:
-			year_try = decade
 			year_try = year_try + 10
 			sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse([city_name, state_abbr, year_try])
 			# If we do not find data, stop looking
@@ -624,7 +625,7 @@ def find_exact_matches_sm(df, street, sm_all_streets, basic_info):
 		print("Error in number of streets")
 		break
 	prop_exact_streets_sm = float(num_streets_exact_sm)/float(num_streets)
-	print("Streets with exact matches (Steve Morse): "+str(num_streets_exact_sm)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_sm, 1))+"%)\n")
+	print("Streets with exact matches (Steve Morse): "+str(num_streets_exact_sm)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_sm, 1))+"%)")
 
 	# Compile info for later use
 	exact_info_sm = [num_exact_matches_sm, num_noexact_matches_sm, 
@@ -694,8 +695,9 @@ def find_exact_matches(df, city, street, sm_all_streets, source):
 	elif source == 'both':
 		# Check for exact matches between microdata and Steve Morse
 		df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
-		# Check for exact matches between microdata and 1940 street grid 
+		# Try tp check for exact matches between microdata and 1940 street grid 
 		try:
+			st_grid_st_list = get_streets_from_1940_street_grid(city,state,file_path)
 			df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
 		except:
 			exact_info_stgrid = [0, 0, 0, 0]
@@ -719,7 +721,7 @@ def find_exact_matches(df, city, street, sm_all_streets, source):
 	# Timer stop
 	end = time.time()
 	exact_matching_time = round(float(end-start)/60, 1)
-	print("Exact matching for %s took %s\n" % (city, exact_matching_time))
+	print("Exact matching took %s minutes\n" % (str(exact_matching_time)))
 
 	# Generate dashboard info
 	exact_info = exact_info_sm + [num_records, num_streets] + exact_info_stgrid + [exact_matching_time]
@@ -798,7 +800,7 @@ def fuzzy_match_function_no_ed(street, all_streets_fuzzyset):
 	
 	#Find best match among all streets
 	try:
-		best_match_all = sm_all_streets_fuzzyset[street][0]
+		best_match_all = all_streets_fuzzyset[street][0]
 	except:
 		return nomatch
 	return [best_match_all[1], best_match_all[0], True]
@@ -825,7 +827,7 @@ def update_current_match(current_match, current_match_bool, new_match, new_match
 		return current_match, current_match_bool
 
 #Function to do fuzzy matching using multiple sources
-def find_fuzzy_matches_module(df, street, all_streets, ed_st_dict, map_type, same_year, resid=0):
+def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type, same_year, resid=0):
 
 	start = time.time()
 
@@ -844,14 +846,17 @@ def find_fuzzy_matches_module(df, street, all_streets, ed_st_dict, map_type, sam
 
 	#Create dictionary based on Street-ED pairs for faster lookup using helper function
 	df_no_exact_match = df[~(df['current_match_bool'+post])]
-	df_grouped = df_no_exact_match.groupby([street, 'ed'])
+	df_grouped = df_no_exact_match.groupby([street_var, 'ed'])
 	fuzzy_match_dict = {}
-	if same_year:
+	# Check that we found Steve Morse data
+	if len(all_streets) != 0:
 		for st_ed, _ in df_grouped:
-			fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], ed_st_dict, all_streets_fuzzyset)
-	elif len(all_streets) != 0:
-		for st_ed, _ in df_grouped:
-			fuzzy_match_dict[st_ed] = fuzzy_match_function_no_ed(st_ed[0], all_streets_fuzzyset)
+			# If Steve Morse data come from same year as microdata, use ED for fuzzy matching
+			if same_year:
+				fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], ed_st_dict, all_streets_fuzzyset)
+			# If Steve Morse data DO NOT come from same year as microdata, do not use ED for fuzzy matching
+			else:
+				fuzzy_match_dict[st_ed] = fuzzy_match_function_no_ed(st_ed[0], all_streets_fuzzyset)
 	else:
 		# For when there is no Steve Morse dictionary or Street Grid
 		return df, [0, 0], len(df)-len(df_no_exact_match)
@@ -861,23 +866,23 @@ def find_fuzzy_matches_module(df, street, all_streets, ed_st_dict, map_type, sam
 	if resid == 0:
 		resid = num_records - len(df[df['current_match_bool'+post]])
 	#Get fuzzy matches 
-	df[fuzzy_match], df[fuzzy_score], df[fuzzy_bool] = zip(*df.apply(lambda x: get_fuzzy_match(x['current_match_bool'+post], fuzzy_match_dict, x[street], x['ed']), axis=1))
+	df[fuzzy_match], df[fuzzy_score], df[fuzzy_bool] = zip(*df.apply(lambda x: get_fuzzy_match(x['current_match_bool'+post], fuzzy_match_dict, x[street_var], x['ed']), axis=1))
 	#Update current match 
 	df['current_match'+post], df['current_match_bool'+post] = zip(*df.apply(lambda x: update_current_match(x['current_match'+post], x['current_match_bool'+post], x[fuzzy_match], x[fuzzy_bool]),axis=1))
 
 	#Generate dashboard information
 	num_fuzzy_matches = np.sum(df[fuzzy_bool])
 	prop_fuzzy_matches = float(num_fuzzy_matches)/num_records
+	print("Fuzzy matches (using " + map_type + "): "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)")
 	end = time.time()
 	fuzzy_matching_time = round(float(end-start)/60, 1)
+	print("Fuzzy matching took %s minutes\n" % (str(fuzzy_matching_time)))
 	fuzzy_info = [num_fuzzy_matches, fuzzy_matching_time]
-	print("Fuzzy matches (using " + map_type + "): "+str(num_fuzzy_matches)+" of "+str(resid)+" unmatched cases ("+str(round(100*float(num_fuzzy_matches)/float(resid), 1))+"%)")
-	print("Fuzzy matching for took %s\n" % (str(fuzzy_matching_time)))
 
 	return df, fuzzy_info, resid
 
 #Function to run all fuzzy matching and return results to Clean.py
-def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, file_path, ed_map, same_year):
+def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map, same_year):
 
 	city_name, state_abbr, _ = city_info
 
@@ -886,7 +891,7 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 	except:
 		post = ''
 
-	print("Fuzzy matching algorithm for %s \n" % (street))
+	print("Fuzzy matching algorithm for %s \n" % (street_var))
 
 	#Initialize fuzzy_match_bool
 	df['fuzzy_match_bool'] = False
@@ -894,7 +899,7 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 	#Initialize current match to exact matches that were found
 	df['current_match'+post] = ''
 	df['current_match_bool'+post] = df['exact_match_bool']
-	df.loc[df['current_match_bool'+post],'current_match'+post] = df[street]
+	df.loc[df['current_match_bool'+post],'current_match'+post] = df[street_var]
 
 	if ed_map==True:
 
@@ -903,7 +908,7 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 			map_type='1940', 
 			file_path=file_path)
 		df, fuzzy_info_1940_grid, resid = find_fuzzy_matches_module(df=df, 
-			street=street, 
+			street_var=street_var, 
 			all_streets=grid_1940_all_streets, 
 			ed_st_dict=grid_1940_ed_st_dict, 
 			map_type='1940', 
@@ -914,7 +919,7 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 			map_type='Contemp', 
 			file_path=file_path)
 		df, fuzzy_info_Contemp_grid, resid = find_fuzzy_matches_module(df=df, 
-			street=street, 
+			street_var=street_var, 
 			all_streets=grid_Contemp_all_streets, 
 			ed_st_dict=grid_Contemp_ed_st_dict, 
 			map_type='Contemp', 
@@ -927,7 +932,7 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 				map_type='Chicago', 
 				file_path=file_path)
 			df, fuzzy_info_1930_grid, resid = find_fuzzy_matches_module(df=df, 
-				street=street, 
+				street_var=street_var, 
 				all_streets=grid_1930_all_streets, 
 				ed_st_dict=grid_1930_ed_st_dict, 
 				map_type='Chicago', 
@@ -939,7 +944,7 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 
 		# Get Steve Morse fuzzy matches
 		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df=df, 
-			street=street, 
+			street_var=street_var, 
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
 			map_type='sm', 
@@ -951,11 +956,11 @@ def find_fuzzy_matches(df, city_info, street, sm_all_streets, sm_ed_st_dict, fil
 	else:
 		# If no street-ED map information, just get Steve Morse fuzzy matches
 		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df=df, 
-			street=street, 
+			street_var=street_var, 
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
 			map_type='sm', 
-			same_year = same_year)
+			same_year=same_year)
 		fuzzy_info = fuzzy_info_sm
 
 	return df, fuzzy_info
@@ -1043,7 +1048,7 @@ def fix_blank_st(df, city, HN_seq, street, sm_st_ed_dict):
 	print("A total of "+str(num_street_changes_total)+" ("+str(per_street_changes_total)+r"% of all cases) were changed")
 
 	blank_fix_time = round(float(end-start)/60, 1)
-	print("Fixing blank streets for %s took %s" % (city, str(blank_fix_time)))
+	print("Fixing blank streets took %s minutes" % (str(blank_fix_time)))
 
 	fix_blanks_info = [num_street_changes_total, num_blank_street_names, num_blank_street_singletons, per_singletons, num_blank_street_fixed, per_blank_street_fixed, blank_fix_time]
 

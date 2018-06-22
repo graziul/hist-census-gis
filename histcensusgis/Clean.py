@@ -43,9 +43,8 @@ version = 7
 #
 # V1 - Original run
 
-datestr = time.strftime("%Y_%m_%d")
 
-city_info = ['Utica','NY',1900]
+city_info = ['Allentown','PA',1900]
 street_source='sm'
 ed_map=False
 debug=False
@@ -53,6 +52,8 @@ file_path='/home/s4-data/LatestCities'
 sis_project=True
 
 def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
+
+	datestr = time.strftime("%Y_%m_%d")
 
 	# Let's be sure SIS project never tries to use spatial files
 	if sis_project:
@@ -68,8 +69,10 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
- 	#init()
- 	#sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(decade), city.replace(' ','')+state, datestr),'wb')
+	if not os.path.exists(file_path + "/%s/logs/" % (str(decade))):
+    	os.makedirs(file_path + "/%s/logs/" % (str(decade)))
+ 	init()
+ 	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(decade), city_name.replace(' ','')+state_abbr, datestr),'wb')
 
 	print('%s Automated Cleaning\n' % (city_name))
 
@@ -117,7 +120,7 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	# Step 4a: Search for fuzzy matches
 	df, fuzzy_info = find_fuzzy_matches(df=df, 
 		city_info=city_info, 
-		street=preclean_var, 
+		street_var=preclean_var, 
 		sm_all_streets=sm_all_streets, 
 		sm_ed_st_dict=sm_ed_st_dict, 
 		file_path=file_path, 
@@ -171,7 +174,7 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 
 # Example: clean_microdata(['Flint','MI',1930],ed_map=False)
 
-def batch_microdata_cleaning(decade, sis_project=True, city_list_csv='CityExtractionList.csv', file_path='/home/s4-data/LatestCities'):
+def batch_clean_microdata(decade, sis_project=True, city_list_csv='CityExtractionList.csv', file_path='/home/s4-data/LatestCities'):
 
 	# Get city list
 	city_info_file = file_path + '/' + city_list_csv 
