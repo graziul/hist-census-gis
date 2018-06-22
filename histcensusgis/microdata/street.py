@@ -40,11 +40,7 @@ from histcensusgis.s4utils.IOutils import *
 def load_city(city_info, file_path, sis_project):
 
 	city, state, year = city_info
-	if sis_project:
-		#city = city.replace(' ','_')
-		city = city.replace(' ','')
-	else:
-		city = city.replace(' ','')
+	city = city.replace(' ','')
 
 	start = time.time()
 
@@ -55,14 +51,8 @@ def load_city(city_info, file_path, sis_project):
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
-		if sis_project:
-			#file_name = city.upper() + '_' + state.upper() + '_' + str(year)
-			#df = pd.read_csv(file_path + '/RawData/%s/%s.csv' % (str(year), file_name), low_memory=False)
-			file_name = c + state.upper()
-			df = pd.read_stata(file_path + '/RawData/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
-		else:
-			file_name = c + state.upper()
-			df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
+		file_name = c + state.upper()
+		df = pd.read_stata(file_path + '/%s/%s.dta' % (str(year), file_name), convert_categoricals=False)
 	except:
 		print('Error loading %s raw data' % (city))
 
@@ -113,174 +103,179 @@ def rename_variables(df, year) :
 			if re.search(str(year),columns[ind]) and name in df.columns :
 				#if more than one contradictory var in df, throw assertion error
 				if name_to_change :
-					assert(name+" and "+name_to_change+" both found in microdata; resolve" == False)
+					print("Two versions of " + std_name + " found: " + name_to_change + " and " + name)
+					continue
+					#assert(name+" and "+name_to_change+" both found in microdata; resolve" == False)
 				name_to_change = name
-		df[std_name] = df[name_to_change]
+		if name_to_change != None:		
+			df[std_name] = df[name_to_change]
 	return df
 
-##def rename_variables(df, year):
-##
-##	year = int(year)
-##
-##	# Street
-##	'''
-##	def pick_best_raw_street(st1, st2, st_match):
-##		if st_match: 
-##			return st1  
-##		else:
-##			if st1 == '' or st1 == None:
-##				return st2
-##			if st2 == '' or st2 == None:
-##				return st1
-##			else:
-##				return ''
-##	'''
-##	if year == 1940:
-##		# New 1940 data (Summer 2016)
-##		df['street_raw'] = df['street']		
-##		# Old 1940 data
-##		#df['street_raw'] = df['indexed_street']
-##	if year == 1930:
-##		df['street_raw'] = df['self_residence_place_streetaddre'].str.lower()
-##	if year == 1920:
-##		df['street_raw'] = df['indexed_street']
-##	if year == 1910:
-##		df['street_raw'] = df['Street']
-##	df['street_raw'] = df['street_raw'].astype(str)
-##
-##	# ED
-##	if year == 1940:
-##		# New 1940 data (Summer 2016)
-##		try:
-##			df['ed'] = df['derived_enumdist']
-##		except:
-##			df['ed'] = df['us1940b_0083']
-##		# Old 1940 data
-##		#df['ed'] = df['indexed_enumeration_district']
-##	if year == 1930:
-##		df['ed'] = df['indexed_enumeration_district']
-##	if year == 1920:
-##		df['ed'] = df['general_enumeration_district']
-##	if year == 1910:
-##		df['ed'] = df['EnumerationDistrict']
-##
-##		#Strip leading zeroes from EDs
-##	if year != 1940:
-##		df['ed'] = df['ed'].astype(str)
-##		df['ed'] = df['ed'].str.split('.').str[0]
-##		df['ed'] = df['ed'].str.lstrip('0')
-##
-##	# Some years/cities have ED as a combination of [city code]-[ED number]
-##	def remove_dash(ed):
-##		if '-' in ed:
-##			return ed.split('-')[1]
-##		else:
-##			return ed
-##	df['ed'] = df['ed'].apply(lambda x: remove_dash(x))
-##
-##	# House number
-##	'''
-##	def pick_best_raw_hn(hn1, hn2, hn_match):
-##		if hn_match: 
-##			return hn1  
-##		else:
-##			if hn1 == '' or hn1 == None:
-##				return hn2
-##			if hn2 == '' or hn2 == None:
-##				return hn1
-##			else:
-##				return ''
-##	'''
-##	if year == 1940:
-##		# New 1940 data (Summer 2016)
-##		try:
-##			df['hn_raw'] = df['housenum']
-##		except:
-##			df['hn_raw'] = df['us1940b_0078']
-##		# Old 1940 data
-##		#df['hn_raw'] = df['general_house_number']
-##	if year == 1930:
-##		df['hn_raw'] = df['general_house_number_in_cities_o']
-##	if year == 1920:
-##		df['hn_raw'] = df['general_housenumber']
-##	if year == 1910:
-##		df['hn_raw'] = df['HouseNumber']    
-##
-##	df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
-##	df['hn'] = df['hn'].apply(make_int)  
-##   
-##	# Image ID
-##	if year==1940:
-##		# New 1940 data (Summer 2016)
-##		df['image_id'] = None
-##		# Old 1940 data
-##		#df['image_id'] = df['stableurl']
-##	if year==1930:
-##		df['image_id'] = df['imageid']
-##
-##	# Line number
-##	if year==1940:
-##		df['line_num'] = df['linep']
-##	if year==1930:
-##		df['line_num'] = df['general_line_number'].apply(make_int)
-##
-##	# Dwelling number
-##	if year==1940:
-##		df['dn'] = None    
-##	if year==1930:
-##		df['dn'] = df['general_dwelling_number']
-##
-##	# Family ID
-##	if year==1940:
-##		df['fam_id'] = None
-##	if year==1930:
-##		df['fam_id'] = df['general_family_number']
-##
-##	# Block ID
-##	if year==1930:
-##		df['block'] = df['general_block']
-##
-##	# Institution (name)
-##	if year==1940:
-##		# New 1940 data (Summer 2016)
-##		df['institution'] = None
-##		# Old 1940 data
-##		#df['institution'] = df['general_institution']
-##	if year==1930:
-##		df['institution'] = df['general_institution']
-##
-##	# Rel ID
-##	if year==1940:
-##		df['rel_id'] = None
-##	if year==1930:
-##		df['rel_id'] = df['general_RelID']
-##
-##	# Household ID
-##	if year==1940:
-##		# New 1940 data (Summer 2016)
-##		df['hhid'] = df['serial']		
-##		# Old 1940 data
-##		#df['hhid_raw'] = df['hhid']
-##		#df['hhid'] = df['hhid_numeric']
-##	if year==1930:
-##		df['hhid'] = df['general_HOUSEHOLD_ID']
-##
-##	# PID
-##	if year==1940:
-##		df['pid'] = df['histid']
-##	if year==1930:
-##		df['pid'] = df['pid']
-##
-##	# Name
-##	if year==1940:
-##		# New 1940 data (Summer 2016)
-##		df['name_last'] = df['namelast']
-##		df['name_first'] = df['namefrst']
-##	if year==1930:
-##		df['name_last'] = df['self_empty_name_surname']
-##		df['name_first'] = df['self_empty_name_given']
-##
-##	return df
+'''
+def rename_variables(df, year):
+
+	year = int(year)
+
+	# Street
+	'''
+	def pick_best_raw_street(st1, st2, st_match):
+		if st_match: 
+			return st1  
+		else:
+			if st1 == '' or st1 == None:
+				return st2
+			if st2 == '' or st2 == None:
+				return st1
+			else:
+				return ''
+	'''
+	if year == 1940:
+		# New 1940 data (Summer 2016)
+		df['street_raw'] = df['street']		
+		# Old 1940 data
+		#df['street_raw'] = df['indexed_street']
+	if year == 1930:
+		df['street_raw'] = df['self_residence_place_streetaddre'].str.lower()
+	if year == 1920:
+		df['street_raw'] = df['indexed_street']
+	if year == 1910:
+		df['street_raw'] = df['Street']
+	df['street_raw'] = df['street_raw'].astype(str)
+
+	# ED
+	if year == 1940:
+		# New 1940 data (Summer 2016)
+		try:
+			df['ed'] = df['derived_enumdist']
+		except:
+			df['ed'] = df['us1940b_0083']
+		# Old 1940 data
+		#df['ed'] = df['indexed_enumeration_district']
+	if year == 1930:
+		df['ed'] = df['indexed_enumeration_district']
+	if year == 1920:
+		df['ed'] = df['general_enumeration_district']
+	if year == 1910:
+		df['ed'] = df['EnumerationDistrict']
+
+		#Strip leading zeroes from EDs
+	if year != 1940:
+		df['ed'] = df['ed'].astype(str)
+		df['ed'] = df['ed'].str.split('.').str[0]
+		df['ed'] = df['ed'].str.lstrip('0')
+
+	# Some years/cities have ED as a combination of [city code]-[ED number]
+	def remove_dash(ed):
+		if '-' in ed:
+			return ed.split('-')[1]
+		else:
+			return ed
+	df['ed'] = df['ed'].apply(lambda x: remove_dash(x))
+
+	# House number
+	'''
+	def pick_best_raw_hn(hn1, hn2, hn_match):
+		if hn_match: 
+			return hn1  
+		else:
+			if hn1 == '' or hn1 == None:
+				return hn2
+			if hn2 == '' or hn2 == None:
+				return hn1
+			else:
+				return ''
+	'''
+	if year == 1940:
+		# New 1940 data (Summer 2016)
+		try:
+			df['hn_raw'] = df['housenum']
+		except:
+			df['hn_raw'] = df['us1940b_0078']
+		# Old 1940 data
+		#df['hn_raw'] = df['general_house_number']
+	if year == 1930:
+		df['hn_raw'] = df['general_house_number_in_cities_o']
+	if year == 1920:
+		df['hn_raw'] = df['general_housenumber']
+	if year == 1910:
+		df['hn_raw'] = df['HouseNumber']    
+
+	df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
+	df['hn'] = df['hn'].apply(make_int)  
+   
+	# Image ID
+	if year==1940:
+		# New 1940 data (Summer 2016)
+		df['image_id'] = None
+		# Old 1940 data
+		#df['image_id'] = df['stableurl']
+	if year==1930:
+		df['image_id'] = df['imageid']
+
+	# Line number
+	if year==1940:
+		df['line_num'] = df['linep']
+	if year==1930:
+		df['line_num'] = df['general_line_number'].apply(make_int)
+
+	# Dwelling number
+	if year==1940:
+		df['dn'] = None    
+	if year==1930:
+		df['dn'] = df['general_dwelling_number']
+
+	# Family ID
+	if year==1940:
+		df['fam_id'] = None
+	if year==1930:
+		df['fam_id'] = df['general_family_number']
+
+	# Block ID
+	if year==1930:
+		df['block'] = df['general_block']
+
+	# Institution (name)
+	if year==1940:
+		# New 1940 data (Summer 2016)
+		df['institution'] = None
+		# Old 1940 data
+		#df['institution'] = df['general_institution']
+	if year==1930:
+		df['institution'] = df['general_institution']
+
+	# Rel ID
+	if year==1940:
+		df['rel_id'] = None
+	if year==1930:
+		df['rel_id'] = df['general_RelID']
+
+	# Household ID
+	if year==1940:
+		# New 1940 data (Summer 2016)
+		df['hhid'] = df['serial']		
+		# Old 1940 data
+		#df['hhid_raw'] = df['hhid']
+		#df['hhid'] = df['hhid_numeric']
+	if year==1930:
+		df['hhid'] = df['general_HOUSEHOLD_ID']
+
+	# PID
+	if year==1940:
+		df['pid'] = df['histid']
+	if year==1930:
+		df['pid'] = df['pid']
+
+	# Name
+	if year==1940:
+		# New 1940 data (Summer 2016)
+		df['name_last'] = df['namelast']
+		df['name_first'] = df['namefrst']
+	if year==1930:
+		df['name_last'] = df['self_empty_name_surname']
+		df['name_first'] = df['self_empty_name_given']
+
+	return df
+'''
 
 def remove_duplicates(df):
 
@@ -427,7 +422,7 @@ def preclean_street(df, city_info, file_path, sis_project):
 	#process for Geocoding project
 	if sis_project == False:
 
-		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path)
+		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
 
 		#Create dictionary {NAME:num_NAME_versions}
 		num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
@@ -452,13 +447,13 @@ def preclean_street(df, city_info, file_path, sis_project):
 	else:
 
 		#Loading Steve Morse dicitonary
-		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, decade, file_path + '/RawData')
+		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
 
 		# if no dictionary in that year, find best one
 		while len(sm_all_streets) == 0:
 			year_try = decade
 			year_try = year_try + 10
-			sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_name, state_abbr, year_try, file_path + '/RawData')
+			sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse([city_name, state_abbr, year_try])
 	
 		# was there a SM dictionary the first try?
 		try:
@@ -1021,7 +1016,7 @@ def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
 		else:
 			return False
 
-### Side-step for NYC files
+# Side-step for NYC files
 # Since SM dictionaries are for the 5 boroughs, the process must be done for each
 # This function is identical to the clean_microdata() process for other cities, but includes this loop and append
 

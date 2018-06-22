@@ -253,7 +253,7 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1920,1930,1940]):
 		output_usable_list(sm_ed_st_dict, decade)
 
 # Load Steve Morse st_ed data
-def load_steve_morse(city_info, file_path):
+def load_steve_morse(city_info):
 
 	city_name, state_abbr, decade = city_info
 
