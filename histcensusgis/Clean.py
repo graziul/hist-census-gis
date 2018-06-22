@@ -69,11 +69,13 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	ED_ST_HN_dict = {}
 
 	#Save to logfile
-	if not os.path.exists(file_path + "/%s/logs/" % (str(decade))):
-    	os.makedirs(file_path + "/%s/logs/" % (str(decade)))
- 	init()
- 	sys.stdout = open(file_path + "/%s/logs/%s_Cleaning%s.log" % (str(decade), city_name.replace(' ','')+state_abbr, datestr),'wb')
-
+	log_path = file_path + "/%s/logs/" % (str(decade))
+	if not os.path.exists(log_path):
+		os.makedirs(log_path)
+	original = sys.stdout	
+	fsock = open(log_path + "%s_Cleaning%s.log" % (city_name.replace(' ','')+state_abbr, datestr),'wb')
+	sys.stdout = fsock
+	
 	print('%s Automated Cleaning\n' % (city_name))
 
 	#
@@ -161,6 +163,11 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
 	df.to_csv(file_name_all)
 
+	print("%s %s, %s complete\n" % (decade, city_name, state_abbr))
+
+	sys.stdout = original
+	fsock.close()
+
 	'''
 	#Generate dashbaord info
 	times = [load_time, total_time]
@@ -169,8 +176,6 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	else:
 		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times)
 	'''
-	
-	print("%s %s, %s complete\n" % (decade, city_name, state_abbr))
 
 # Example: clean_microdata(['Flint','MI',1930],ed_map=False)
 

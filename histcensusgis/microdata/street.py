@@ -443,7 +443,7 @@ def preclean_street(df, city_info, file_path, sis_project):
 
 	# If we found Steve Morse data for that decade, proceed as usual
 	if len(sm_all_streets) != 0:
-
+		print('SM file does exists for '+city_name+', '+state_abbr+' in '+str(decade))
 		#Create dictionary {NAME:num_NAME_versions}
 		num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
 		#Flatten for use elsewhere
@@ -453,10 +453,8 @@ def preclean_street(df, city_info, file_path, sis_project):
 		for st in microdata_all_streets:
 			if st not in sm_all_streets:
 				sm_st_ed_dict[st] = None
-
 		# set same_year = True for later functions, this is always true for Geocoding project
 		same_year = True
-
 	# If we cannot find Steve Morse data for that decade, try other decades
 	else:
 		same_year = False
@@ -468,12 +466,10 @@ def preclean_street(df, city_info, file_path, sis_project):
 			# If we do not find data, stop looking
 			if decade > 1940:
 				break
-
 		# delete the ED dictionaries, they are wrong
 		del sm_st_ed_dict_nested
 		sm_ed_st_dict = None
 		sm_st_ed_dict = None
-		
 		# If we found Steve Morse data for the city, use it 
 		if len(sm_all_streets) != 0:
 			#print SM status
@@ -515,10 +511,13 @@ def specials(error):
 codecs.register_error('specials', specials)
 
 #Function to load 1940 street grid data (no or incomplete ED information)
-def get_streets_from_street_grid(city_info, paths): 
+def get_streets_from_street_grid(city_info, paths, use_1940=True): 
 
 	city_name, state_abbr, decade = city_info 
 	_, dir_path = paths
+
+	if use_1940:
+		decade = 1940
 
 	special_cities = {'Birmingham':'standardiz',
 					'Bridgeport':'standardiz',
@@ -634,7 +633,7 @@ def find_exact_matches_sm(df, street, sm_all_streets, basic_info):
 	return df, exact_info_sm
 
 #Function to do exact matching against 1940 street grid
-def find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info):
+def find_exact_matches_grid(df, street, st_grid_st_list, basic_info):
 
 	post, num_records, num_streets = basic_info
 
@@ -687,18 +686,18 @@ def find_exact_matches(df, city, street, sm_all_streets, source):
 		df['exact_match_stgrid_bool'+post] = False
 		exact_info_stgrid = [0, 0, 0, 0]
 	elif source == 'stgrid':
-		st_grid_st_list = get_streets_from_1940_street_grid(city,state,file_path)
+		st_grid_st_list = get_streets_from_street_grid(city,state,file_path)
 		# Check for exact matches between microdata and 1940 street grid 
-		df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
+		df, exact_info_stgrid = find_exact_matches_grid(df, street, st_grid_st_list, basic_info)
 		df['exact_match_sm_bool'+post] = False
 		exact_info_sm = [0, 0, 0, 0]
 	elif source == 'both':
 		# Check for exact matches between microdata and Steve Morse
 		df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
-		# Try tp check for exact matches between microdata and 1940 street grid 
+		# Try to check for exact matches between microdata and 1940 street grid 
 		try:
-			st_grid_st_list = get_streets_from_1940_street_grid(city,state,file_path)
-			df, exact_info_stgrid = find_exact_matches_1940_grid(df, street, st_grid_st_list, basic_info)
+			st_grid_st_list = get_streets_from_street_grid(city,state,file_path)
+			df, exact_info_stgrid = find_exact_matches_grid(df, street, st_grid_st_list, basic_info)
 		except:
 			exact_info_stgrid = [0, 0, 0, 0]
 			df['exact_match_stgrid_bool'+post] = False
@@ -716,7 +715,7 @@ def find_exact_matches(df, city, street, sm_all_streets, source):
 	df_exact_matches = df[df['exact_match_bool'+post]]
 	num_streets_exact = len(df_exact_matches.groupby([street]).count())
 	prop_exact_streets = float(num_streets_exact)/float(num_streets)
-	print("Total streets with exact matches: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)\n")
+	print("Total streets with exact matches: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)")
 
 	# Timer stop
 	end = time.time()
