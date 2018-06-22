@@ -19,8 +19,11 @@ def standardize_hn(s):
 	# df['hn_flag'] = [x[1] for x in dfHNList]
 	debug = False
 	if(not type(s) == str) :
-		row = s
-		s = s['hn']
+		try:
+			row = s
+			s = s['hn']
+		except:
+			s = str(s)
 	orig_s = s
 	s = s.strip()
 	hnFlag = ''
@@ -52,7 +55,13 @@ def make_int(s):
 		s = int(s)
 		return s
 	except ValueError:
-		return None
+		try:
+			if s == 'nan':
+				return np.nan
+			else:
+				return int(float(s))
+		except ValueError:
+			return None
 
 # Handle house number outliers (Amory)
 def handle_outlier_hns(df, street_var, outlier_var, year, HN_SEQ, ED_ST_HN_dict):

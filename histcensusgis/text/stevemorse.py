@@ -212,7 +212,7 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1920,1930,1940]):
 	city_info_df = pd.read_csv(city_info_file)
 	city_info_df = city_info_df[city_info_df['Status']>0]
 	city_info_df.loc[:,'city_name'], city_info_df.loc[:,'state_abbr'] = zip(*city_info_df['City'].str.split(','))
-	city_info_df['city_name'] = city_info_df['city_name'].str.replace('Saint','St').replace('.','')
+	city_info_df['city_name'] = city_info_df['city_name'].str.replace('Saint','St').str.replace('.','')
 	city_info_df['state_abbr'] = city_info_df['state_abbr'].str.replace(' ','').str.lower()
 
 	state_list = city_info_df['state_abbr'].tolist()

@@ -45,11 +45,17 @@ version = 7
 
 datestr = time.strftime("%Y_%m_%d")
 
-def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities', sis_project=False):
+city_info = ['Utica','NY',1900]
+street_source='sm'
+ed_map=False
+debug=False
+file_path='/home/s4-data/LatestCities'
+sis_project=True
+
+def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
 
 	# Let's be sure SIS project never tries to use spatial files
 	if sis_project:
-		street_source = 'sm'
 		ed_map = False
 
 	city_name, state_abbr, decade = city_info
@@ -145,17 +151,12 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	# Step 7: Save full dataset and generate dashboard information 
 	#
 
-	if sis_project:
-		file_name = city_name.upper() + '_' + state_abbr.upper() + '_' + str(decade) + '_clean'
-		outfile = file_path + '/CleanData/%s/%s.csv' % (str(decade), file_name)
-		df.to_csv(outfile)
-	else:
-		city_state = city_name.replace(' ','') + state_abbr
-		autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
-		if not os.path.exists(autoclean_path):
-			os.makedirs(autoclean_path)
-		file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
-		df.to_csv(file_name_all)
+	city_state = city_name.replace(' ','') + state_abbr
+	autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
+	if not os.path.exists(autoclean_path):
+		os.makedirs(autoclean_path)
+	file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
+	df.to_csv(file_name_all)
 
 	'''
 	#Generate dashbaord info
@@ -166,55 +167,68 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times)
 	'''
 	
-	print("%s %s, %s complete" % (decade, city_name, state_abbr))
+	print("%s %s, %s complete\n" % (decade, city_name, state_abbr))
 
 # Example: clean_microdata(['Flint','MI',1930],ed_map=False)
 
+def batch_microdata_cleaning(decade, sis_project=True, city_list_csv='CityExtractionList.csv', file_path='/home/s4-data/LatestCities'):
+
+	# Get city list
+	city_info_file = file_path + '/' + city_list_csv 
+	# Parse it appropriately
+	try:
+		city_info_df = pd.read_csv(city_info_file)
+		city_info_df = city_info_df[city_info_df['Status']>0]
+		city_info_df.loc[:,'city_name'], city_info_df.loc[:,'state_abbr'] = zip(*city_info_df['City'].str.split(','))
+		city_info_df.loc[:,'city_name'] = city_info_df['city_name'].str.replace('Saint','St').str.replace('.','')
+		city_info_df.loc[:,'state_abbr'] = city_info_df['state_abbr'].str.replace(' ','')
+		city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
+	except:
+		city_info_df = pd.read_csv(city_info_file)
+		city_info_df.loc[:,'city_name'] = city_info_df['city_name'].str.replace('.','')
+		city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
+
+	# 1940 issues: Only Brooklyn in 5 boroughs, no Norfolk for unknown reasons
+	#exclude = ['Manhattan','Bronx','Queens','Staten Island','Norfolk']
+	#city_info_list = [i for i in city_info_list if i[0] not in exclude]
+
+	# Get decade and add it to city list information
+	for i in city_info_list:
+		i.append(decade)
+	# Add arguments as desired
+	city_info_list_w_args=[]
+	for i in city_info_list:
+		city_info_list_w_args.append([i, sis_project])
+
+	# Check if all raw files exist
+	missing_raw = []
+	for city_info in city_info_list_w_args:
+		city_name, state_abbr, decade = city_info[0]
+		# Rename Staten Island, NY to Richmond, NY
+		if city_name == "StatenIsland":
+			c = "Richmond"
+		else:
+			c = city_name.replace(' ','')
+		# Look for file
+		file_name = c + state_abbr.upper()
+		file = file_path + '/%s/%s.dta' % (str(decade), file_name)
+		if os.path.exists(file):
+			continue
+		else:
+			missing_raw.append([c, state_abbr])
+	if len(missing_raw) > 0:
+		for i in missing_raw:
+			print("Missing %s%s.dta" % (i[0], i[1]))
+		#raise ValueError
+
+	for i in city_info_list_w_args:
+		clean_microdata(i[0],i[1])
+	# Farm out cleaning across multiple instances of Python
+	#pool = Pool(processes=8, maxtasksperchild=1)
+	#temp = pool.map(clean_microdata, city_info_list_w_args)
+	#pool.close()
+
 '''
-
-# Get city list
-file_path = '/home/s4-data/LatestCities' 
-city_info_file = file_path + '/CityInfo.csv' 
-#city_info_file = file_path + '/CityInfo_with_map.csv' 
-city_info_df = pd.read_csv(city_info_file)
-city_info_df['city_name'] = city_info_df['city_name'].str.replace('.','')
-city_info_list = city_info_df[['city_name','state_abbr']].values.tolist()
-# 1940 issues: Only Brooklyn in 5 boroughs, no Norfolk for unknown reasons
-exclude = ['Manhattan','Bronx','Queens','Staten Island','Norfolk']
-city_info_list = [i for i in city_info_list if i[0] not in exclude]
-
-# Get decade and add it to city list information
-#decade = int(sys.argv[1])
-decade = 1940
-for i in city_info_list:
-	i.append(decade)
-
-# Check if all raw files exist
-missing_raw = []
-for i in city_info_list:
-	city, state, decade = i
-
-	if city == "StatenIsland":
-		c = "Richmond"
-	else:
-		c = city.replace(' ','')
-
-	file_name = c + state.upper()
-	file = file_path + '/%s/%s.dta' % (str(decade), file_name)
-	if os.path.exists(file):
-		continue
-	else:
-		missing_raw.append([city,state])
-if len(missing_raw) > 0:
-	for i in missing_raw:
-		print("Missing %s, %s" % (i[0], i[1]))
-	raise ValueError
-
-# Farm out cleaning across multiple instances of Python
-pool = Pool(processes=8, maxtasksperchild=1)
-temp = pool.map(clean_microdata, city_info_list)
-pool.close()
-
 # Build dashboard for decade and save
 
 city_state = ['City','State']
