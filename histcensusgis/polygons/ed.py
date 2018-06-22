@@ -1247,8 +1247,8 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 		# Create Morse DICTs
 		for line in Descriptions :
 			line_list = line.split(',')
-			ED_description_dict[line_list[0]] = [x.strip('"\' \n') for x in line_list[1:]]
-			ED_NAME_description_dict[line_list[0]] = [isolate_st_name(x.strip('"\' \n')) for x in line_list[1:]]
+			ED_description_dict[line_list[0]] = [x.strip('"\' \n\r') for x in line_list[1:]]
+			ED_NAME_description_dict[line_list[0]] = [isolate_st_name(x.strip('"\' \n\r')) for x in line_list[1:]]
 
 		# Isolate St NAMEs
 		arcpy.AddField_management (stgrid_shp, "NAME", "TEXT")
