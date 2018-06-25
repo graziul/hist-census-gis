@@ -99,20 +99,24 @@ def rename_variables(df, decade) :
 	for row in var_names_ref :
 		std_name = row[0]
 		name_to_change = None
-		for ind, name in enumerate(row) :
-			name = name.strip()
-			if name == "NONE" or name == "" :
-				continue
-			# if the correct decade is found in csv column label, and the corresponding var name is in df...
-			if re.search(str(decade),columns[ind]) and name in df.columns :
-				#if more than one contradictory var in df, throw assertion error
-				if name_to_change :
-					print("Two versions of " + std_name + " found: " + name_to_change + " and " + name)
+		# Some decades are missing variables, so skip if missing
+		try:
+			for ind, name in enumerate(row) :
+				name = name.strip()
+				if name == "NONE" or name == "" :
 					continue
-					#assert(name+" and "+name_to_change+" both found in microdata; resolve" == False)
-				name_to_change = name
-			#if columns[ind] == "NOTES":
-			#	print(std_name + ": " + name)
+				# if the correct decade is found in csv column label, and the corresponding var name is in df...
+				if re.search(str(decade),columns[ind]) and name in df.columns :
+					#if more than one contradictory var in df, throw assertion error
+					if name_to_change :
+						print("Two versions of " + std_name + " found: " + name_to_change + " and " + name)
+						continue
+						#assert(name+" and "+name_to_change+" both found in microdata; resolve" == False)
+					name_to_change = name
+				#if columns[ind] == "NOTES":
+				#	print(std_name + ": " + name)
+		except:
+			continue
 		if name_to_change != None:		
 			df[std_name] = df[name_to_change]
 	# Clean up raw variables a bit
@@ -461,11 +465,11 @@ def preclean_street(df, city_info, file_path, sis_project):
 		# Try other decades until we find data
 		year_try = decade
 		while len(sm_all_streets) == 0:
-			year_try = year_try + 10
-			sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse([city_name, state_abbr, year_try])
-			# If we do not find data, stop looking
-			if decade > 1940:
-				break
+			try:
+				year_try = year_try + 10
+				sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse([city_name, state_abbr, year_try])
+			except KeyError:
+				sm_all_streets = []
 		# delete the ED dictionaries, they are wrong
 		del sm_st_ed_dict_nested
 		sm_ed_st_dict = None

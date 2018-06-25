@@ -1,7 +1,10 @@
 from histcensusgis.microdata import *
 from histcensusgis.s4utils import *
+from multiprocessing import Pool
+from functools import partial
 import os
 import pandas as pd
+import itertools
 
 # Version number 
 version = 7
@@ -43,15 +46,7 @@ version = 7
 #
 # V1 - Original run
 
-
-city_info = ['Allentown','PA',1900]
-street_source='sm'
-ed_map=False
-debug=False
-file_path='/home/s4-data/LatestCities'
-sis_project=True
-
-def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
+def clean_microdata(city_info, sis_project, street_source='both', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
 
 	datestr = time.strftime("%Y_%m_%d")
 
@@ -82,7 +77,11 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	# Step 1: Load city and standardize variable names
 	#
 
-	df, load_time = load_city(city_info, file_path, sis_project)
+	try:
+		df, load_time = load_city(city_info, file_path, sis_project)
+	except:
+		print("Raw data not found for %s, %s (may not have existed)" % (city_name, state_abbr))
+		return
 
 	# Side step: If processing NYC all at once, run a separate process
 	# Process is identical to below, but must be applied to all boroughs separately
@@ -99,18 +98,21 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	df, preclean_info = preclean_street(df, city_info, file_path, sis_project)  
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _, same_year  = preclean_info  
 
-	# Step 2b: Use formatted street names to get house number sequences
 	street_var = 'street_precleaned'
-	df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier1', decade, HN_SEQ, ED_ST_HN_dict)
 
-	# Step 2c: Use house number sequences to fill in blank street names
-	df, fix_blanks_info1 = fix_blank_st(df, city_name, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
+	try:	
+		# Step 2b: Use formatted street names to get house number sequences
+		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier1', decade, HN_SEQ, ED_ST_HN_dict)
+		# Step 2c: Use house number sequences to fill in blank street names
+		df, fix_blanks_info1 = fix_blank_st(df, city_name, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
+		preclean_var = 'street_precleanedHN'
+	except:
+		preclean_var = 'street_precleaned'
+		pass
 
 	#
 	# Step 3: Identify exact matches
 	#
-
-	preclean_var = 'street_precleanedHN'
 
 	# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
 	df, exact_info = find_exact_matches(df, city_name, preclean_var, sm_all_streets, street_source)
@@ -132,11 +134,13 @@ def clean_microdata(city_info, sis_project=False, street_source='both', ed_map=F
 	df[street_var] = df[preclean_var]
 	df.loc[df['current_match_bool'],street_var] = df['current_match']
 
-	# Step 4b: Use fuzzy matches to get house number sequences
-	df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier2', decade, HN_SEQ, ED_ST_HN_dict)
-
-	# Step 4c: Use house number sequences to fill in blank street names
-	df, fix_blanks_info2 = fix_blank_st(df, city_name, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
+	try:
+		# Step 4b: Use fuzzy matches to get house number sequences
+		df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(df, street_var, 'hn_outlier2', decade, HN_SEQ, ED_ST_HN_dict)
+		# Step 4c: Use house number sequences to fill in blank street names
+		df, fix_blanks_info2 = fix_blank_st(df, city_name, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
+	except:
+		pass
 
 	#	
 	# Step 5: Create overall match and all check variables
@@ -210,8 +214,8 @@ def batch_clean_microdata(decade, sis_project=True, city_list_csv='CityExtractio
 
 	# Check if all raw files exist
 	missing_raw = []
-	for city_info in city_info_list_w_args:
-		city_name, state_abbr, decade = city_info[0]
+	for city_info in city_info_list:
+		city_name, state_abbr, decade = city_info
 		# Rename Staten Island, NY to Richmond, NY
 		if city_name == "StatenIsland":
 			c = "Richmond"
@@ -228,13 +232,25 @@ def batch_clean_microdata(decade, sis_project=True, city_list_csv='CityExtractio
 		for i in missing_raw:
 			print("Missing %s%s.dta" % (i[0], i[1]))
 		#raise ValueError
+	#for i in city_info_list_w_args:
+	#	clean_microdata(i[0], i[1])
+	#stuff = itertools.izip(city_info_list, itertools.repeat(sis_project))
+	#func = partial(clean_microdata, city_info, sis_project)
+	pool = Pool(processes=16, maxtasksperchild=1)
+	temp = pool.map(clean_microdata_w_args, city_info_list)
+	pool.close()
 
-	for i in city_info_list_w_args:
-		clean_microdata(i[0],i[1])
+def clean_microdata_w_args(city_info):
+	clean_microdata(city_info=city_info, sis_project=True)
+
+	#for i in city_info_list_w_args:
+	#	clean_microdata(i[0],i[1])
 	# Farm out cleaning across multiple instances of Python
-	#pool = Pool(processes=8, maxtasksperchild=1)
-	#temp = pool.map(clean_microdata, city_info_list_w_args)
-	#pool.close()
+	#stuff = itertools.izip(city_info_list, itertools.repeat(sis_project), itertools.repeat(street_source), itertools.repeat(ed_map),itertools.repeat(debug), itertools.repeat(file_path))
+	#to_do_list = list(stuff)
+
+decade = sys.argv[1]
+batch_clean_microdata(int(decade))
 
 '''
 # Build dashboard for decade and save

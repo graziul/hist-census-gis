@@ -498,7 +498,7 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 	grid_ed_intersect_shp = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_ED_intersect.shp"
 
 	# Load files
-	df_grid = load_shp(grid, hn_ranges)
+	df_grid = load_shp(grid_shp, hn_ranges)
 	if df_micro == None:
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 	df_micro[micro_street_var+'_old'] = df_micro[micro_street_var]

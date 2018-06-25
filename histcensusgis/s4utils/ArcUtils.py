@@ -4,7 +4,7 @@ import os
 # Wrapper function for arcpy.SpatialJoin. By default, returns a reference to a temporary output file in the
 # Scratch GDB, with all fields the same as the two parent files, and with JOIN_ONE_TO_MANY.
 # By default, only those target features that have the specified match_option with the join features will be kept.
-def spatial_join(target,join,match_option, output_fields = 'ALL', output_file = None, join_operation = 'JOIN_ONE_TO_MANY') :
+def spatial_join(target,join,match_option, join_type='KEEP_COMMON', output_fields = 'ALL', output_file = None, join_operation = 'JOIN_ONE_TO_MANY') :
     if not output_file :
         output_file = os.path.join(arcpy.env.scratchGDB,'join_lyr')
     targ_fields = arcpy.ListFields(target)
@@ -34,7 +34,7 @@ def spatial_join(target,join,match_option, output_fields = 'ALL', output_file = 
             f.scale,f.precision,"First",src_file,f.name)
         field_mapping += s
 
-    arcpy.SpatialJoin_analysis(target,join,output_file,join_operation,'KEEP_COMMON',field_mapping,match_option)           
+    arcpy.SpatialJoin_analysis(target,join,output_file,join_operation,join_type,field_mapping,match_option)           
     return output_file
 
 """ pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;

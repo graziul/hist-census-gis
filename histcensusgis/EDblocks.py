@@ -29,10 +29,10 @@ def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program
 
 	return paths
 
-def get_ed_map(city_info, paths, grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
+def get_ed_map(city_info, grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
 	city_name, state_abbr, decade = city_info
-	r_path, dir_path = paths
+	r_path, dir_path = get_paths(city_info)
 	geo_path = dir_path + '/GIS_edited/'
 	
 	# Step 0: Fix stgrid and get pblks (make this a check when iterative function working)
@@ -53,51 +53,43 @@ def get_ed_map(city_info, paths, grid_street_var='FULLNAME', hn_ranges=['LTOADD'
 
 	print("\nFinished ED map for %s %s, %s\n" % (str(decade), city_name, state_abbr))
 
-def get_block_map(city_info, paths):
+def get_block_map(city_info):
 
 	city_name, state_abbr, decade = city_info
-	r_path, dir_path = paths
+	r_path, dir_path = get_paths(city_info)
 
-	if decade != 1940:
-		# Identify blocks using geocoding
-		identify_blocks_geocode(city_info, paths)
-		# Identify blocks using microdata alone (derived block descriptions)
-		identify_blocks_microdata(city_info, paths)
-		'''
-		NOTE: These functions have worked in the past, but are not in use currently.
-		# Add ranges to new grid 
-		add_ranges_to_new_grid(city_name, state_abbr, file_name, paths)		
-		# Run OCR script
-		run_ocr(script_path, file_path, city_name)
-		# Integrate OCR block numbering results
-		integrate_ocr(city_name, file_name, paths)
-		'''
-		# Set confidence in block number guess [NEEDS TO BE GENERALIZED]
-		set_blocknum_confidence(city_name, paths)
+	# Identify blocks using geocoding
+	identify_blocks_geocode(city_info, paths)
+	# Identify blocks using microdata alone (derived block descriptions)
+	identify_blocks_microdata(city_info, paths)
+	'''
+	NOTE: These functions have worked in the past, but are not in use currently.
+	# Add ranges to new grid 
+	add_ranges_to_new_grid(city_name, state_abbr, file_name, paths)		
+	# Run OCR script
+	run_ocr(script_path, file_path, city_name)
+	# Integrate OCR block numbering results
+	integrate_ocr(city_name, file_name, paths)
+	'''
+	# Set confidence in block number guess [NEEDS TO BE GENERALIZED]
+	set_blocknum_confidence(city_name, paths)
 	
-def get_ed_block_numbers(city_info, paths, grid_street_var="FULLNAME", hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD'], just_desc=False):
+def geocode_city(city_info):
 
-	_, dir_path = paths
+	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+
+	_, dir_path = r_path, dir_path = get_paths(city_info)
 	geo_path = dir_path + '/GIS_edited/'
 
-	get_pblks(city_info, paths)
+	fix_micro_dir_using_ed_map(city_info, paths)
 
-	get_missing_streets(city_info, paths)
-
-	get_ed_map(city_info, paths, grid_street_var, hn_ranges)
-
-	fix_micro_dir_using_ed_map()
-	
-	fix_micro_blocks_using_ed_map()
+	fix_micro_blocks_using_ed_map(city_info, paths)
 
 	get_block_map(city_info, paths)
 
-def do_geocode():
-
-	get_ed_block_numbers()
-
-	renumber_grid(city_name=city, 
-		state_abbr=state, 
+	renumber_grid(city_name=city_name, 
+		state_abbr=state_abbr, 
 		paths=paths, 
 		decade=decade,
 		df=df_micro2)
@@ -108,7 +100,7 @@ def do_geocode():
 	# Common variables
 
 	# "vm" is the verified map (e.g., ED or block map)
-	vm = geo_path + city + "_" + str(decade) + "_ED.shp"
+	vm = geo_path + city_name + "_" + str(decade) + "_ED.shp"
 	# "cal_street" is the name of the street as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (hence "cal_"; REQUIRED)
 	cal_street = "FULLNAME" 
 	# "cal_city" is the name of the city as noted in the output of the intersect of the "sg" street grid and "vm" verified map, which is used in the create address locator (e.g., city or ED; NOT REQUIRED)
@@ -137,27 +129,26 @@ def do_geocode():
 	#
 
 	# "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
-	add = geo_path + city + "_" + str(decade) + "_Addresses.csv"
+	add = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
 	# "sg" is the name of the street grid on which the previous list of addresses will be geocoded
-	sg = geo_path + city + state + "_" + str(decade) + "_stgrid_renumberedbf.shp"
+	sg = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_renumberedbf.shp"
 	# "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
-	al = geo_path + city + "_addloc_" + str(decade) + "_ED"
+	al = geo_path + city_name + "_addloc_" + str(decade) + "_ED"
 	# "gr" is the filename of the geocoding results
-	gr = geo_path + city + state + "_" + str(decade) + "_geocode_renumberedEDbf.shp"
+	gr = geo_path + city_name + state_abbr + "_" + str(decade) + "_geocode_renumberedEDbf.shp"
 	# "sg_vm" is the filename of the intersection of the street grid and the verified map
-	sg_vm = geo_path + city + state + "_grid_poly_intersect.shp"
+	sg_vm = geo_path + city_name + state_abbr + "_grid_poly_intersect.shp"
 	#"spatjoin" is joining the geocode to the verified map (e.g., ED or block map)
-	spatjoin = geo_path + city + state + "_" + str(decade) + "_geo_map_spatjoin.shp"
+	spatjoin = geo_path + city_name + state_abbr + "_" + str(decade) + "_geo_map_spatjoin.shp"
 	# Not correct geocode
-	notcor = geo_path + city + state + "_" + str(decade) + "_NotGeocodedCorrect.shp"
+	notcor = geo_path + city_name + state_abbr + "_" + str(decade) + "_NotGeocodedCorrect.shp"
 	# Correct geocode
-	cor = geo_path + city + state + "_" + str(decade) + "_GeocodedCorrect.shp"
+	cor = geo_path + city_name + state_abbr + "_" + str(decade) + "_GeocodedCorrect.shp"
 	# Ungeocoded addresses
-	resid_add = geo_path + city + "_" + str(decade) + "_AddNotGeocoded.dbf"
+	resid_add = geo_path + city_name + "_" + str(decade) + "_AddNotGeocoded.dbf"
 
-	geocode(geo_path, city, add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
-
-	validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, decade, residual_file=resid_add)
+	geocode(geo_path, city_name, add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
+	validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, decade, residual_file=resid_add)
 
 	#
 	# Geocode on contemporary house number ranges
@@ -166,34 +157,33 @@ def do_geocode():
 	# "add" is the list of addresses (e.g., .csv or table in a geodatabase) that will eventually be geocoded
 	# "add" is resid_add from above
 	# "sg" is the name of the street grid on which the previous list of addresses will be geocoded
-	sg = geo_path + city + state + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	sg = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 	# "al" is the filename of the ESRI-generated address locator, which cannot be overwritten and must be changed if you are running multiple iterations of this tool
-	al = geo_path + city + "_addloc_" + str(decade) + "_ED_Contemp"
+	al = geo_path + city_name + "_addloc_" + str(decade) + "_ED_Contemp"
 	# "gr" is the filename of the geocoding results
-	gr = geo_path + city + state + "_" + str(decade) + "_geocode_renumberedED_Contemp.shp"
+	gr = geo_path + city_name + state_abbr + "_" + str(decade) + "_geocode_renumberedED_Contemp.shp"
 	# "sg_vm" is the filename of the intersection of the street grid and the verified map
-	sg_vm = geo_path + city + state + "_grid_poly_intersect_Contemp.shp"
+	sg_vm = geo_path + city_name + state_abbr + "_grid_poly_intersect_Contemp.shp"
 	#"spatjoin" is joining the geocode to the verified map (e.g., ED or block map)
-	spatjoin = geo_path + city + state + "_" + str(decade) + "_geo_map_spatjoin_Contemp.shp"
+	spatjoin = geo_path + city_name + state_abbr + "_" + str(decade) + "_geo_map_spatjoin_Contemp.shp"
 	# Not correct geocode
-	notcor = geo_path + city + state + "_" + str(decade) + "_NotGeocodedCorrect_Contemp.shp"
+	notcor = geo_path + city_name + state_abbr + "_" + str(decade) + "_NotGeocodedCorrect_Contemp.shp"
 	# Correct geocode
-	cor = geo_path + city + state + "_" + str(decade) + "_GeocodedCorrect_Contemp.shp"
+	cor = geo_path + city_name + state_abbr + "_" + str(decade) + "_GeocodedCorrect_Contemp.shp"
 	# Ungeocoded addresses
-	resid_add_contemp = geo_path + city + "_" + str(decade) + "_AddNotGeocoded_Contemp.dbf"
+	resid_add_contemp = geo_path + city_name + "_" + str(decade) + "_AddNotGeocoded_Contemp.dbf"
 
-	geocode(geo_path, city, resid_add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
-
-	validate(geo_path, city, state, gr, vm, spatjoin, notcor, cor, decade, residual_file=resid_add_contemp)
+	geocode(geo_path, city_name, resid_add, sg, vm, sg_vm, fl, tl, fr, tr, cal_street, cal_city, cal_state, addfield, al, g_address, g_city, g_state, gr)
+	validate(geo_path, city_name, state_abbr, gr, vm, spatjoin, notcor, cor, decade, residual_file=resid_add_contemp)
 
 	#
 	# Combine both geocodes to get the best geocode
 	#
 
-	combine_geocodes(geo_path, city, state, decade)
+	combine_geocodes(geo_path, city_name, state_abbr, decade)
 
 
-def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix_path='/home/s4-data/LatestCities', server='pstc-cs1.pstc.brown.edu', grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
+def run_cleaning_w_ed(city_info, overwrite=False, iterate=True, unix_path='/home/s4-data/LatestCities', server='pstc-cs1.pstc.brown.edu', grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
 	overwrite=False
 	iterate=False
@@ -202,8 +192,6 @@ def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix
 	grid_street_var='FULLNAME'
 	hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']
 	city_info = ['Omaha','NE',1930]
-	if paths is None:
-		paths = get_paths(city_info)
 
 	user = raw_input("Username:")
 	passwd = getpass.getpass("Password for " + user + ":")
@@ -212,7 +200,7 @@ def run_cleaning_w_ed(city_info, paths=None, overwrite=False, iterate=True, unix
 	# pw = sys.argv[2]
 	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
-	_, dir_path = paths
+	r_path, dir_path = get_paths(city_info)
 	geo_path = dir_path + '/GIS_edited/'
 
 	ssh = paramiko.SSHClient()

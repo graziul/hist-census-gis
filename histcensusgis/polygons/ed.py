@@ -1734,27 +1734,29 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	df_ed_geo.loc[:,['ED_ID','ED_ID2','ED_ID3']]= df_ed_geo[['ED_ID','ED_ID2','ED_ID3']].astype(object).replace(np.nan,0).astype(int).astype(str).replace('0','')
 
 	ed_desc_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_desc.shp'
-	df_ed_desc= load_shp(ed_desc_shp)
-	df_ed_desc.loc[:,'ed_desc'] = df_ed_desc['ed_desc'].astype(str).replace('None','')
-	df_ed_desc.loc[:,'cblk_id'] = df_ed_desc['cblk_id'].astype(str).replace('None','')
-	df_ed_desc.loc[:,'pblk_id'] = df_ed_desc['pblk_id'].astype(int)
 
-	df_ed_inter_geo = df_ed_inter.merge(df_ed_geo.drop(['geometry'], axis=1), on='pblk_id')
-	df = df_ed_inter_geo.merge(df_ed_desc.drop(['geometry'], axis=1), on='pblk_id')
-
-	#save_shp(df_ed_inter_geo, ed_guess_shp)
-
-	# Spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
-	#arcpy.SpatialJoin_analysis(target_features=ed_inter_geo_shp, 
-	#	join_features=ed_desc_shp, 
-	#	out_feature_class=ed_guess_shp, 
-	#	join_operation="JOIN_ONE_TO_ONE", 
-	#	join_type="KEEP_ALL",
-	#	match_option="HAVE_THEIR_CENTER_IN")
+	# If 1940, can use non-spatial joins...
+	if decade == 1940:
+		df_ed_desc= load_shp(ed_desc_shp)
+		df_ed_desc.loc[:,'ed_desc'] = df_ed_desc['ed_desc'].astype(str).replace('None','')
+		df_ed_desc.loc[:,'cblk_id'] = df_ed_desc['cblk_id'].astype(str).replace('None','')
+		df_ed_desc.loc[:,'pblk_id'] = df_ed_desc['pblk_id'].astype(int)
+		df_ed_inter_geo = df_ed_inter.merge(df_ed_geo.drop(['geometry'], axis=1), on='pblk_id')
+		df = df_ed_inter_geo.merge(df_ed_desc.drop(['geometry'], axis=1), on='pblk_id')
+	# ...otherwise, spatially join ed_desc polygons to assign ed_desc guesses to pblk_id
+	else:
+		ed_inter_desc_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_inter_desc.shp'
+		arcpy.SpatialJoin_analysis(target_features=ed_inter_shp, 
+			join_features=ed_desc_shp, 
+			out_feature_class=ed_inter_desc_shp, 
+			join_operation="JOIN_ONE_TO_ONE", 
+			join_type="KEEP_ALL",
+			match_option="HAVE_THEIR_CENTER_IN")
+		df_ed_inter_desc_shp = load_shp(ed_inter_desc_shp)
+		df_ed_inter_desc_shp.loc[:,'ed_desc'] = df_ed_inter_desc_shp['ed_desc'].astype(str).replace('None','')
+		df = df_ed_inter_desc_shp.merge(df_ed_geo.drop(['geometry'], axis=1), on='pblk_id')
 
 	# Select relevant variables and extract best ED guesses
-	#df = load_shp(ed_guess_shp, hn_ranges)
-
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].apply(lambda x: get_ed_geocode(x), axis=1)
 	df.loc[:,'ed_desc'] = df.apply(lambda x: format_ed_desc(x['ed_desc']), axis=1)
 	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str)

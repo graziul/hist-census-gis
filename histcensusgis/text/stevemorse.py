@@ -212,8 +212,16 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1920,1930,1940]):
 	city_info_df = pd.read_csv(city_info_file)
 	city_info_df = city_info_df[city_info_df['Status']>0]
 	city_info_df.loc[:,'city_name'], city_info_df.loc[:,'state_abbr'] = zip(*city_info_df['City'].str.split(','))
+	city_info_df = city_info_df[['city_name','state_abbr']]
 	city_info_df['city_name'] = city_info_df['city_name'].str.replace('Saint','St').str.replace('.','')
 	city_info_df['state_abbr'] = city_info_df['state_abbr'].str.replace(' ','').str.lower()
+	# Add New York boroughs
+	new_york = [{'city_name':'Richmond','state_abbr':'ny'}, 
+		{'city_name':'Queens','state_abbr':'ny'}, 
+		{'city_name':'Manhattan','state_abbr':'ny'}, 
+		{'city_name':'Brooklyn','state_abbr':'ny'},
+		{'city_name':'Bronx','state_abbr':'ny'}]
+	city_info_df = city_info_df.append(pd.DataFrame(new_york))
 
 	state_list = city_info_df['state_abbr'].tolist()
 
@@ -257,12 +265,12 @@ def load_steve_morse(city_info):
 
 	city_name, state_abbr, decade = city_info
 
-	if city_name == 'Richmond' and state_abbr == 'NY':
-		city_name = 'Staten Island'
+	#if city_name == 'Richmond' and state_abbr == 'NY':
+	#	city_name = 'Staten Island'
 	#NOTE: This dictionary must be built independently of this script
 	package_path = os.path.dirname(histcensusgis.__file__)
 	sm_st_ed_dict_file = pickle.load(open(package_path + '/text/sm_st_ed_dict.pickle', 'rb'))
-	sm_st_ed_dict_nested = sm_st_ed_dict_file[decade][(city_name, '%s' % (state_abbr.lower()))]
+	sm_st_ed_dict_nested = sm_st_ed_dict_file[decade][(city_name.replace(' ',''), state_abbr.lower())]
 
 	#Flatten dictionary
 	temp = {k:v for d in [v for k, v in sm_st_ed_dict_nested.items()] for k, v in d.items()}
