@@ -18,6 +18,7 @@ from histcensusgis.s4utils.AmoryUtils import *
 from histcensusgis.s4utils.IOutils import *
 import arcpy
 import os
+import subprocess
 import pandas as pd
 arcpy.env.overwriteOutput=True
 
@@ -107,6 +108,27 @@ def initial_geocode(city_info, geo_path, hn_ranges=['MIN_LFROMA','MIN_RFROMA','M
 
 # Ensure geocode data exist for Matt's ED/block algorithms
 def check_matt_dependencies(city_info, paths, geocode_file=None):
+
+	# Attach physical block IDs to geocoded points 
+	def attach_pblk_id(city_info, geo_path, points_shp):
+
+		city_name, state_abbr, decade = city_info
+		city_name = city_name.replace(' ','')
+		state_abbr = state_abbr.upper()
+
+		# Files
+		pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+		pblk_points_shp = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
+
+		#Attach Pblk ids to points
+		arcpy.SpatialJoin_analysis(points_shp, 
+			pblk_shp, 
+			pblk_points_shp, 
+			"JOIN_ONE_TO_MANY", 
+			"KEEP_ALL", 
+			"#", 
+			"INTERSECT")
+		print("The script has finished executing the 'SpatialJoin' tool")
 
 	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')

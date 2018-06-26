@@ -7,6 +7,7 @@
 from histcensusgis.microdata.misc import create_addresses
 from histcensusgis.polygons.block import *
 from histcensusgis.polygons.ed import *
+from histcensusgis.points.geocode import *
 from histcensusgis.lines.street import *
 import arcpy
 import getpass
@@ -29,10 +30,10 @@ def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program
 
 	return paths
 
-def get_ed_map(city_info, grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
+def get_ed_map(city_info, paths, grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
 	city_name, state_abbr, decade = city_info
-	r_path, dir_path = get_paths(city_info)
+	r_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 	
 	# Step 0: Fix stgrid and get pblks (make this a check when iterative function working)
@@ -53,40 +54,48 @@ def get_ed_map(city_info, grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROM
 
 	print("\nFinished ED map for %s %s, %s\n" % (str(decade), city_name, state_abbr))
 
-def get_block_map(city_info):
+def get_block_map(city_info, paths):
 
 	city_name, state_abbr, decade = city_info
-	r_path, dir_path = get_paths(city_info)
+	r_path, dir_path = paths
 
-	# Identify blocks using geocoding
-	identify_blocks_geocode(city_info, paths)
-	# Identify blocks using microdata alone (derived block descriptions)
-	identify_blocks_microdata(city_info, paths)
-	'''
-	NOTE: These functions have worked in the past, but are not in use currently.
-	# Add ranges to new grid 
-	add_ranges_to_new_grid(city_name, state_abbr, file_name, paths)		
-	# Run OCR script
-	run_ocr(script_path, file_path, city_name)
-	# Integrate OCR block numbering results
-	integrate_ocr(city_name, file_name, paths)
-	'''
-	# Set confidence in block number guess [NEEDS TO BE GENERALIZED]
-	set_blocknum_confidence(city_name, paths)
-	
-def geocode_city(city_info):
+	if decade != 1940:
+		# Identify blocks using geocoding
+		identify_blocks_geocode(city_info, paths)
+		# Identify blocks using microdata alone (derived block descriptions)
+		identify_blocks_microdata(city_info, paths)
+		'''
+		NOTE: These functions have worked in the past, but are not in use currently.
+		# Add ranges to new grid 
+		add_ranges_to_new_grid(city_name, state_abbr, file_name, paths)		
+		# Run OCR script
+		run_ocr(script_path, file_path, city_name)
+		# Integrate OCR block numbering results
+		integrate_ocr(city_name, file_name, paths)
+		'''
+		# Set confidence in block number guess [NEEDS TO BE GENERALIZED]
+		set_blocknum_confidence(city_info, paths)
+	else:
+		print("Cannot automatically assign Census block numbers for 1940 using current data sources")
+
+def geocode_city(city_info, paths):
 
 	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
 
-	_, dir_path = r_path, dir_path = get_paths(city_info)
+	r_path, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 
-	fix_micro_dir_using_ed_map(city_info, paths)
+	df_micro = fix_micro_dir_using_ed_map(city_info=city_info, 
+		paths=paths)
 
-	fix_micro_blocks_using_ed_map(city_info, paths)
+	df_micro2 = fix_micro_blocks_using_ed_map(city_info=city_info, 
+		paths=paths, 
+		df_micro=df_micro)
 
-	get_block_map(city_info, paths)
+	block_guess_shp = geo_path + city_name + "_" + str(decade) + "_block_guess.shp"
+	if not os.path.isfile(block_guess_shp):
+		get_block_map(city_info, paths)
 
 	renumber_grid(city_name=city_name, 
 		state_abbr=state_abbr, 
@@ -181,7 +190,6 @@ def geocode_city(city_info):
 	#
 
 	combine_geocodes(geo_path, city_name, state_abbr, decade)
-
 
 def run_cleaning_w_ed(city_info, overwrite=False, iterate=True, unix_path='/home/s4-data/LatestCities', server='pstc-cs1.pstc.brown.edu', grid_street_var='FULLNAME', hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 
@@ -431,3 +439,12 @@ def run_cleaning_w_ed(city_info, overwrite=False, iterate=True, unix_path='/home
 	# Report how well we did
 	print("\nOverall match found for %s of %s cases (%s%)" % (str(cases_w_street_label), str(tot_micro), float(cases_w_street_label)/tot_micro))
 	print("ED guess found for %s of %s physical blocks (%s%)\n" % (str(cases_w_ed_label), str(tot_pblks), float(cases_w_ed_label)/tot_pblks))
+
+'''
+from histcensusgis.EDblocks import *
+city_info=['Omaha','NE',1930]
+paths=get_paths(city_info)
+get_ed_map(city_info, paths)
+get_block_map(city_info, paths)
+geocode_city(city_info, paths)
+'''

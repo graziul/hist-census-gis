@@ -8,8 +8,12 @@ from histcensusgis.microdata.misc import load_cleaned_microdata
 from histcensusgis.lines.street import *
 from histcensusgis.points.geocode import *
 from histcensusgis.s4utils.IOutils import *
+from multiprocessing import Pool
 import histcensusgis
 import arcpy
+import sys
+import subprocess
+import random
 arcpy.env.overwriteOutput = True
 
 #
@@ -100,7 +104,7 @@ def attach_pblk_id(city_info, geo_path, points_shp):
 # Identifies block numbers and can be run independently (R script)
 # NOTE: Assigns block numbers using microdata blocks. Examines proportion of cases that geocode 
 # onto the same physical block and decides  
-def identify_blocks_geocode(city_info, paths, script_path):
+def identify_blocks_geocode(city_info, paths):
 
 	city_name, _, decade = city_info
 	city_name = city_name.replace(' ','')
@@ -132,11 +136,11 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 	r_path, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
-	block_file = geo_path + city_name + "_" + str(decade) + "_Block_Choice_Map.shp"
-	pblk_file = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
-	stgrid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
-	pblk_grid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_Pblk_Grid_SJ.shp"
-	out_file = geo_path + city_name + "_" + str(decade) + "_Block_Choice_Map2.shp"
+	block_shp = geo_path + city_name + "_" + str(decade) + "_block_geo.shp"
+	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	grid_shp = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
+	pblk_grid_shp = geo_path + city_name + state_abbr + "_" + str(decade) + "_Pblk_Grid_SJ.shp"
+	block_guess_shp = geo_path + city_name + "_" + str(decade) + "_block_guess.shp"
 	pblk_grid_dict_file = geo_path + city_name + "_pblk_grid_dict.pkl"
 	pblk_st_dict_file = geo_path + city_name + "_pblk_st_dict.pkl"
 
@@ -154,7 +158,7 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 
 	end = time.time()
 	run_time = round(float(end-start)/60, 1)
-	print("Finished loading microdata (took " + str(run_time) + " minutes)", 'cyan')
+	print("Finished loading microdata (took " + str(run_time) + " minutes)")
 
 	#TO DO: Clean up block numbers
 	df_pre = df_pre[df_pre['block'].notnull() & df_pre['ed'].notnull()]
@@ -164,7 +168,7 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 	#del df_pre['block']
 
 	#Get number of physical blocks
-	num_physical_blocks = int(arcpy.GetCount_management(block_file).getOutput(0))
+	num_physical_blocks = int(arcpy.GetCount_management(block_shp).getOutput(0))
 	#Get number of microdata blocks
 	num_micro_blocks = len(df_pre['block'].unique())
 
@@ -185,17 +189,17 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 
 	field_mapSJ = """pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,%s,pblk_id,-1,-1;
 	FULLNAME "FULLNAME" true true false 80 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
-	grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (pblk_file, stgrid_file, stgrid_file)
-	arcpy.SpatialJoin_analysis(target_features=pblk_file, join_features=stgrid_file, out_feature_class=pblk_grid_file, 
+	grid_id "grid_id" true true false 10 Long 0 10 ,First,#,%s,grid_id,-1,-1""" % (pblk_shp, grid_shp, grid_shp)
+	arcpy.SpatialJoin_analysis(target_features=pblk_shp, join_features=grid_shp, out_feature_class=pblk_grid_shp, 
 		join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
 		match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
-	df_pblk_grid = dbf2DF(pblk_grid_file.replace(".shp",".dbf"))
+	df_pblk_grid = load_shp(pblk_grid_shp.replace(".shp",".dbf"))
 
 	# Group by pblk_id to create some dictionaries
 	df_grouped = df_pblk_grid.groupby('pblk_id')
 	# This dictionary is used here as empiric census block descriptions
 	pblk_st_dict = {pblk:list(set(grid_list['FULLNAME'].tolist())) for pblk, grid_list in df_grouped}
-		#Exclude certain street names "City Limits"
+	# Exclude certain street names "City Limits"
 	exclude_list = ['City Limits']
 	pblk_st_dict = {k:[i for i in v if i not in exclude_list] for k,v in pblk_st_dict.items()}
 	# This dictionary is used in RenumberGrid.py to match empiric house number ranges to grid segments based on block number
@@ -215,7 +219,7 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 		labels_step1 = []
 		pblks_labeled1 = []
 		for field in fields:
-			with arcpy.da.SearchCursor(block_file,['pblk_id',field]) as cursor:
+			with arcpy.da.SearchCursor(block_shp,['pblk_id',field]) as cursor:
 				for row in cursor:
 					if row[1] != ' ':
 						labels_step1.append(row[1])
@@ -223,7 +227,7 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 		num_labels_step1 = len(labels_step1)
 		per_micro_blocks = round(100*float(num_labels_step1)/num_micro_blocks, 1)
 		print("Physical blocks labeled in Step 1: "+str(num_labels_step1)+" ("+str(per_micro_blocks)+r"% of microdata blocks)"+"\n")
-		return labels_step1, pblks_labeled1, num_labels_step1
+		return labels_step1, [int(i) for i in pblks_labeled1], num_labels_step1
 
 	#This step determines which ED-blocks to consider labeled based on prior numbering efforts
 	fields = ['MBID','MBID2']
@@ -249,9 +253,14 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 		#Ensure that physical block (1) has not been labeled already and (2) intersects streets with names
 		temp_pblk_st_dict = {k:v for k,v in pblk_st_dict.items() if (int(k) not in pblks_labeled) and (len(v) > 0)}
 		#Use multiprocessing to compare street lists for matching blocks
-		pool = Pool(4)
-		pool_results = pool.map(check_block,temp_pblk_st_dict.items())
-		pool.close()
+		if 'win' in sys.platform:
+			pool_results=[]
+			for i in temp_pblk_st_dict.items():
+				pool_results.append(check_block(i))
+		else:
+			pool = Pool(4)
+			pool_results = pool.map(check_block,temp_pblk_st_dict.items())
+			pool.close()
 		#Convert list of dictionaries into one dictionary, as long as there is only one microdata block guess
 		temp_match_dict = {k:v[0] for d in pool_results for k,v in d.items() if len(v)==1}
 		temp_pblks_labeled, temp_labels = zip(*temp_match_dict.items())
@@ -288,11 +297,11 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 		if block not in good_match_dict.keys():
 			good_match_dict[block] = ''		
 
-	arcpy.CopyFeatures_management(block_file,out_file)
-	arcpy.AddField_management(out_file,'blockdesc','TEXT')
-	arcpy.AddField_management(out_file,'blockdesc2','TEXT')
+	arcpy.CopyFeatures_management(block_shp, block_guess_shp)
+	arcpy.AddField_management(block_guess_shp,'blockdesc','TEXT')
+	arcpy.AddField_management(block_guess_shp,'blockdesc2','TEXT')
 
-	cursor = arcpy.UpdateCursor(out_file)
+	cursor = arcpy.UpdateCursor(block_guess_shp)
 	for row in cursor:
 		pblk_id = row.getValue('pblk_id')
 		row.setValue('blockdesc',exact_match_dict[int(pblk_id)])
@@ -333,13 +342,15 @@ def integrate_ocr(city_info, paths, script_path, file_name):
 # Sets confidence in block number based on multpiel sources
 def set_blocknum_confidence(city_info, paths, has_ocr=False):
 
-	city_name, _, _ = city_info
+	city_name, state_abbr, decade = city_info
 	r_path, dir_path = paths
-	geo_path = file_path + '/GIS_edited/'
+	geo_path = dir_path + '/GIS_edited/'
 
 	# Load
-	block_choice2_shp = geo_path + city_name + '_' + str(decade) + '_Block_Choice_Map2.shp'
-	df = load_shp(block_choice2_shp)
+	block_guess_shp = geo_path + city_name + "_" + str(decade) + "_block_guess.shp"
+	df = load_shp(block_guess_shp)
+	relevant_vars = ['MBID','MBID2','MBID3','blockdesc','blockdesc2']
+	df[relevant_vars] = df[relevant_vars].astype(str).replace('None','')
 
 	# Reduce OCR variables to fewest possible
 	if has_ocr:
@@ -361,12 +372,11 @@ def set_blocknum_confidence(city_info, paths, has_ocr=False):
 
 	print(100*df['auto_bnc'].value_counts(normalize=True))
 
-	save_shp(df, block_choice2_shp)
-	# Save as dbf via csv
-	csv_file = dir_path + "\\temp_for_dbf.csv"
+	save_shp(df, block_guess_shp)
+
 
 # Function to set block confidence based on which method(s) provided a block number
-def get_auto_blocknum(x,conf):
+def get_auto_blocknum(x,conf,min_num_vars=None):
 
 	# Confidence 1: Matt's strict (100% of people are in block)
 	#				Matt's loose (criteria 2 or 3) and Chris's strict (100% of streets match) agree
@@ -400,10 +410,11 @@ def get_auto_blocknum(x,conf):
 			if x['MBID2'] != '':
 				return [x['MBID2'], conf]	
 			elif x['MBID3'] != '':
-				return [x['MBID3'], conf]			
-			for i in range(1,min_num_vars+1):
-				if x['blockdesc'] == x['ocr%s' % (str(i))] and x['blockdesc'] != '':
-					return [x['blockdesc'], conf]	
+				return [x['MBID3'], conf]	
+			if min_num_vars != None:		
+				for i in range(1,min_num_vars+1):
+					if x['blockdesc'] == x['ocr%s' % (str(i))] and x['blockdesc'] != '':
+						return [x['blockdesc'], conf]	
 			else:
 				return ['','']					
 		else:
@@ -415,9 +426,10 @@ def get_auto_blocknum(x,conf):
 		if x['auto_bnc'] == '':
 			if x['blockdesc'] != '':
 				return [x['blockdesc'], conf]				
-			for i in range(1,min_num_vars+1):
-				if x['blockdesc2'] == x['ocr%s' % (str(i))] and x['blockdesc2'] != '':
-					return [x['blockdesc2'], conf]	
+			if min_num_vars != None:		
+				for i in range(1,min_num_vars+1):
+					if x['blockdesc2'] == x['ocr%s' % (str(i))] and x['blockdesc2'] != '':
+						return [x['blockdesc2'], conf]	
 			else:
 				return ['','']											
 		else:
@@ -438,7 +450,7 @@ def get_auto_blocknum(x,conf):
 	#
 	if conf == 6:
 		if x['auto_bnc'] == '':
-			if min_num_vars > 1:
+			if min_num_vars != None and min_num_vars > 1:
 				guess = ''
 				for i in range(1,min_num_vars+1):
 					for j in range(1,min_num_vars+1):
@@ -456,7 +468,7 @@ def get_auto_blocknum(x,conf):
 	# Confidence 7: List of OCR guesses
 	#
 	if conf == 7:
-		if x['auto_bnc'] == '':
+		if x['auto_bnc'] == '' and min_num_vars != None:
 			if min_num_vars > 1:
 				guesses = [] 
 				for i in range(1,min_num_vars+1):
@@ -494,7 +506,7 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 
 	# Files
 	grid_shp = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
-	ed_shp = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+	ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess_map.shp'
 	grid_ed_intersect_shp = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_ED_intersect.shp"
 
 	# Load files
@@ -510,27 +522,43 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 	df_grid['DIR'] = df_grid.apply(lambda x: get_dir(x[grid_street_var]), axis=1)
 	save_shp(df_grid, grid_shp)
 
-	arcpy.Intersect_analysis (in_features=[grid_shp, ed_shp], 
+	arcpy.Intersect_analysis(in_features=[grid_shp, ed_shp], 
 		out_feature_class=grid_ed_intersect_shp, 
 		join_attributes="ALL")
 
 	# Get the spatial join dbf and extract some info
-	df_intersect = load(grid_ed_intersect_shp, hn_ranges)
-	df_dir_ed = df_intersect[['DIR','ed']].drop_duplicates()
+	df_intersect = load_shp(grid_ed_intersect_shp, hn_ranges)
+	try:
+		ed_var = 'ed'
+		df_dir_ed = df_intersect[['DIR',ed_var]].drop_duplicates()
+	except:
+		ed_var = 'ed_guess'
+		df_dir_ed[ed_var] = df_dir_ed[ed_var].astype(int) 
+		df_dir_ed = df_intersect[['DIR',ed_var]].drop_duplicates()
 	df_dir_ed = df_dir_ed[df_dir_ed['DIR']!='']
-	df_dir_ed = df_dir_ed[df_dir_ed['ed']!=0]
-	eds = df_dir_ed['ed'].drop_duplicates().tolist()
+	df_dir_ed = df_dir_ed[df_dir_ed[ed_var]!=0]
+	eds = df_dir_ed[ed_var].drop_duplicates().tolist()
 
 	# Create dictionary of {ED:list(DIRs)}
 	ed_dir_dict = {}
-	ed_grouped = df_dir_ed.groupby(['ed'])
+	ed_grouped = df_dir_ed.groupby([ed_var])
 	for ed, group in ed_grouped:
 		ed_dir_dict[ed] = group['DIR'].tolist()
 
 	## I feel like this could be simplified significantly
 
 	# Create dictionary of {street_var:list(DIRs)} and delete any that have combination of N/S and E/W
+	try:
+		df_micro.rename(columns={'DIR':'dir'},inplace=True)
+	except:
+		pass
+
+	def fix_str(x):
+		y = str(x)
+		return y.replace('nan','')
+
 	df_name_dir = df_micro[[micro_street_var,'dir']]
+	df_name_dir = df_name_dir.astype(str).replace('nan','')
 	df_name_dir.loc[:,('st')], df_name_dir.loc[:,('dir')], df_name_dir.loc[:,('name')], df_name_dir.loc[:,('type')] = zip(*df_name_dir.apply(lambda x: standardize_street(x[micro_street_var]), axis=1))
 	df_name_dir.loc[:,('st')] = (df_name_dir['name'] + ' ' + df_name_dir['type']).str.strip()
 	df_name_dir = df_name_dir.drop_duplicates(['dir','st'])
@@ -627,8 +655,14 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 	df_points = load_shp(points_shp, hn_ranges)
 	df = df_points[df_points['Status']!='M']
 	# ERROR: LOST INDEX SOMEWHERE ALONG THE WAY
-	resid_vars = ['index','ed','fullname','state','city','address']
-	df_resid = df[resid_vars]
+	try:
+		ed_var = 'ed'
+		resid_vars = ['index',ed_var,'fullname','state','city','address']
+		df_resid = df[resid_vars]
+	except:
+		ed_var = 'ed_guess'
+		resid_vars = ['index',ed_var,'fullname','state','city','address']
+		df_resid = df[resid_vars]
 	if os.path.isfile(resid_add_csv):
 		os.remove(resid_add_csv)
 	df_resid.to_csv(resid_add_csv)
@@ -648,7 +682,7 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 
 	# Identify points in the correct ED
 	arcpy.MakeFeatureLayer_management(resid_ed_intersect_shp, "geocodelyr1")
-	arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", """ "ed" = "ed_1" """)
+	arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", """ "%s" = "%s_1" """ % (ed_var, ed_var))
 	arcpy.CopyFeatures_management("geocodelyr1",inrighted_shp)
 
 	# Intersect points in the correct ED with block map

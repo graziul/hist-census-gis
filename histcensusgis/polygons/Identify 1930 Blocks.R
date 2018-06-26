@@ -17,8 +17,6 @@ if(length(new.packages)) install.packages(new.packages)
   library(reshape2)
   library(maptools)
   library(rgdal)
-  library(rJava)
-  library(xlsx)
   library(magrittr)
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -61,7 +59,11 @@ shift<-function(x,shift_by){
 
 #Keep only Unique Addresses
   Blocks<-subset(Points, !duplicated(Points$build_id))
-  
+
+#Generate mblk (all NA for some reason) using ed_block (generated in previous steps)
+  Split <- strsplit(as.character(Blocks$ed_block),"-",fixed=TRUE)
+  Blocks$mblk <- as.numeric(sapply(Split,"[",2))
+
 #Keep variables needed  
   myvars<-c("ed", "mblk", "pblk_id", "build_id")
   Blocks<-Blocks[myvars]
