@@ -506,13 +506,18 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 
 	# Files
 	grid_shp = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
-	ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess_map.shp'
+	ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess.shp'
 	grid_ed_intersect_shp = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_ED_intersect.shp"
 
 	# Load files
 	df_grid = load_shp(grid_shp, hn_ranges)
 	if df_micro == None:
 		df_micro = load_cleaned_microdata(city_info, dir_path)
+	try:
+		df_micro.rename(columns={'DIR':'dir'},inplace=True)
+	except:
+		pass
+	df_micro[[micro_street_var,'dir']] = df_micro[[micro_street_var,'dir']].astype(str).replace('nan','')
 	df_micro[micro_street_var+'_old'] = df_micro[micro_street_var]
 
 	def get_dir(st):
@@ -548,17 +553,7 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 	## I feel like this could be simplified significantly
 
 	# Create dictionary of {street_var:list(DIRs)} and delete any that have combination of N/S and E/W
-	try:
-		df_micro.rename(columns={'DIR':'dir'},inplace=True)
-	except:
-		pass
-
-	def fix_str(x):
-		y = str(x)
-		return y.replace('nan','')
-
 	df_name_dir = df_micro[[micro_street_var,'dir']]
-	df_name_dir = df_name_dir.astype(str).replace('nan','')
 	df_name_dir.loc[:,('st')], df_name_dir.loc[:,('dir')], df_name_dir.loc[:,('name')], df_name_dir.loc[:,('type')] = zip(*df_name_dir.apply(lambda x: standardize_street(x[micro_street_var]), axis=1))
 	df_name_dir.loc[:,('st')] = (df_name_dir['name'] + ' ' + df_name_dir['type']).str.strip()
 	df_name_dir = df_name_dir.drop_duplicates(['dir','st'])
@@ -635,9 +630,9 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 	# File names
 
 	rand_post = str(random.randint(1,100001))
-	ed_shp = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+	ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess.shp'
 	temp = geo_path + "temp"+rand_post+".shp"
-	add_locator_contemp = geo_path + city_name + "_addloc"
+	add_locator_contemp = geo_path + city_name + "_addloc_" + str(decade)
 	resid_add_dbf = geo_path + city_name + "_" + str(decade) + "_Addresses_residual.dbf"
 	resid_add_csv = geo_path + city_name + "_" + str(decade) + "_Addresses_residual.csv"
 	address_fields_contemp="Street address; City city; State state"
@@ -646,7 +641,7 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 	resid_ed_intersect_shp = geo_path + city_name + "_" + str(decade) + "_resid_ed_intersect.shp"
 	inrighted_shp = geo_path + city_name + "_" + str(decade) + "_ResidPoints_inRightED.shp"
 	correct_ed_intersect_shp = geo_path + city_name + "_" + str(decade) + "_correct_ed_intersect.shp"
-	block_shp = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
+	ed_block_shp = geo_path + city_name + state_abbr + '_' + str(decade) '_ed_block_guess.shp'
 
 	# Obtain residuals
 	#arcpy.MakeFeatureLayer_management(points, "geocodelyr")
@@ -682,11 +677,16 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 
 	# Identify points in the correct ED
 	arcpy.MakeFeatureLayer_management(resid_ed_intersect_shp, "geocodelyr1")
-	arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", """ "%s" = "%s_1" """ % (ed_var, ed_var))
+	try:
+		sql_exp=""" 'ed' = 'ed_1' """
+		arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", "[ed]==[ed_1]")
+	except:
+		sql_exp=""" 'ed_guess' = 'ed' """
+		arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", sql_exp)
 	arcpy.CopyFeatures_management("geocodelyr1",inrighted_shp)
 
 	# Intersect points in the correct ED with block map
-	arcpy.Intersect_analysis([block_shp, inrighted_shp], correct_ed_intersect_shp)
+	arcpy.Intersect_analysis([ed_block_shp, inrighted_shp], correct_ed_intersect_shp)
 
 	# Get correct block number based on block map and geocoded in correct ED
 	df_correct_ed = load_shp(correct_ed_intersect_shp, hn_ranges)

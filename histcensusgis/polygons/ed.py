@@ -1779,7 +1779,7 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 
 	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)
 
-	ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess_map.shp'
+	ed_guess_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess.shp'
 	save_shp(df_ed_guess, ed_guess_shp)
 
 # Save information
@@ -1789,7 +1789,7 @@ def get_ed_guess_stats(city_info, paths, hn_ranges):
 	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 	# Load dbf data
-	ed_guess_file = geo_path + city_name + state_abbr + '_' + str(decade) + '_ED_guess_map.shp'
+	ed_guess_file = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess.shp'
 	df_ed_guess = load_shp(ed_guess_file, hn_ranges)
 	if decade == 1940:
 		# Get number of blocks in block description file

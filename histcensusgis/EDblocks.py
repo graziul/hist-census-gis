@@ -78,6 +78,103 @@ def get_block_map(city_info, paths):
 	else:
 		print("Cannot automatically assign Census block numbers for 1940 using current data sources")
 
+def combine_ed_block_maps(city_info, paths):
+
+	city_name, state_abbr, decade = city_info
+	r_path, dir_path = paths
+	geo_path = dir_path + '/GIS_edited/'
+	
+	#edit_shp_file = geo_path + "EmptyBlockToFillNumbers2.shp"
+	block_shp = geo_path + city_name + "_" + str(decade) + "_block_guess.shp"
+	ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess.shp'
+	ed_block_shp = geo_path + city_name + state_abbr + '_' + str(decade) '_ed_block_guess.shp'
+	
+	# Load block guess file and clean up
+	df_block_shp = load_shp(block_shp)
+	df_block_shp['pblk_id'] = df_block_shp['pblk_id'].astype(int)
+	#Replace spaces and "and" with "-"
+	df_block_shp['auto_bn'] = df_block_shp['auto_bn'].str.replace(' ','-')
+	df_block_shp['auto_bn'] = df_block_shp['auto_bn'].str.replace('and','-')
+	df_block_shp['auto_bn'] = df_block_shp['auto_bn'].replace('-+','-',regex=True)
+	df_block_shp['auto_bn'] = df_block_shp['auto_bn'].str.replace('None','')
+	df_block_shp['ed_alt'], df_block_shp['blk_guess'] = df_block_shp['auto_bn'].str.split('-',1).str
+	df_block_shp['blk_guess'] = df_block_shp['blk_guess'].astype(str).str.replace('nan','')
+
+	# Load ED guses file and clean up
+	df_ed_shp = load_shp(ed_shp)
+	#Turn ED=0 into blank 
+	df_ed_shp['ed_guess'] = df_ed_shp['ed_guess'].astype(str).replace('0','')
+
+	df = df_ed_shp.merge(df_block_shp.loc[:,df_block_shp.columns!='geometry'], on='pblk_id')
+
+	def generate_ed_block_guesses():
+		
+
+	df['am_bn'] = df.apply(lambda x: generate_ed_block_guesses(x[]), axis=1)
+
+	save_shp(df, ed_block_shp)
+
+	#Add ED to manual block numbers
+	df['block1'] = df['ed1'] + '-' + df['block']
+	df['block1'] = df['block1'].replace('^-|-$','',regex=True)
+	df.loc[df['block']=='','block1'] = ''
+	df.loc[df['ed']==0,'block1'] = ''
+
+	#Replace spaces and "and" with "-"
+	df['auto_bn'] = df['auto_bn'].str.replace(' ','-')
+	df['auto_bn'] = df['auto_bn'].str.replace('and','-')
+	df['auto_bn'] = df['auto_bn'].replace('-+','-',regex=True)
+
+	save_shp(df, ed_block_shp)
+	'''
+	###
+	### THIS CODE INVOLVED INCLUDING MANUAL BLOCK NUMBERING BUT IS NOT USED CURRENTLY
+	###
+
+	#Start with manual block numbers (some automatic block numbers have been fixed)
+	df['am_bn'] = df['block1']
+	#Add automatic block numbers where there is no manual block number
+	df.loc[df['D']==0,'am_bn'] = df['auto_bn1']
+
+	# Save as dbf via csv
+	csv_file = dir_path + "\\temp_for_dbf.csv"
+	df.to_csv(csv_file)
+	arcpy.TableToTable_conversion(csv_file,dir_path,"temp_for_shp.dbf")
+	os.remove(dbf_file)
+	os.remove(csv_file)
+	os.rename(dir_path+"\\temp_for_shp.dbf",dbf_file)
+	os.remove(dir_path+"\\temp_for_shp.dbf.xml")
+	os.remove(dir_path+"\\temp_for_shp.cpg")
+
+	#Select non-missing block numbers
+	arcpy.MakeFeatureLayer_management(temp_shp_file,"edit_lyr")
+	arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "am_bn" <> \'\' ')
+	arcpy.CopyFeatures_management("edit_lyr",block_shp)
+	arcpy.DeleteFeatures_management(temp_shp_file)
+
+	#Dissolve by "am_bn"
+	arcpy.Dissolve_management(in_features=block_shp, out_feature_class=temp_shp_file, dissolve_field=["am_bn","ed"], statistics_fields="", multi_part="MULTI_PART", unsplit_lines="DISSOLVE_LINES")
+	#Generate unique block ID
+	expression="!FID! + 1"
+	arcpy.AddField_management(temp_shp_file, "pblk_id", "LONG", 4, "", "","", "", "")
+	arcpy.CalculateField_management(temp_shp_file, "pblk_id", expression, "PYTHON_9.3")
+	arcpy.CopyFeatures_management(temp_shp_file, block_shp)
+	arcpy.DeleteFeatures_management(temp_shp_file)
+
+	#Select non-missing EDs
+	arcpy.CopyFeatures_management(edit_shp_file,temp_shp_file)
+	arcpy.MakeFeatureLayer_management(temp_shp_file,"edit_lyr")
+	arcpy.SelectLayerByAttribute_management("edit_lyr", "", ' "ed" <> 0 ')
+	arcpy.CopyFeatures_management("edit_lyr",ed_shp_file)
+	arcpy.DeleteFeatures_management(temp_shp_file)
+
+	#Dissolve by "ed"
+	arcpy.Dissolve_management(in_features=ed_shp_file, out_feature_class=temp_shp_file, dissolve_field=["ed"], statistics_fields="", multi_part="MULTI_PART", unsplit_lines="DISSOLVE_LINES")
+	arcpy.CopyFeatures_management(temp_shp_file,ed_shp_file)
+	arcpy.DeleteFeatures_management(temp_shp_file)
+	'''
+
+
 def geocode_city(city_info, paths):
 
 	city_name, state_abbr, decade = city_info
