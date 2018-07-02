@@ -756,7 +756,7 @@ def run_inter_analysis(city_name) :
 							print("something is up with intersection "+str(i))
 							assert (False == True)
 
-	# What are these initializations?
+	# initialize counters for the various categories of intersections
 	internal_cnt = 0
 	external_cnt = 0
 	nf_cnt = 0
@@ -767,7 +767,8 @@ def run_inter_analysis(city_name) :
 
 	ED_Intersect_DICT = {}
 
-	# What's this doing?
+	# take stock of the intersections based on their various flags
+	# record all "internal" ('i') intersections in ED_Intersect_DICT
 	for i,info in Intersect_Info_DICT.items() :
 		if(info[0] == 'e') :
 		   external_cnt = external_cnt+1
@@ -794,7 +795,8 @@ def run_inter_analysis(city_name) :
 	print("st_ed from map+morse not found in micro: "+str(nf_micro_cnt))
 	print("not enough address data to resolve ambiguity: "+str(na_cnt))
 
-	# What's this doing?
+	# Check streets from those intersections that are not found in morse or micro
+	# If streets are not found in ST_ED_DICT, add them to nf_list (not found)
 	nf_list = []
 	for i,info in Intersect_Info_DICT.items() :
 		if(info[0]=='nf') :
@@ -821,6 +823,7 @@ def run_inter_analysis(city_name) :
 		else :
 			Output_TXT.write(i+","+info[0]+"\n")
 
+# Run the entire intersections algorithm on the given city_info
 def ed_inter_algo(city_info, paths, grid_street_var):
 
 	city_name, state_abbr, decade = city_info
@@ -1466,6 +1469,7 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 
 		# HERE BEGINS CODE FOR MATCHING DESCRIPTION BLOCKS TO STGRID BLOCKS #
 
+# Run the entire descriptions algorithm on the given city_info
 def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME'):
 
 	city_name, state_abbr, decade = city_info
