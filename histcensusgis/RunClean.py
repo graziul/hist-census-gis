@@ -14,7 +14,10 @@ print(city_info, ed_map_flag)
 if batch:
 	batch_clean_microdata(int(decade))
 else:
-	clean_microdata(city_info=city_info, ed_map=ed_map_flag)
+	if city_info[:2] == ["All","All"] :
+		batch_clean_microdata(int(decade))
+	else :
+		clean_microdata(city_info=city_info, ed_map=ed_map_flag)
 
 def batch_clean_microdata(decade, sis_project=True, city_list_csv='CityExtractionList.csv', file_path='/home/s4-data/LatestCities'):
 
