@@ -42,7 +42,7 @@ def create_ed_st_dict(sm_st_ed_dict):
 	return sm_ed_st_dict
 
 # Get the city_state abbreviation for Steve Morse    
-def get_sm_web_abbr(decade):
+def get_sm_web_abbr(decade,sm_web_abbr_dict):
 
 	for i, city_state in city_state_iterator.iterrows():
 
@@ -235,7 +235,7 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1920,1930,1940]):
 		sm_web_abbr_dict[decade] = {}
 		for state_abbr in state_list:
 			sm_web_abbr_dict[decade][state_abbr] = {}
-		get_sm_web_abbr(decade)
+		get_sm_web_abbr(decade,sm_web_abbr_dict)
 	print("Saving Steve Morse web abbreviations")
 	pickle.dump(sm_web_abbr_dict,open(package_path + '/text/sm_web_abbr.pickle','wb'))
 
