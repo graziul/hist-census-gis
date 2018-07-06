@@ -20,7 +20,14 @@ def ignore_unicode(chars):
 # Create ED-street dictionary from street-ED dictionary 
 def create_ed_st_dict(sm_st_ed_dict):
 	sm_ed_st_dict = {}
-	for city_state in city_state_iterator:
+	for i, city_state in city_state_iterator.iterrows():
+
+		city_name = city_state[0]
+		state_abbr = city_state[1]
+
+		city_state = list(city_state)
+		city_state[0] = city_state[0].replace(' ','')
+		city_state = tuple(city_state)
 		sm_ed_st_dict[city_state] = {}
 		sm_st_ed_dict_nested = sm_st_ed_dict[city_state] 
 		#Flatten dictionary
