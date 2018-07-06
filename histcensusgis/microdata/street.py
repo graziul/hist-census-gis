@@ -37,7 +37,7 @@ from histcensusgis.s4utils.IOutils import *
 # Step 1: Load city
 #
 
-def load_city(city_info, file_path, sis_project):
+def load_city(city_info, file_path):
 
 	city, state, year = city_info
 	city = city.replace(' ','')
@@ -65,14 +65,6 @@ def load_city(city_info, file_path, sis_project):
 	num_records = len(df)
 	print('Loading data for %s took %s' % (city, load_time))
 
-	# Standardize variable names
-	#if sis_project:
-	#	df['street'] = df['street'].astype('str')
-	#	df = df.rename(columns = {'street' : 'street_raw'})
-	#	#df = df.rename(columns = {'hn' : 'hn_raw'})
-	#	df = df.rename(columns = {'enumdist' : 'ed'})
-	#	df['hn'] = pd.to_numeric(df['hn_raw'].str.replace(' ?1/2','.5'), 'coerce')
-	#else:
 	df = rename_variables(df, year)
 
 	# Remove duplicates
@@ -429,7 +421,7 @@ def try_to_find_dir(st, DIR, ed):
 
 # This is the higher level precleaning function (with SIS flag)
 
-def preclean_street(df, city_info, file_path, sis_project):
+def preclean_street(df, city_info, file_path):
 
 	city_name, state_abbr, decade = city_info 
 	city_info = [city_name.replace(' ',''), state_abbr, decade]
@@ -1070,7 +1062,7 @@ def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
 # Since SM dictionaries are for the 5 boroughs, the process must be done for each
 # This function is identical to the clean_microdata() process for other cities, but includes this loop and append
 
-def clean_nyc(df, city_info, file_path, sis_project):
+def clean_nyc(df, city_info, file_path):
 
 	boros = {50:'bronx', 470:'brooklyn', 610:'manhattan', 810:'queens', 850:'staten island'}
 	codes = df['county'].unique()
@@ -1088,7 +1080,7 @@ def clean_nyc(df, city_info, file_path, sis_project):
 		#
 
 		# Step 2a: Properly format street names and get Steve Morse street-ed information
-		boro_df, preclean_info = preclean_street(boro_df, city_info, file_path, sis_project)  
+		boro_df, preclean_info = preclean_street(boro_df, city_info, file_path)  
 		sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _, same_year  = preclean_info  
 
 		# Step 2b: Use formatted street names to get house number sequences
@@ -1154,17 +1146,12 @@ def clean_nyc(df, city_info, file_path, sis_project):
 	# Step 7: Save full dataset and generate dashboard information 
 	#
 
-	if sis_project:
-		file_name = city_name.upper() + '_' + state_abbr.upper() + '_' + str(decade) + '_clean'
-		outfile = file_path + '/CleanData/%s/%s.csv' % (str(decade), file_name)
-		df.to_csv(outfile)
-	else:
-		city_state = city_name.replace(' ','') + state_abbr
-		autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
-		if ~os.path.exists(autoclean_path):
-			os.makedirs(autoclean_path)
-		file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
-		df.to_csv(file_name_all)
+	city_state = city_name.replace(' ','') + state_abbr
+	autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
+	if ~os.path.exists(autoclean_path):
+		os.makedirs(autoclean_path)
+	file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
+	df.to_csv(file_name_all)
 
 	'''
 	#Generate dashbaord info

@@ -46,13 +46,9 @@ version = 7
 #
 # V1 - Original run
 
-def clean_microdata(city_info, sis_project, street_source='both', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
+def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
 
 	datestr = time.strftime("%Y_%m_%d")
-
-	# Let's be sure SIS project never tries to use spatial files
-	if sis_project:
-		ed_map = False
 
 	city_name, state_abbr, decade = city_info
 
@@ -78,7 +74,7 @@ def clean_microdata(city_info, sis_project, street_source='both', ed_map=False, 
 	#
 
 	try:
-		df, load_time = load_city(city_info, file_path, sis_project)
+		df, load_time = load_city(city_info, file_path)
 	except:
 		print("Raw data not found for %s, %s (may not have existed)" % (city_name, state_abbr))
 		return
@@ -87,7 +83,7 @@ def clean_microdata(city_info, sis_project, street_source='both', ed_map=False, 
 	# Process is identical to below, but must be applied to all boroughs separately
 
 	if city_name == 'new york':
-		clean_nyc(df, city_info, file_path, sis_project)
+		clean_nyc(df, city_info, file_path)
 		return 
 
 	#
@@ -95,7 +91,7 @@ def clean_microdata(city_info, sis_project, street_source='both', ed_map=False, 
 	#
 
 	# Step 2a: Properly format street names and get Steve Morse street-ed information
-	df, preclean_info = preclean_street(df, city_info, file_path, sis_project)  
+	df, preclean_info = preclean_street(df, city_info, file_path)  
 	sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _, same_year  = preclean_info  
 
 	street_var = 'street_precleaned'
