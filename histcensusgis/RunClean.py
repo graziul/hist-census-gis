@@ -19,7 +19,7 @@ else:
 	else :
 		clean_microdata(city_info=city_info, ed_map=ed_map_flag)
 
-def batch_clean_microdata(decade, sis_project=True, city_list_csv='CityExtractionList.csv', file_path='/home/s4-data/LatestCities'):
+def batch_clean_microdata(decade, city_list_csv='CityExtractionList.csv', file_path='/home/s4-data/LatestCities'):
 
 	# Get city list
 	city_info_file = file_path + '/' + city_list_csv 
@@ -46,7 +46,7 @@ def batch_clean_microdata(decade, sis_project=True, city_list_csv='CityExtractio
 	# Add arguments as desired
 	city_info_list_w_args=[]
 	for i in city_info_list:
-		city_info_list_w_args.append([i, sis_project])
+		city_info_list_w_args.append([i])
 
 	# Check if all raw files exist
 	missing_raw = []
@@ -70,18 +70,18 @@ def batch_clean_microdata(decade, sis_project=True, city_list_csv='CityExtractio
 		#raise ValueError
 	#for i in city_info_list_w_args:
 	#	clean_microdata(i[0], i[1])
-	#stuff = itertools.izip(city_info_list, itertools.repeat(sis_project))
-	#func = partial(clean_microdata, city_info, sis_project)
+	#stuff = itertools.izip(city_info_list)
+	#func = partial(clean_microdata, city_info)
 	pool = Pool(processes=16, maxtasksperchild=1)
 	temp = pool.map(clean_microdata_w_args, city_info_list)
 	pool.close()
 
 def clean_microdata_w_args(city_info):
-	clean_microdata(city_info=city_info, sis_project=True)
+	clean_microdata(city_info=city_info)
 
 	#for i in city_info_list_w_args:
 	#	clean_microdata(i[0],i[1])
 	# Farm out cleaning across multiple instances of Python
-	#stuff = itertools.izip(city_info_list, itertools.repeat(sis_project), itertools.repeat(street_source), itertools.repeat(ed_map),itertools.repeat(debug), itertools.repeat(file_path))
+	#stuff = itertools.izip(city_info_list, itertools.repeat(street_source), itertools.repeat(ed_map),itertools.repeat(debug), itertools.repeat(file_path))
 	#to_do_list = list(stuff)
 
