@@ -641,7 +641,7 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 	resid_ed_intersect_shp = geo_path + city_name + "_" + str(decade) + "_resid_ed_intersect.shp"
 	inrighted_shp = geo_path + city_name + "_" + str(decade) + "_ResidPoints_inRightED.shp"
 	correct_ed_intersect_shp = geo_path + city_name + "_" + str(decade) + "_correct_ed_intersect.shp"
-	ed_block_shp = geo_path + city_name + state_abbr + '_' + str(decade) '_ed_block_guess.shp'
+	ed_block_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_block_guess.shp'
 
 	# Obtain residuals
 	#arcpy.MakeFeatureLayer_management(points, "geocodelyr")
