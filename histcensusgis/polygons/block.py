@@ -69,6 +69,10 @@ def create_pblks(city_info, geo_path):
 	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
 
+	if not os.path.isfile(split_grid):
+                print("Processing raw stgrid for %s" %decade)
+                _ = process_raw_grid(city_info, geo_path)
+
 	#Create Physical Blocks# #####
 	arcpy.FeatureToPolygon_management(split_grid, pblk_shp)
 	#Add a Physical Block ID
