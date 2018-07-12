@@ -462,6 +462,7 @@ def preclean_street(df, city_info, file_path):
 				sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse([city_name, state_abbr, year_try])
 			except KeyError:
 				sm_all_streets = []
+				break
 		# delete the ED dictionaries, they are wrong
 		del sm_st_ed_dict_nested
 		sm_ed_st_dict = None
