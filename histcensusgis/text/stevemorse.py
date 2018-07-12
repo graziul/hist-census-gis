@@ -66,6 +66,7 @@ def get_sm_web_abbr(decade,sm_web_abbr_dict):
 		#Change the parsing strings if necessary (CG: Doesn't seem necessary yet)
 		start_num = "value=" 
 		end_num = ">"
+		alt_end_num = " selected>" # AFAIK, this applies only to DC '40
 		end_name = "</option>"
 
 		for line in sourcetext:
@@ -79,7 +80,10 @@ def get_sm_web_abbr(decade,sm_web_abbr_dict):
 				else:
 					city = line[line.find(end_num)+1:line.find("(")].rstrip().replace('.','')
 					if city_name in city:
-						city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
+						if alt_end_num in line :
+							city_abbr = line[line.find(start_num) + 7 : line.find(alt_end_num)-1].lower()
+						else :
+							city_abbr = line[line.find(start_num) + 7 : line.find(end_num)-1].lower()
 						city_abbr = re.sub(r'\$[0-9]|\*[0-9]','',city_abbr)
 						sm_web_abbr = city_abbr + state_abbr
 						if sm_web_abbr not in sm_web_abbr_dict[decade][state_abbr][city_name.replace(' ','')]:
@@ -88,22 +92,15 @@ def get_sm_web_abbr(decade,sm_web_abbr_dict):
 
 # Get Steve Morse street-ed information for a single decade
 def get_sm_st_ed(decade, sm_st_ed_dict, package_path):
-
 	sm_web_abbr_dict = pickle.load(open(package_path + '/text/sm_web_abbr.pickle','rb'))
-
 	no_data = 0
-
 	for i, city_state in city_state_iterator.iterrows():
-
 		city_name = city_state[0]
 		state_abbr = city_state[1]
-
 		city_state = list(city_state)
 		city_state[0] = city_state[0].replace(' ','')
 		city_state = tuple(city_state)
-
 		sm_st_ed_dict_city = {}
-
 		try:
 			sm_web_abbr = sm_web_abbr_dict[decade][state_abbr][city_name.replace(' ','')]
 			if city_name == 'Springfield' and state_abbr == 'MA':
@@ -113,20 +110,15 @@ def get_sm_st_ed(decade, sm_st_ed_dict, package_path):
 				continue
 		except:
 			continue
-
 		for i in sm_web_abbr:
-
 			url = "http://www.stevemorse.org/census/%scities/%s.htm" % (str(decade),i.lower()) 
-
 			url_handle = urllib.urlopen(url)
 			sourcetext = url_handle.readlines()
 			url_handle.close()
-
 			#Change the parsing strings if necessary (CG: Doesn't seem necessary yet)
 			start_num = "value=" 
 			end_num = ">"
 			end_name = "</option>"
-
 			for line in sourcetext:
 				#If line has "value=" and "</option>" in it, do stuff
 				if start_num in line and end_name in line:
@@ -220,10 +212,10 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1920,1930,1940]):
 	city_info_df = city_info_df[city_info_df['Status']>0]
 	city_info_df.loc[:,'city_name'], city_info_df.loc[:,'state_abbr'] = zip(*city_info_df['City'].str.split(','))
 	city_info_df = city_info_df[['city_name','state_abbr']]
-	city_info_df['city_name'] = city_info_df['city_name'].str.replace('Saint','St').str.replace('.','').str.lower()
+	city_info_df['city_name'] = city_info_df['city_name'].str.replace('Saint','St').str.replace('.','')
 	city_info_df['state_abbr'] = city_info_df['state_abbr'].str.replace(' ','').str.lower()
 	# Add New York boroughs
-	new_york = [{'city_name':'Richmond','state_abbr':'ny'}, 
+	new_york = [{'city_name':'Staten Island','state_abbr':'ny'}, 
 		{'city_name':'Queens','state_abbr':'ny'}, 
 		{'city_name':'Manhattan','state_abbr':'ny'}, 
 		{'city_name':'Brooklyn','state_abbr':'ny'},
