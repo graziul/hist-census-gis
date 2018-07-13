@@ -1372,7 +1372,7 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 				print(line)
 				#assert False
 				continue
-
+		# Format edited ED Descriptions
 		prev_line_num = ""
 		prev_descript = ""
 		for ind,line in enumerate(ed_lines) :
@@ -1440,7 +1440,9 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 						desc = re.sub(re.escape(blk_num.group(0)),"",blk_line)
 						desc = desc.replace('\n','')
 						desc_list = desc.split(', ')
-						has_dir = re.search("^.\.[\s]?.\.?$",desc_list[-1])
+						# Check for uni- or multi-directional abbreviations at end of each descript line
+						# if it exists, prepend to each street in descript line
+						has_dir = re.search("^.\.[\s]?.?\.?$",desc_list[-1])
 						if has_dir:
 							dir_to_prepend = has_dir.group(0)
 							desc = ', '.join([standardize_street_40_desc(dir_to_prepend+' '+i) for i in desc_list[:-1]]) #put direction in front of all streets
