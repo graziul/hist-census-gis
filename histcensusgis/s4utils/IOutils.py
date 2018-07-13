@@ -10,6 +10,22 @@ import csv
 import xlrd
 import os
 
+def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program Files/R/R-3.4.2/bin/Rscript"):
+
+	city_name, state_abbr, decade = city_info 
+	city_spaces = city_name
+	city_name = city_name.replace(' ','')
+
+	city_state = city_name + state_abbr
+	if city_state in ['KansasCityKS','KansasCityKS','RichmondVA','RichmondNY']:
+		dir_path = data_path + city_state
+	else:
+		dir_path = data_path + city_name #TO DO: Directories need to be city_name+state_abbr
+
+	paths = [r_path, dir_path]
+
+	return paths
+
 # Function to load large Stata files
 def load_large_dta(fname):
 
