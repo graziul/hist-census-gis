@@ -947,17 +947,16 @@ def check_for_desc_files(city_info, paths, grid_street_var):
 	_, dir_path = paths
 	geo_path = dir_path + '/GIS_edited/'
 
+	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
+	if not os.path.isfile(pblk_shp):
+		print("Creating Pblk file for %s" %decade)
+		create_pblks(city_info, geo_path)
+	
 	# Ensure street grid file exists 
 	stgrid_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2.shp'
 	if not os.path.isfile(stgrid_shp):
 		print("Missing stgrid file")
 		raise ValueError
-
-	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
-	if not os.path.isfile(pblk_shp):
-		print("Creating Pblk file for %s" %decade)
-		create_pblks(city_info, geo_path)
-
 
 	if decade == 1940:
 
