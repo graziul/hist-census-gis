@@ -73,7 +73,7 @@ def combine_ed_block_maps(city_info, paths):
 	#edit_shp_file = geo_path + "EmptyBlockToFillNumbers2.shp"
 	block_shp = geo_path + city_name + "_" + str(decade) + "_block_guess.shp"
 	ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_guess.shp'
-	ed_block_shp = geo_path + city_name + state_abbr + '_' + str(decade) '_ed_block_guess.shp'
+	ed_block_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_block_guess.shp'
 	
 	# Load block guess file and clean up
 	df_block_shp = load_shp(block_shp)
