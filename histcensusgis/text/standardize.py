@@ -401,7 +401,7 @@ def standardize_street_40_desc(st):
 	st = re.sub('\\\\','',st)
 	st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
 	#consider extended a diff stname#
-	#st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
+	st = re.sub(r" [Ee][Xx][Tt][Ee]?[Nn]?[Dd]?[Ee]?[Dd]?$","",st)
 
 	#Check if st is empty or blank and return empty to [st,DIR,NAME,TYPE]
 	if st == '' or st == ' ':
