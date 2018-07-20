@@ -54,7 +54,7 @@ def ed_geocode_algo(city_info, paths):
 		print("OK!\n")
 
 # Draw ED maps (descriptions, intersections)
-def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
+def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=None) :
 
 	city_name, state_abbr, decade = city_info
 
@@ -100,7 +100,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 		# We use a very different method for 1940 
 		elif decade == 1940:
 
-			def find_blk_by_stnames(stname_list,use_fuzz=False) :
+			def find_blk_by_stnames(stname_list,use_fuzz=False,wildcard=None) :
 				try :
 					return fullname_blk_dict[tuple(stname_list)]
 				except KeyError :
@@ -114,17 +114,21 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 							r_sum = 0
 							#keep track of which SM streets have been matched???
 							#match_list = copy.deepcopy(stname_list)
-							r_avg = blk_fuzz_ratio(blk_st_list,stname_list)
+							r_avg = blk_fuzz_ratio(blk_st_list,stname_list,wildcard)
 							if r_avg > best_r_avg :
 								best_r_avg = r_avg
 								best_blk = blk
 						if best_r_avg >= 80 :
 							return best_blk
 
-			def blk_fuzz_ratio(blk_st_list,stname_list) :
+			def blk_fuzz_ratio(blk_st_list,stname_list,wildcard=None) :
 				r_sum = 0
-				for blk_st in blk_st_list :
+				if wildcard and wildcard in stname_list:
+					stname_list.remove(wildcard)
+					stname_list.extend([x + " "+wildcard for x in stname_list])
+				for blk_st in blk_st_list :                                
 				#find best match for each blk_st
+					
 					best = ''
 					best_r = 0
 					for stname in stname_list :
@@ -134,6 +138,8 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 							best = stname
 					r_sum += best_r
 				r_avg = r_sum / max(len(blk_st_list),len(stname_list))
+				if wildcard :
+				    r_avg = r_sum / max(len(blk_st_list),len(stname_list)/2)
 				return r_avg
 
 			print("Matching block descriptions to physical blocks based on street grid...")
@@ -168,7 +174,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 				join_operation="JOIN_ONE_TO_ONE", 
 				join_type="KEEP_ALL",
 				field_mapping="""pblk_id "pblk_id" true true false 10 Long 0 10 ,First,#,pblk_lyr,pblk_id,-1,-1;
-				grid_id_s "grid_id_s" true true false 750 Text 0 0 ,Join,#,st_lyr,grid_id_s,-1,-1""", 
+				grid_id_s "grid_id_s" true true false 1500 Text 0 0 ,Join,#,st_lyr,grid_id_s,-1,-1""", 
 				match_option="SHARE_A_LINE_SEGMENT_WITH")
 
 			with open(geo_path + 'ed_blk_desc.txt','r') as blk_desc_file :
@@ -240,7 +246,10 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var) :
 			#find fuzzy block matches
 			print("Finding fuzzy block matches...")
 			for ed_blk, stname_list in fuzz_blk_desc_dict.items() :
-				pblk = find_blk_by_stnames(stname_list,use_fuzz=True)
+				if wildcard and wildcard in stname_list :
+				    pblk = find_blk_by_stnames(stname_list,use_fuzz=True,wildcard=wildcard)
+				else :
+				    pblk = find_blk_by_stnames(stname_list,use_fuzz=True)
 				if pblk :
 					if pblk in pblk_ed_blk_dict :
 						prev_r = blk_fuzz_ratio(blk_fullname_dict[pblk],blk_desc_dict[pblk_ed_blk_dict[pblk]])
@@ -1199,7 +1208,7 @@ def find_descript_segments(descript,intersect,start_ind,start_streets,fuzzy = Fa
 
 	return finished,str(filter(None,predecessor_dict.values())).replace("'","").replace("[","(").replace("]",")")+" "+str(vertex)+" "+next_name
 
-def run_desc_analysis(city_info, paths, grid_street_var) :
+def run_desc_analysis(city_info, paths, grid_street_var, wildcard=None) :
 
 	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
@@ -1459,7 +1468,10 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 				if st.encode('ascii',errors='ignore') != st :
 					diff = True
 				st = preserve_chars(st)
-				st_add = standardize_street_40_desc(st)
+				if not st==wildcard :
+				    st_add = standardize_street_40_desc(st)
+				else :
+				    st_add = st
 				#if use_fuzz :
 				#    st_add = fuzzy_match_list(st_add)
 				if diff:
@@ -1478,7 +1490,7 @@ def run_desc_analysis(city_info, paths, grid_street_var) :
 		# HERE BEGINS CODE FOR MATCHING DESCRIPTION BLOCKS TO STGRID BLOCKS #
 
 # Run the entire descriptions algorithm on the given city_info
-def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME'):
+def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME',wildcard=None):
 
 	city_name, state_abbr, decade = city_info
 	city_spaces = city_name
@@ -1493,7 +1505,7 @@ def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME'):
 
 	# Run descriptions algorithm
 	print("Processing %s (Descriptions algorithm)" % (city_name))
-	run_desc_analysis(city_info, paths, grid_street_var)
+	run_desc_analysis(city_info, paths, grid_street_var,wildcard)
 
 	# Draw the ED map based on descriptions algorithm
 	print("Creating ED Map for %s (Descriptions algorithm)" % (city_name))
@@ -1501,7 +1513,8 @@ def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME'):
 		paths=paths, 
 		new_var_name="ED_desc", 
 		is_desc=True, 
-		grid_street_var=grid_street_var)
+		grid_street_var=grid_street_var,
+                wildcard=wildcard)
 
 #
 # Misc ED functions
@@ -1933,5 +1946,4 @@ def run_ed_guess(decade=1940, grid_street_var="FULLNAME"):
 	df_to_write.to_csv('S:/Users/Chris/ed_guess_info'+str(decade)+'_'+datestr+'.csv')
 
 	num_finished = len(df_to_write)
-
 	print("%s of %s cities processed for %s" % (str(num_finished), str(len(city_info_list)), str(decade)))
