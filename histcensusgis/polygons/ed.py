@@ -162,7 +162,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 			arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state+"_"+str(decade)+"_stgrid_edit_Uns2"), "st_lyr")
 			arcpy.MakeFeatureLayer_management(os.path.join(arcpy.env.workspace,city_state[:-2] + "_"+str(decade)+"_Pblk"), "pblk_lyr")
 
-			arcpy.AddField_management ('st_lyr', 'grid_id_s', "TEXT", 750)
+			arcpy.AddField_management ('st_lyr', 'grid_id_s', "TEXT", 1500)
 			arcpy.CalculateField_management ('st_lyr', 'grid_id_s', 'str(!'+grid_id_var+'!)+","', 
 				expression_type="PYTHON_9.3")
 
