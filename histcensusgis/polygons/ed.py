@@ -142,7 +142,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 				    r_avg = r_sum / max(len(blk_st_list),len(stname_list)/2)
 				return r_avg
 
-			print("Matching block descriptions to physical blocks based on street grid...")
+			print("Converting shape files to GDB and exporting attribute tables...")
 
 			#spatial join target=pblk file, join=Uns2, share_a_LINE_SEGMENT, join the grid_ids of all street segments for each block
 			#format the joined grid ID field so it is like: (1047,1048,1081,168,197,218,219)
@@ -184,7 +184,8 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 				blk_desc[ind] = line.strip()    
 
 			blk_desc_dict = {} # lookup SM ed_blk identifier -> SM description of block
-			blk_gridID_dict = {} # lookup pblk_id -> string of grid_ids of streets comprising boundary of block
+			blk_gridID_dict = {} # lookup pblk_id -> list of grid_ids of streets comprising boundary of block
+			gridID_fullname_dict = {} # lookup grid_id of st segment -> fullname of st segment
 			blk_fullname_dict = {} # lookup pblk_id -> list of fullnames of streets comprising boundary of block
 			fullname_blk_dict = {} # lookup alphabetical, unique tuple of streets comprising boundary of block -> pblk_id of block
 			pblk_ed_blk_dict = {} # lookup pblk_id -> SM ed_blk identifier
@@ -203,6 +204,8 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 			def foo_format(s) :
 				return '('+s[:-1]+')'
 
+			
+			'''
 			with arcpy.da.SearchCursor(join_file,['pblk_id',grid_id_str_var]) as b_cursor :
 				for b_row in b_cursor :
 					blk = b_row[0]
@@ -227,6 +230,49 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 						stname_list = list(np.unique(stname_list))
 						blk_fullname_dict[blk] = stname_list
 						fullname_blk_dict[tuple(stname_list)] = blk
+						'''
+			arcpy.ExportXYv_stats(Input_Feature_Class=join_file,
+					      Value_Field="pblk_id;"+grid_id_str_var,
+					      Delimiter="COMMA",
+					      Output_ASCII_File = intermed_path + city_name + "_pblks.txt",
+					      Add_Field_Names_to_Output="ADD_FIELD_NAMES")
+
+			arcpy.ExportXYv_stats(Input_Feature_Class="st_lyr",
+					      Value_Field=grid_id_var+";"+grid_street_var,
+					      Delimiter="COMMA",
+					      Output_ASCII_File = intermed_path + city_name + "_stsegments.txt",
+					      Add_Field_Names_to_Output="ADD_FIELD_NAMES")
+                        print("Matching block descriptions to physical blocks based on street grid...")
+			with open(intermed_path + city_name + "_pblks.txt") as pblk_txt :
+				for blk_line in list(pblk_txt)[1:] :
+					blk_line = blk_line.strip()
+					# ignore field names, coordinate values, and trailing comma
+					try :
+						assert(blk_line[-1] == ',')
+					except :
+						print "nooooooooooooo"+blk_line
+					blk_line = blk_line[:-1].split(',')[2:]
+					blk = blk_line[0]
+					blk_gridID_dict[blk] = blk_line[1:]
+
+			with open(intermed_path + city_name + "_stsegments.txt") as stseg_txt :
+				for st_line in list(stseg_txt)[1:] :
+					st_line = st_line.strip()
+					# ignore field names, coordinate values
+					st_line = st_line.split(',')[2:]
+					grid_id = st_line[0]
+					gridID_fullname_dict[grid_id] = st_line[1].strip()
+
+			for blk,gridID_list in blk_gridID_dict.items() :
+				stname_list = []
+				for grid_id in gridID_list :
+					stname_list.append(gridID_fullname_dict[grid_id])
+				if city_state == "OklahomaCityOK" :
+					# remove multi-directionals in OC
+					stname_list = [re.sub("^[A-Z][A-Z] ","",x) for x in stname_list]
+				stname_list = list(np.unique(stname_list))
+				blk_fullname_dict[blk] = stname_list
+				fullname_blk_dict[tuple(stname_list)] = blk
 
 			#dicts to keep track of which blocks need to be fuzzy-matched
 			fuzz_blk_fullname_dict = copy.deepcopy(blk_fullname_dict)
@@ -240,7 +286,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 					try :
 						fuzz_blk_fullname_dict.pop(pblk)
 					except KeyError :
-						print("Key "+str(pblk)+" already removed before matching "+str(stname_list))
+						print("pblk "+str(pblk)+" has >1 exact matches: "+str(stname_list)+" & "+str(blk_desc_dict[pblk_ed_blk_dict[pblk]]))
 					fuzz_blk_desc_dict.pop(ed_blk)
 
 			#find fuzzy block matches
@@ -261,13 +307,15 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 						pblk_ed_blk_dict[pblk] = ed_blk
 
 			#resolve duplicate block matches
+			print pblk_ed_blk_dict.items()[:10]
+			print len(pblk_ed_blk_dict)
 			print("Removing duplicate block matches...")
 			arcpy.AddField_management(join_file, "ed_desc", "TEXT", "", "", 20)
 			arcpy.AddField_management(join_file, "cblk_id", "TEXT", "", "", 20)
 			with arcpy.da.UpdateCursor(join_file,['pblk_id','ed_desc','cblk_id']) as b_cursor :
 				for row in b_cursor :
 					try :
-						ed_blk = pblk_ed_blk_dict[row[0]]
+						ed_blk = pblk_ed_blk_dict[str(row[0])]
 						row[1] = ed_blk.split('_')[0]
 						row[2] = ed_blk.split('_')[1]
 						b_cursor.updateRow(row)
