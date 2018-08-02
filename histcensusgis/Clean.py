@@ -165,7 +165,7 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 
 	print("%s %s, %s complete\n" % (decade, city_name, state_abbr))
 
-	sys.stdout = original
+	sys.stdout = sys.__stdout__
 	fsock.close()
 
 	'''
