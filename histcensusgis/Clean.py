@@ -82,7 +82,7 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 	# Side step: If processing NYC all at once, run a separate process
 	# Process is identical to below, but must be applied to all boroughs separately
 
-	if city_name == 'new york':
+	if city_name == 'NewYork' | city_name == 'new york':
 		clean_nyc(df, city_info, file_path)
 		return 
 
