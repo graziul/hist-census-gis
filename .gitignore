@@ -31,3 +31,4 @@ microclean/STstandardize.pyc
 *.pyc
 *.pyc
 microclean/SetPriority.pyc
+histcensusgis/s4utils/.DS_Store
