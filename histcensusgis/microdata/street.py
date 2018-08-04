@@ -124,6 +124,8 @@ def rename_variables(df, decade) :
 		df['ed'] = df['ed'].str.lstrip('0')
 	df['ed'] = df['ed'].apply(lambda x: remove_dash(x))
 	df['hn'], df['hn_flag'] = zip(*df['hn_raw'].map(standardize_hn))
+	df['hn'] = df['hn'].str.replace('Inf', '')
+	df['hn'] = df['hn'].str.replace('1e', '')
 	df['hn'] = df['hn'].apply(make_int)
 	return df
 

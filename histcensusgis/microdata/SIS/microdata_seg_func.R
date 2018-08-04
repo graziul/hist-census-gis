@@ -9,7 +9,6 @@
 ### see notes for formatting before running function
 
 library(data.table)
-#library(tidyverse)
 library(dplyr)
 library(dtplyr)
 library(randtests)
@@ -50,26 +49,26 @@ pstar <- function(rows, unit){
 
 
 ### Must feed in data at desired level of analysis (e.g. household, dwelling)
-### rename order var to serial if not final IPUMS version
+### rename order var to splithid if not final IPUMS version
 sis <- function(rows){
   test <- rows %>% 
     filter(sisrace < 3) %>% 
-    arrange(serial) %>% 
+    arrange(splithid) %>% 
     .[["sisrace"]] %>% 
     runs.test("two.sided",threshold=1.1)
   round(1-((test$runs - 2) / (test$mu - 2)), 3)
 }
 
 ### Must feed in data at desired level of analysis (e.g. household, dwelling)
-### rename order var to serial if not final IPUMS version
+### rename order var to splithid if not final IPUMS version
 nbi <- function(rows){
   units <- rows %>% 
     #filter(sisrace < 3) %>% 
     mutate(b = if_else(sisrace == 2, 1, 0),
            w = if_else(sisrace == 1, 1, 0)) %>%
-    arrange(serial)
+    arrange(splithid)
   
-  if(sum(units$b > 0)){
+  if(sum(units$b, na.rm = T) > 0){
     w_neighs <- embed(units$w, 3)[,-2]
     units$w_neigh <- 0
     units$w_neigh[-c(1,nrow(units))] <- apply(w_neighs, 1, max)
