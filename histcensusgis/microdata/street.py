@@ -909,8 +909,7 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			street_var=street_var, 
 			all_streets=grid_1940_all_streets, 
 			ed_st_dict=grid_1940_ed_st_dict, 
-			map_type='1940', 
-			same_year=same_year)
+			map_type='1940')
 
 		#Get Contemporary grid fuzzy matches
 		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city_info=city_info, 
@@ -921,8 +920,7 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			all_streets=grid_Contemp_all_streets, 
 			ed_st_dict=grid_Contemp_ed_st_dict, 
 			map_type='Contemp', 
-			resid=resid, 
-			same_year=same_year)
+			resid=resid)
 
 		#Get Chicago group 1930 grid fuzzy matches
 		'''
@@ -948,7 +946,6 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
 			map_type='sm', 
-			same_year=same_year, 
 			resid=resid)
 
 		fuzzy_info = fuzzy_info + fuzzy_info_sm 
@@ -959,8 +956,7 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			street_var=street_var, 
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
-			map_type='sm', 
-			same_year=same_year)
+			map_type='sm')
 		fuzzy_info = fuzzy_info_sm
 
 	return df, fuzzy_info
@@ -1109,7 +1105,7 @@ def clean_nyc(df, city_info, file_path):
 		#
 
 		# Step 4a: Search for fuzzy matches
-		boro_df, fuzzy_info = find_fuzzy_matches(boro_df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map = False, same_year = same_year)
+		boro_df, fuzzy_info = find_fuzzy_matches(boro_df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map = False)
 		street_var = 'street_post_fuzzy'
 		boro_df[street_var] = boro_df[preclean_var]
 		boro_df.loc[boro_df['current_match_bool'],street_var] = boro_df['current_match']

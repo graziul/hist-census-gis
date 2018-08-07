@@ -124,8 +124,7 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 		sm_all_streets=sm_all_streets, 
 		sm_ed_st_dict=sm_ed_st_dict, 
 		file_path=file_path, 
-		ed_map=ed_map, 
-		same_year=same_year)
+		ed_map=ed_map)
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df[preclean_var]
 	df.loc[df['current_match_bool'],street_var] = df['current_match']

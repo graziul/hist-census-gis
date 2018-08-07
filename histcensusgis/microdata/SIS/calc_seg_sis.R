@@ -15,6 +15,18 @@ library(stringr)
 library(tibble)
 
 
+# Planned changes for V4:
+# Get both full race pop counts
+# Drop black live-in servants (after Lisa's STATA code, is that saved in files already?)
+# calculate adjusted black population
+# calculate all indices with live-in cases removed
+# calculate eta^2 transformations with adjusted blackpop
+# Finally, drop eta transformation when combining results
+# re-write this with doParallel for server
+
+
+
+
 # "method" is currently not part of function
 # dwelling and dwgroup interpolation is not ready yet
 # 8/3/2018
