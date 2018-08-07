@@ -925,6 +925,7 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			same_year=same_year)
 
 		#Get Chicago group 1930 grid fuzzy matches
+		'''
 		if city_name in ['Boston', 'Cincinnatti','Philadelphia']:
 			grid_1930_all_streets, grid_1930_ed_st_dict = get_stgrid_with_EDs(city_info=city_info, 
 				map_type='Chicago', 
@@ -938,7 +939,8 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 				same_year=same_year)
 			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid + fuzzy_info_1930_grid
 		else:
-			fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid 
+		'''
+		fuzzy_info = fuzzy_info_1940_grid + fuzzy_info_Contemp_grid 
 
 		# Get Steve Morse fuzzy matches
 		df, fuzzy_info_sm, resid = find_fuzzy_matches_module(df=df, 
