@@ -27,28 +27,25 @@ library(tibble)
 
 
 
-# "method" is currently not part of function
+# method argument can be "full", "nosrv", "nosrvblnk"
 # dwelling and dwgroup interpolation is not ready yet
 # 8/3/2018
 
-calc_seg_sis <- function(file_name, year){
+calc_seg_sis <- function(file_name, year, method){
   df <- paste0("/home/s4-data/LatestCities/SIS/FinalData/", year, "/", file_name) %>% 
-    read_dta() %>% 
-    filter(street_final != "" | is.na(hn) == F)
-  
+    read_dta()
   
   # remove cases to keep population consistent across measures
   
-  #if(method == "no_blanks"){
-  #  df <- filter(df, street_final != "" & is.na(hn) == F)
-  #}
+  if(method == "nosrv"){
+    df <- filter(df, black_n_wh == 0)
+  }
   
-  #if(method == "ancestry" & year == 1900){
-  #  df <- filter(df, is.na(dwell_ancestry) == F) %>% 
-  #    mutate(page_num = as.numeric(str_replace_all(anc_page_num, "[A-Z]", "")),
-  #           page_letter = str_replace_all(anc_page_num, "[0-9]", ""),
-  #           dwell_ancestry = paste(ed, street_fixed, dwell_ancestry, sep = "_"))
-  #}
+  if(method == "nosrvblnk"){
+    df <- filter(df, black_n_wh == 0 & 
+                   street_final != "" & 
+                   is.na(hn) == F)
+  }
   
   year <- as.numeric(year)
   
@@ -126,6 +123,6 @@ calc_seg_sis <- function(file_name, year){
   nis <- filter(df, head == 1) %>% nbi()
   
   # return a df of results with one row
-  tibble(city, state, year, totalpop, blackpop, pctblack, D_ed, D_ed_st, D_hh,
+  tibble(city, state, year, method, totalpop, blackpop, pctblack, D_ed, D_ed_st, D_hh,
          p_ed, p_ed_st, p_hh, sis, nis)
 }
