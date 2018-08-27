@@ -10,6 +10,9 @@ import re
 
 # Standardize street (microdata/grid)
 def standardize_street(st):
+
+	#TODO: Deal with multiple TYPES (e.g. "3rd Pl/St")
+	
 	runAgain = False
 	#Special case: More characters after \n\r - solution is to split on \n and take what's before
 	st = st.split('\n')[0]
@@ -23,6 +26,7 @@ def standardize_street(st):
 	st = st.strip()
 	st = re.sub('\\\\','',st)
 	st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
+	st = st.replace('(','').replace(')','')
 	#consider extended a diff stname#
 	#st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
 
@@ -178,13 +182,13 @@ def standardize_street(st):
 			NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
 			NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
 			NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
-			NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
+			NAME = re.sub("^[Ff]if[th]+een(th)?","15th",NAME)
 			NAME = re.sub("^[Ss]ixt[h]?een(th)?","16th",NAME)
 			NAME = re.sub("^[Ss]event[h]?een(th)?","17th",NAME)
 			NAME = re.sub("^[eE]ighteen(th)?","18th",NAME)
 			NAME = re.sub("^[Nn]inet[h]?e+n(th)?","19th",NAME)
-			NAME = re.sub("^[Tt]went[iy]eth","20th",NAME)
-			NAME = re.sub("^[Tt]hirt[iy]eth","30th",NAME)
+			NAME = re.sub("^[Tt]h?went[iy]eth","20th",NAME)
+			NAME = re.sub("^[Tt]hirt[iy]e?th","30th",NAME)
 			NAME = re.sub("^[Ff]o[u]?rt[iy]eth","40th",NAME)
 			NAME = re.sub("^[Ff]ift[iy]eth", "50th",NAME)
 			NAME = re.sub("^[Ss]ixt[iy]eth", "60th",NAME)
@@ -205,7 +209,7 @@ def standardize_street(st):
 			if re.search("(^|[0-9]+.*)([Ss]econd|[Tt]wo)$",NAME) : NAME = re.sub("([Ss]econd|[Tt]wo)$","2nd",NAME)
 			if re.search("(^|[0-9]+.*)([Tt]hird|[Tt]hree)$",NAME) : NAME = re.sub("([Tt]hird|[Tt]hree)$","3rd",NAME)
 			if re.search("(^|[0-9]+.*)[Ff]our(th)?$",NAME) : NAME = re.sub("[Ff]our(th)?$","4th",NAME)
-			if re.search("(^|[0-9]+.*)([Ff]ifth|[Ff]ive)$",NAME) : NAME = re.sub("([Ff]ifth|[Ff]ive)$","5th",NAME)
+			if re.search("(^|[0-9]+.*)([Ff]if?th|[Ff]ive)$",NAME) : NAME = re.sub("([Ff]if?th|[Ff]ive)$","5th",NAME)
 			if re.search("(^|[0-9]+.*)[Ss]ix(th)?$",NAME) : NAME = re.sub("[Ss]ix(th)?$","6th",NAME)
 			if re.search("(^|[0-9]+.*)[Ss]even(th)?$",NAME) : NAME = re.sub("[Ss]even(th)?$","7th",NAME)
 			if re.search("(^|[0-9]+.*)[Ee]igh?th?$",NAME) : NAME = re.sub("[Ee]igh?th?$","8th",NAME)
@@ -298,7 +302,7 @@ def sm_standardize(st) :
 		if(re.match("All?e?y?",TYPE)) :
 			TYPE = "Aly"
 		if(TYPE=="Parkway") :
-                        TYPE = "Pkwy"
+			TYPE = "Pkwy"
 	else :
 		if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
 			TYPE = ""
