@@ -282,7 +282,7 @@ def sm_standardize(st) :
 	else :
 		DIR = ""
 
-	TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+	TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Parkway|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
 	
 	if(TYPE) :
 		st = re.sub(TYPE.group(0),"",st)
@@ -297,6 +297,8 @@ def sm_standardize(st) :
 			TYPE = "Ln"            
 		if(re.match("All?e?y?",TYPE)) :
 			TYPE = "Aly"
+		if(TYPE=="Parkway") :
+                        TYPE = "Pkwy"
 	else :
 		if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
 			TYPE = ""
