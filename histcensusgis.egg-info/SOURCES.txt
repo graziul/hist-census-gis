@@ -1,0 +1,47 @@
+README.md
+setup.cfg
+setup.py
+histcensusgis/Clean.py
+histcensusgis/EDblocks.py
+histcensusgis/Geocode.py
+histcensusgis/RunClean.py
+histcensusgis/__init__.py
+histcensusgis.egg-info/PKG-INFO
+histcensusgis.egg-info/SOURCES.txt
+histcensusgis.egg-info/dependency_links.txt
+histcensusgis.egg-info/requires.txt
+histcensusgis.egg-info/top_level.txt
+histcensusgis.egg-info/zip-safe
+histcensusgis/lines/DirectionRetrieval.py
+histcensusgis/lines/GetStInMicroNotGrid.py
+histcensusgis/lines/__init__.py
+histcensusgis/lines/hn.py
+histcensusgis/lines/street.py
+histcensusgis/microdata/AddStudentCleaning.py
+histcensusgis/microdata/HarmonizeMicroMap.py
+histcensusgis/microdata/Segregation Values.R
+histcensusgis/microdata/Sumby Function.R
+histcensusgis/microdata/__init__.py
+histcensusgis/microdata/error_fix.py
+histcensusgis/microdata/hn.py
+histcensusgis/microdata/misc.py
+histcensusgis/microdata/street.py
+histcensusgis/points/__init__.py
+histcensusgis/points/geocode.py
+histcensusgis/polygons/BuildED_BlockMap.py
+histcensusgis/polygons/EDs_from_blockmap.py
+histcensusgis/polygons/Identify 1930 Blocks.R
+histcensusgis/polygons/Identify 1930 EDs.R
+histcensusgis/polygons/__init__.py
+histcensusgis/polygons/block.py
+histcensusgis/polygons/ed.py
+histcensusgis/s4utils/AmoryUtils.py
+histcensusgis/s4utils/ArcUtils.py
+histcensusgis/s4utils/IOutils.py
+histcensusgis/s4utils/__init__.py
+histcensusgis/text/__init__.py
+histcensusgis/text/download_sm_crosswalk.py
+histcensusgis/text/sm_st_ed_dict.pickle
+histcensusgis/text/sm_web_abbr.pickle
+histcensusgis/text/standardize.py
+histcensusgis/text/stevemorse.py

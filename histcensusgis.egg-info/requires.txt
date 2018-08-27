@@ -1,0 +1,15 @@
+Cython
+pysal
+openpyxl
+pandas
+xlrd
+fiona
+pyproj
+geopandas
+fuzzyset
+paramiko
+unicodecsv
+dbf
+argparse
+fuzzywuzzy
+netcdf4
