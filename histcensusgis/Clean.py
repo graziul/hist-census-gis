@@ -166,7 +166,7 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 
 	sys.stdout = sys.__stdout__
 	fsock.close()
-	os.chmod(fsock,0o777)
+	os.chmod(fsock.name,0o777)
 	os.chmod(file_name_all,0o777)
 
 	'''
