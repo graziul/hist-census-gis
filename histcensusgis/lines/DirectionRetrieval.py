@@ -25,13 +25,12 @@ import pysal as ps
 import pandas as pd
 import numpy as np
 import multiprocessing
-from blocknum.blocknum import *
-from microclean.STstandardize import *
+from histcensusgis.text.standardize import standardize_street
+from histcensusgis.s4utils.IOutils import *
 
 arcpy.env.overwriteOutput = True
 
 # Paths
-dir_path = "S:/Users/Chris/"
 stedit_path = "S:/Projects/1940Census/StreetGridsStdName/"
 tiger2012_path = "S:/Projects/1940Census/County Shapefiles/"
 sj_path = "S:/Projects/1940Census/DirAdd/"
@@ -123,7 +122,8 @@ def fix_dir(city, hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 			if citystate == "KansasCityMO":
 				df_stedit_temp = df_stedit_temp.rename(columns={'stndrdName': 'FULLNAME'})
 			save_shp(df_stedit_temp, stedit_shp_file)
-		except:
+		except Exception as e:
+			print(e)
 			continue
 		else:
 			break
@@ -231,7 +231,8 @@ def fix_dir(city, hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 				join_operation="JOIN_ONE_TO_ONE", 
 				join_type="KEEP_ALL", 
 				match_option="CONTAINS")
-		except:
+		except Exception as e:
+			print(e)
 			continue
 		else:
 			break
@@ -290,7 +291,8 @@ def fix_dir(city, hn_ranges=['LTOADD','LFROMADD','RTOADD','RFROMADD']):
 				FULLNAME "FULLNAME" true true false 100 Text 0 0 ,First,#,%s,FULLNAME,-1,-1;
 				FULLNAME_1 "FULLNAME_1" true true false 100 Text 0 0 ,First,#,%s,FULLNAME,-1,-1""" % (temp_file, temp_file, temp_file), 
 				match_option="INTERSECT")
-		except:
+		except Exception as e:
+			print(e)
 			continue
 		else:
 			break
