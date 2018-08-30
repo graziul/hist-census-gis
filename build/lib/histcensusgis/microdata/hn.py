@@ -27,7 +27,7 @@ def standardize_hn(s):
 	orig_s = s
 	s = s.strip()
 	hnFlag = ''
-	s = re.sub('[0-9]/[0-9]|[Rr][Ee][Aa][Rr]','',s)
+	s = re.sub('[Rr][Ee][Aa][Rr]','',s)
 	s = re.sub('\.$','',s)
 	s = re.sub('\([0-9]\)','',s)
 	s = s.strip()

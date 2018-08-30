@@ -69,7 +69,10 @@ def load_shp(filename, ranges=None):
 				if df[col].dtype == 'O':
 					df.loc[mask[col], col] = ''
 					if col in ranges:
-						df[col] = df[col].apply(lambda x: '' if '-' in x else x).str.replace(r'[aA-zZ]+','').replace('','0').astype(int)
+						#try :
+						df[col] = df[col].apply(lambda x: '' if '-' in x else x).str.replace(r'[aA-zZ]+','').replace(' ','').replace('','0').astype(int)
+						#except :
+						#        print col
 			return df
 
 	filename = filename.replace('.dbf','.shp')
