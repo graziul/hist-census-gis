@@ -909,7 +909,8 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			street_var=street_var, 
 			all_streets=grid_1940_all_streets, 
 			ed_st_dict=grid_1940_ed_st_dict, 
-			map_type='1940')
+			map_type='1940',
+			same_year=same_year)
 
 		#Get Contemporary grid fuzzy matches
 		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city_info=city_info, 
@@ -920,7 +921,8 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			all_streets=grid_Contemp_all_streets, 
 			ed_st_dict=grid_Contemp_ed_st_dict, 
 			map_type='Contemp', 
-			resid=resid)
+			resid=resid,
+			same_year=same_year)
 
 		#Get Chicago group 1930 grid fuzzy matches
 		'''
@@ -945,7 +947,8 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			street_var=street_var, 
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
-			map_type='sm', 
+			map_type='sm',
+			same_year=same_year,
 			resid=resid)
 
 		fuzzy_info = fuzzy_info + fuzzy_info_sm 
@@ -956,7 +959,8 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			street_var=street_var, 
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
-			map_type='sm')
+			map_type='sm',
+			same_year=same_year)
 		fuzzy_info = fuzzy_info_sm
 
 	return df, fuzzy_info

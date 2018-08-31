@@ -279,6 +279,7 @@ def standardize_street(st):
 # Standardize street (Steve Morse)
 def sm_standardize(st) :
 	orig_st = st
+	st = st.replace("(","").replace(")","")
 	st = re.sub(r" [Ee][Xx][Tt][Ee]?[Nn]?[Dd]?[Ee]?[Dd]?$","",st)
 	DIR = re.search(r" ([NSEW ]+)$",st)
 	st = re.sub(r" ([NSEW ]+)$","",st)
