@@ -268,7 +268,10 @@ def load_steve_morse(city_info):
 	#	city_name = 'Staten Island'
 	#NOTE: This dictionary must be built independently of this script
 	package_path = os.path.dirname(histcensusgis.__file__)
-	sm_st_ed_dict_file = pickle.load(open(package_path + '/text/sm_st_ed_dict.pickle', 'rb'))
+	try :
+		sm_st_ed_dict_file = pickle.load(open(package_path + '/text/sm_st_ed_dict.pickle', 'rb'))
+	except ValueError :
+		sm_st_ed_dict_file = pickle.load(open(package_path + '/text/sm_st_ed_dict.pickle', 'r'))
 	sm_st_ed_dict_nested = sm_st_ed_dict_file[decade][(city_name.replace(' ',''), state_abbr.lower())]
 
 	#Flatten dictionary
