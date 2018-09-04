@@ -54,7 +54,7 @@ def standardize_street(st):
 		DIR = 'SW'
    
 	#First check if DIR is at end of stname. make sure that it's the DIR and not actually the NAME (e.g. "North Ave" or "Avenue E")#
-	if re.search(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$',st) and not re.match('^[Nn][Oo][Rr][Tt][Hh]$|^[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Nn]$',st) :
+	if re.search(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?e?)$',st) and not re.match('^[Nn][Oo][Rr][Tt][Hh]$|^[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Nn]$',st) :
 		st = "N "+re.sub(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$','',st)
 		DIR = 'N'
 	if re.search(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$',st) and not re.search('^[Ss][Oo][Uu][Tt][Hh]$|^[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ss]$',st) :

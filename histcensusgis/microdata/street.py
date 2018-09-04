@@ -65,7 +65,7 @@ def load_city(city_info, file_path):
 	num_records = len(df)
 	print('Loading data for %s took %s' % (city, load_time))
 
-	df = rename_variables(df, year)
+	df = rename_variables(df, year, file_path)
 
 	# Remove duplicates
 	try:
@@ -82,11 +82,11 @@ def load_city(city_info, file_path):
 
 	return df, load_time
 
-def rename_variables(df, decade) :
+def rename_variables(df, decade, path="/home/s4-data/LatestCities") :
 	decade = int(decade)
 	print("\nStandardizing variable names\n")
 	# Load renaming information from .csv
-	var_names_ref = csv.reader(open("/home/s4-data/LatestCities/VariableRecodes.csv","rb"))
+	var_names_ref = csv.reader(open(path+"/VariableRecodes.csv","rb"))
 	columns = var_names_ref.next()
 	for row in var_names_ref :
 		std_name = row[0]
@@ -472,7 +472,7 @@ def preclean_street(df, city_info, file_path):
 		# If we found Steve Morse data for the city, use it 
 		if len(sm_all_streets) != 0:
 			#print SM status
-			print('SM file does not exist for '+city_name+', '+state_abbr+' in '+str(decade))
+			print('SM file doespath not exist for '+city_name+', '+state_abbr+' in '+str(decade))
 		# If we did not find Steve Morse data, return a bunch of Nones
 		else:
 			print('SM file could not be found for '+city_name+', '+state_abbr)
@@ -863,7 +863,7 @@ def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type,
 	num_records = len(df)
 	if resid == 0:
 		resid = num_records - len(df[df['current_match_bool'+post]])
-	#Get fuzzy matches 
+	#Get fuzzy matches
 	df[fuzzy_match], df[fuzzy_score], df[fuzzy_bool] = zip(*df.apply(lambda x: get_fuzzy_match(x['current_match_bool'+post], fuzzy_match_dict, x[street_var], x['ed']), axis=1))
 	#Update current match 
 	df['current_match'+post], df['current_match_bool'+post] = zip(*df.apply(lambda x: update_current_match(x['current_match'+post], x['current_match_bool'+post], x[fuzzy_match], x[fuzzy_bool]),axis=1))
