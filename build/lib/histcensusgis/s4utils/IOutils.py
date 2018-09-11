@@ -10,7 +10,7 @@ import csv
 import xlrd
 import os
 
-def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program Files/R/R-3.4.2/bin/Rscript"):
+def get_paths(city_info, data_path="S:/Projects/1940Census/", r_path="C:/Program Files/R/R-3.5.1/bin/Rscript"):
 
 	city_name, state_abbr, decade = city_info 
 	city_spaces = city_name

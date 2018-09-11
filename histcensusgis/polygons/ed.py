@@ -1798,7 +1798,7 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 
 	ed_inter_shp = geo_path + city_name + '_' + str(decade) + '_ed_inter.shp'
 	df_ed_inter = load_shp(ed_inter_shp)
-	df_ed_inter.loc[:,'ed_inter'] = df_ed_inter['ed_inter'].astype(str).replace('0','')
+	df_ed_inter.loc[:,'ED_inter'] = df_ed_inter['ED_inter'].astype(str).replace('0','')
 	df_ed_inter.loc[:,'pblk_id'] = df_ed_inter['pblk_id'].astype(int)
 
 	ed_geo_shp = geo_path + city_name + '_' + str(decade) + '_ed_geo.shp'
@@ -1832,11 +1832,11 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	# Select relevant variables and extract best ED guesses
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].apply(lambda x: get_ed_geocode(x), axis=1)
 	df.loc[:,'ed_desc'] = df.apply(lambda x: format_ed_desc(x['ed_desc']), axis=1)
-	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str)
+	df.loc[:,'ED_inter'] = df['ED_inter'].astype(str)
 	if decade == 1940:
-		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode','cblk_id']
+		relevant_vars = ['geometry','pblk_id','ed_desc','ED_inter','ed_geocode','cblk_id']
 	else:
-		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode']
+		relevant_vars = ['geometry','pblk_id','ed_desc','ED_inter','ed_geocode']
 	df_ed_guess = df.loc[:,relevant_vars]
 	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
 
