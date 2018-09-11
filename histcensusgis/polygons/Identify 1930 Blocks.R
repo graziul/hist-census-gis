@@ -6,9 +6,21 @@ writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 # Install missing packages
 chooseCRANmirror(ind=1)
+status <- paste0("line 1 done", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
+
 list.of.packages <- c("foreign","car","plyr","dplyr","sf")
+status <- paste0("line 2 done", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
+
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+status <- paste0("line 3 done", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
+
 if(length(new.packages)) install.packages(new.packages)
+status <- paste0("line 4 done", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
+
 
 status <- paste0(status, "Libraries are installed", "\n")
 writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
