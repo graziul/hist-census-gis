@@ -279,6 +279,7 @@ def standardize_street(st):
 # Standardize street (Steve Morse)
 def sm_standardize(st) :
 	orig_st = st
+	st = st.strip()
 	st = st.replace("(","").replace(")","")
 	st = re.sub(r" [Ee][Xx][Tt][Ee]?[Nn]?[Dd]?[Ee]?[Dd]?$","",st)
 	DIR = re.search(r" ([NSEW ]+)$",st)
@@ -289,8 +290,7 @@ def sm_standardize(st) :
 	else :
 		DIR = ""
 
-	TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Parkway|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
-	
+	TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
 	if(TYPE) :
 		st = re.sub(TYPE.group(0),"",st)
 		TYPE = TYPE.group(1)
@@ -301,11 +301,13 @@ def sm_standardize(st) :
 		if(TYPE=="Dr") :
 			TYPE = "Drive"
 		if(TYPE=="La") :
-			TYPE = "Ln"            
+			TYPE = "Ln"
+		if(re.match("Terr?a?c?e?",TYPE)) :
+            		TYPE = "Ter"
+		if(re.match("Pa?r?kwa?y",TYPE)) :
+			TYPE = "Pkwy"
 		if(re.match("All?e?y?",TYPE)) :
 			TYPE = "Aly"
-		if(TYPE=="Parkway") :
-			TYPE = "Pkwy"
 	else :
 		if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
 			TYPE = ""
