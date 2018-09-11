@@ -17,7 +17,7 @@ new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"
 status <- paste0("line 3 done", "\n")
 writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
-if(length(new.packages)) install.packages(new.packages)
+if(length(new.packages) > 0){install.packages(new.packages)}
 status <- paste0("line 4 done", "\n")
 writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
