@@ -1,12 +1,17 @@
 # Code by Matt Martinez
 # Inital update by Ben Bellman, Sept 10, 2018
 
+status <- paste0("R process has begun", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 # Install missing packages
 chooseCRANmirror(ind=1)
 list.of.packages <- c("foreign","car","plyr","dplyr","sf")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
+
+status <- paste0(status, "Libraries are installed", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 # Load Neccessary Libraries
 library(foreign)
@@ -15,11 +20,17 @@ library(plyr)
 library(dplyr)
 library(sf)
 
+status <- paste0(status, "Libraries are loaded", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
+
 args <- commandArgs(trailingOnly = TRUE)
 dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
 city_name <- args[2]
 city_name <- gsub(" ","",city_name)
 decade <- args[3]
+
+status <- paste0(status, "Arguments are read", "\n")
+writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 
 ### Start Processing
