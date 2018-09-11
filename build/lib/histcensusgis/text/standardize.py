@@ -54,7 +54,7 @@ def standardize_street(st):
 		DIR = 'SW'
    
 	#First check if DIR is at end of stname. make sure that it's the DIR and not actually the NAME (e.g. "North Ave" or "Avenue E")#
-	if re.search(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$',st) and not re.match('^[Nn][Oo][Rr][Tt][Hh]$|^[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Nn]$',st) :
+	if re.search(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?e?)$',st) and not re.match('^[Nn][Oo][Rr][Tt][Hh]$|^[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Nn]$',st) :
 		st = "N "+re.sub(r'[ \-]+([Nn]|[Nn][Oo][Rr]?[Tt]?[Hh]?)$','',st)
 		DIR = 'N'
 	if re.search(r'[ \-]+([Ss]|[Ss][Oo][Uu]?[Tt]?[Hh]?)$',st) and not re.search('^[Ss][Oo][Uu][Tt][Hh]$|^[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+[Ss]$',st) :
@@ -82,7 +82,7 @@ def standardize_street(st):
 	st = re.sub(r'[ \-]+([Pp][Ll][Aa]?[Cc]?[Ee]?)$',' Pl',st)
 	st = re.sub(r'[ \-]+([Ss][Qq][Uu]?[Aa]?[Rr]?[Ee]?)$',' Sq',st)
 	st = re.sub(r'[ \-]+[Cc]ircle$',' Cir',st)
-	st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kwa?y|[Pp]ky|[Pp]arkwy|[Pp]rakway|[Pp]rkwy|[Pp]wy)$',' Pkwy',st)
+	st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kwa?y|[Pp]ky|[Pp]arkwy|[Pp]ra?kwa?y|[Pp]wy)$',' Pkwy',st)
 	st = re.sub(r'[ \-]+[Ww][Aa][Yy]$',' Way',st)
 	st = re.sub(r'[ \-]+[Aa][Ll][Ll]?[Ee]?[Yy]?$',' Aly',st)
 	st = re.sub(r'[ \-]+[Tt][Ee][Rr]+[EeAa]?[Cc]?[Ee]?$',' Ter',st)
@@ -92,9 +92,12 @@ def standardize_street(st):
 	st = re.sub(r'[ \-]+([Hh]eights?)$',' Heights',st)
 
 	# "Park" is not considered a valid TYPE because it should probably actually be part of NAME #
-	match = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Heights|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+	match = re.search(r' ([Ss]t|[Aa]ve|[Bb]lvd|[Pp]l|[Dd]rive|[Rr]oad|[Cc]t|[Rr]ailway|[Rr][Rr]|[Cc]ity[Ll]imits|[Hh]wy|[Ff]wy|[Pp]kwy|[Cc]ir|[Cc]ircuit|[Tt]er|[Ll]n|[Ww]ay|[Tt]rail|[Ss]q|[Aa]ly|[Bb]ridge|[Bb]ridgeway|[Ww]alk|[Hh]eights|[Cc]rescent|[Cc]reek|[Rr]iver|[Ll]ine|[Pp]laza|[Ee]splanade|[Cc]emetery|[Vv]iaduct|[Tt]rafficway|[Tt]rfy|[Tt]urnpike)$',st)
 	if match :
-		TYPE = match.group(1)
+		TYPE = match.group(1).title()
+		if TYPE == "Rr" :
+			TYPE = "RR"
+		st = re.sub(re.escape(match.group(1)),TYPE,st)
 
 	#Combinations of directions
 	
@@ -250,8 +253,7 @@ def standardize_street(st):
 					#False
 					NAME = re.sub(hnum.group(1),"",NAME) #remove housenum. May want to update housenum field, maybe not though.
 					runAgain = True
-			else :
-				NAME = NAME.title()
+			NAME = re.sub("(?:^| )[a-z]",lambda x:x.group(0).upper(),NAME)
 			
 		else :
 			print('failed at "'+st,'"')
@@ -277,6 +279,7 @@ def standardize_street(st):
 # Standardize street (Steve Morse)
 def sm_standardize(st) :
 	orig_st = st
+	st = st.replace("(","").replace(")","")
 	st = re.sub(r" [Ee][Xx][Tt][Ee]?[Nn]?[Dd]?[Ee]?[Dd]?$","",st)
 	DIR = re.search(r" ([NSEW ]+)$",st)
 	st = re.sub(r" ([NSEW ]+)$","",st)
