@@ -96,7 +96,7 @@ def initial_geocode(city_info, geo_path, hn_ranges=['MIN_LFROMA','MIN_RFROMA','M
 		out_address_locator=add_locator, 
 		config_keyword="")
 	#Change side offset to maximize quality of physical block matches
-	locator_fn = geo_path+'/'+city_name+'_addloc_'+decade'.loc'
+	locator_fn = geo_path+'/'+city_name+'_addloc_'+str(decade)+'.loc'
 	locator_file = open(locator_fn,'a')  # open for appending
 	locator_file.writelines('SideOffset = 1')
 	locator_file.writelines('SideOffsetUnits = Feet')
