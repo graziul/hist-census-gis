@@ -1,29 +1,14 @@
 # Code by Matt Martinez
 # Inital update by Ben Bellman, Sept 10, 2018
 
-status <- paste0("R process has begun", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
-
 # Install missing packages
 chooseCRANmirror(ind=1)
-status <- paste0("line 1 done", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 list.of.packages <- c("foreign","car","plyr","dplyr","sf")
-status <- paste0("line 2 done", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-status <- paste0("line 3 done", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 if(length(new.packages) > 0){install.packages(new.packages)}
-status <- paste0("line 4 done", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
-
-
-status <- paste0(status, "Libraries are installed", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
 
 # Load Neccessary Libraries
 library(foreign)
@@ -32,18 +17,11 @@ library(plyr)
 library(dplyr)
 library(sf)
 
-status <- paste0(status, "Libraries are loaded", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
-
 args <- commandArgs(trailingOnly = TRUE)
-dir_path <- paste(args[1],"\\GIS_edited\\",sep="")
+dir_path <- paste(args[1],"/GIS_edited/",sep="")
 city_name <- args[2]
 city_name <- gsub(" ","",city_name)
 decade <- args[3]
-
-status <- paste0(status, "Arguments are read", "\n")
-writeLines(paste0(status, "\n"), "C:/Users/akisch/Desktop/R_py_log.txt")
-
 
 ### Start Processing
 
@@ -84,6 +62,7 @@ Blocks <- Blocks[which(Blocks$pblk_id!=0),]
 
 #Remove mblk with NA;
 Blocks <- Blocks[which(!is.na(Blocks$mblk)),]
+
 
 #Count Number of Unique Ed_Blocks (Microdata combinations of ED and Block #)
 EdCt <- tapply(Blocks$Build, INDEX=list(Blocks$ed_block), FUN=sum)
@@ -141,6 +120,7 @@ Seq <- tapply(Combo$SeqCombo2, INDEX=list(Combo$pblk_id), FUN=max)
 Seq2 <- data.frame(pblk_id=names(Seq), SeqMax=Seq)
 Combo <- merge(x=Combo, y=Seq2, by="pblk_id", all.x=T)
 
+
 #Create The matches
 Combo$One <- ifelse(Combo$M_Count<=2, "Yes", "No")
 Combo$Match75 <- ifelse(Combo$PerMblk>=70 & Combo$PerPblk>=100 & Combo$One=="No", "Yes", "No")
@@ -183,8 +163,9 @@ pblk_id <- BlockC$pblk_id
 pblk_map <- BlockMap$pblk_id
 BlockMap$inmap <- ifelse(pblk_map %in% pblk_id, 1, 0)
 
+
 #Export Map
-st_write(BlockMap, paste0(dir_path, city_name, "_", decade, "_block_geo.shp"))
+st_write(BlockMap, paste0(dir_path, city_name, "_", decade, "_block_geo.shp"), delete_layer = T)
 
 #########################################
   
