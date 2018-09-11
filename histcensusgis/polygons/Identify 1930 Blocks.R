@@ -3,11 +3,8 @@
 
 # Install missing packages
 chooseCRANmirror(ind=1)
-
 list.of.packages <- c("foreign","car","plyr","dplyr","sf")
-
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-
 if(length(new.packages) > 0){install.packages(new.packages)}
 
 # Load Neccessary Libraries
