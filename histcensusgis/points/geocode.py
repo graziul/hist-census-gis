@@ -95,6 +95,12 @@ def initial_geocode(city_info, geo_path, hn_ranges=['MIN_LFROMA','MIN_RFROMA','M
 		in_field_map=field_map, 
 		out_address_locator=add_locator, 
 		config_keyword="")
+	#Change side offset to maximize quality of physical block matches
+	locator_fn = al+'.loc'
+	locator_file = open(locator_fn,'a')  # open for appending
+	locator_file.writelines('SideOffset = 1')
+	locator_file.writelines('SideOffsetUnits = Feet')
+	locator_file.close()
 	print("The script has finished executing the 'CreateAddressLocator' tool and has begun executing the 'GeocodeAddress' tool")
 	#Geocode Points
 	arcpy.GeocodeAddresses_geocoding(in_table=city_name + "_" + str(decade) + "_Addresses", 
