@@ -119,7 +119,7 @@ def identify_blocks_geocode(city_info, paths):
 	# Ensure files exist for Matt's block algorithm
 	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 	pblk_points_shp = geo_path + city_name + "_" + str(decade) + "_Pblk_Points.shp"
-	if ~os.path.isfile(pblk_points_shp) or ~os.path.isfile(pblk_shp):
+	if not os.path.isfile(pblk_points_shp) or not os.path.isfile(pblk_shp):
 		check_matt_dependencies(city_info, paths)
 
 	print("Identifying " + str(decade) + " blocks\n")
