@@ -242,7 +242,7 @@ def draw_EDs(city_info, paths, new_var_name, is_desc, grid_street_var, wildcard=
 					      Delimiter="COMMA",
 					      Output_ASCII_File = intermed_path + city_name + "_stsegments.txt",
 					      Add_Field_Names_to_Output="ADD_FIELD_NAMES")
-                        print("Matching block descriptions to physical blocks based on street grid...")
+			print("Matching block descriptions to physical blocks based on street grid...")
 			with open(intermed_path + city_name + "_pblks.txt") as pblk_txt :
 				for blk_line in list(pblk_txt)[1:] :
 					blk_line = blk_line.strip()
@@ -1067,7 +1067,7 @@ def check_for_desc_files(city_info, paths, grid_street_var):
 		InterLines = Intersect_TXT.readlines()[1:]
 
 		# Ensure desriptions file exist
-		descriptions_file = 'S:/Projects/1940Census/SMdescriptions/'+city_spaces+'_EDdraw_test.txt'
+		descriptions_file = 'S:/Projects/1940Census/SMdescriptions/'+city_spaces+"_SM_ED_desc.txt"
 		if os.stat(descriptions_file).st_size == 0 or not os.path.isfile(descriptions_file):
 			print("No ED description data found for " + city_spaces + state_abbr)
 			raise ValueError
@@ -1312,9 +1312,10 @@ def run_desc_analysis(city_info, paths, grid_street_var, wildcard=None) :
 
 		# Create Morse DICTs
 		for line in Descriptions :
-			line_list = line.split(',')
-			ED_description_dict[line_list[0]] = [x.strip('"\' \n\r') for x in line_list[1:]]
-			ED_NAME_description_dict[line_list[0]] = [isolate_st_name(x.strip('"\' \n\r')) for x in line_list[1:]]
+			ed = line.split(':')[0]
+			line_list = line[line.index(': ')+2:].split(',')
+			ED_description_dict[ed] = [x.strip('"\' \n\r') for x in line_list]
+			ED_NAME_description_dict[ed] = [isolate_st_name(x.strip('"\' \n\r')) for x in line_list]
 
 		# Isolate St NAMEs
 		arcpy.AddField_management (stgrid_shp, "NAME", "TEXT")
@@ -1562,7 +1563,7 @@ def ed_desc_algo(city_info, paths, grid_street_var='FULLNAME',wildcard=None):
 		new_var_name="ED_desc", 
 		is_desc=True, 
 		grid_street_var=grid_street_var,
-                wildcard=wildcard)
+		wildcard=wildcard)
 
 #
 # Misc ED functions
