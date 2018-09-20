@@ -176,6 +176,10 @@ def standardize_street(st):
 		#If NAME is not 'North', 'West', etc...
 		if match :
 			NAME = match.group(1).strip()
+
+			#fix "D" St (found in SM descript for Spokane, at least)
+			if re.search('^"[a-z]"$',NAME) :
+				NAME = NAME.replace('"','')
 			
 			#convert written-out numbers to digits
 			#TODO: Make these work for all exceptions (go thru text file with find)
@@ -303,7 +307,7 @@ def sm_standardize(st) :
 		if(TYPE=="La") :
 			TYPE = "Ln"
 		if(re.match("Terr?a?c?e?",TYPE)) :
-            		TYPE = "Ter"
+			TYPE = "Ter"
 		if(re.match("Pa?r?kwa?y",TYPE)) :
 			TYPE = "Pkwy"
 		if(re.match("All?e?y?",TYPE)) :

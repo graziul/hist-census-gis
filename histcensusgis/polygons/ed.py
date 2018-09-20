@@ -1675,13 +1675,13 @@ def get_adjacent_eds(city_info, geo_path):
 def combine_ed_maps(city_info, geo_path, hn_ranges):
 
 	# Function to select best ED guess based on three methods
-	def select_best_ed_guess(x):
+	def select_best_ed_guess(x, decade):
 		
-		# 1940 also had cblk_id, but 1930 does not (may need if/else with decade in future)
-		try:
+		# 1940 also has cblk_id, but 1930 does not
+		if decade==1940 :
 			_, _, ed_desc, ed_inter, ed_geocode, _ = x
-		except:
-			_, _, ed_desc, ed_inter, ed_geocode = x
+		else :
+			_, _, ed_desc, ed_inter, ed_geocode, ed_micro_desc = x
 		# Split if multiple EDs
 		if '|' in str(ed_desc):
 			ed_desc = ed_desc.split('|')
@@ -1693,14 +1693,19 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 			ed_inter = [i for i in ed_inter]
 		else:
 			ed_inter = [ed_inter]
-		if '|' in str(ed_inter):
+		if '|' in str(ed_geocode): # I think Chris made a mistake here- it had been "if '|' in str(ed_inter):"
 			ed_geocode = ed_geocode.split('|')
 			ed_geocode = [i for i in ed_geocode]
 		else:
 			ed_geocode = [ed_geocode]
+		if '|' in str(ed_micro_desc):
+			ed_micro_desc = ed_micro_desc.split('|')
+			ed_micro_desc = [i for i in ed_micro_desc]
+		else:
+			ed_micro_desc = [ed_micro_desc]
 
 		# List of EDs guessed
-		ed_list = list(set(ed_desc + ed_inter + ed_geocode))
+		ed_list = list(set(ed_desc + ed_inter + ed_geocode + ed_micro_desc))
 		ed_list = [i for i in ed_list if i != '']
 
 		# List of ED guesses by confidence
@@ -1724,17 +1729,18 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 				in_desc = check_ed_num(ed_n, ed_desc)
 				in_inter = check_ed_num(ed_n, ed_inter)
 				in_geocode = check_ed_num(ed_n, ed_geocode)
-				# If all three agree, highest confidence
-				if in_desc and in_inter and in_geocode:
+				in_micro_desc = check_ed_num(ed_n, ed_micro_desc)
+				# If at least three agree, highest confidence
+				if in_desc and in_inter and (in_geocode or in_micro_desc):
 					ed_guess_list.append([ed, 1])
 				# If any two agree, second highest confidence
-				elif (in_desc and in_inter) or (in_desc and in_geocode) or (in_inter and in_geocode):
+				elif (in_desc and in_inter) or (in_desc and in_geocode) or (in_inter and in_geocode) or (in_micro_desc and in_inter) or (in_desc and in_micro_desc) or (in_micro_desc and in_geocode):
 					ed_guess_list.append([ed, 2])
 				# If ed_desc not missing, third highest confidence
 				elif in_desc:
 					ed_guess_list.append([ed, 3])
-				# If ed_inter not missing, fourth highest confidence
-				elif in_inter:
+				# If ed_inter or ed_micro_desc not missing, fourth highest confidence
+				elif in_inter or in_micro_desc:
 					ed_guess_list.append([ed, 4])
 				# If ed_geocode not missing, fifth highest confidence
 				elif in_geocode:
@@ -1748,30 +1754,38 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 		num_guesses = df_ed_guess.groupby(['conf'], as_index=False).size().to_dict()
 		df_ed_guess['count'] = df_ed_guess.apply(lambda x: num_guesses[x['conf']], axis=1)
 		df_one_ed_guess = df_ed_guess[df_ed_guess['count']==1]
-		if len(df_one_ed_guess) > 0:
+		#If there exists an ed_guess whose confidence level is lower than any other guess, use it:
+		if len(df_one_ed_guess) > 0 and df_one_ed_guess['conf'].min() == df_ed_guess['conf'].min():
 			ed_conf = df_one_ed_guess['conf'].min()
 			ed_guess = df_one_ed_guess.loc[df_one_ed_guess['conf']==ed_conf,'ed'].values[0]
 			ed_guess_conf = [ed_conf, ed_guess]
+		#Deal with cases where multiple EDs with the same confidence level are found:
 		elif len(df_ed_guess[df_ed_guess['count']>1]) > 0:
 			df_two_plus_ed_guess = df_ed_guess[df_ed_guess['count']>1]
-			for ed in df_two_plus_ed_guess['ed'].tolist():
-				if ed in ed_desc:
-					if (ed in ed_inter) or (ed in ed_geocode):
-						ed_guess_conf = [2, ed]
-						return ed_guess_conf
-					else:
-						ed_guess_conf = [3, ed]
-						return ed_guess_conf
-				elif ed in ed_inter:
-					if ed in ed_geocode:
-						ed_guess_conf = [2, ed]
-						return ed_guess_conf
-					else:
-						ed_guess_conf = [4, ed]
-						return ed_guess_conf
-				elif ed in ed_geocode:
-					ed_guess_conf = [5, ed]
-					return ed_guess_conf
+			if df_two_plus_ed_guess['conf'].min() == 2 :
+				df_ed_guess2 = df_ed_guess[df_ed_guess['conf']==2]
+				eds2 = list(df_ed_guess2['ed'])
+				ed_conf_list = []
+				for ed in eds2 :
+					ed_n = ed.replace(r'[a-zA-Z]+','')
+					in_desc = check_ed_num(ed_n, ed_desc)
+					in_inter = check_ed_num(ed_n, ed_inter)
+					in_geocode = check_ed_num(ed_n, ed_geocode)
+					in_micro_desc = check_ed_num(ed_n, ed_micro_desc)
+					if in_desc :
+						ed_conf_list.append([1,ed])
+					if in_inter and in_micro_desc :
+						ed_conf_list.append([2,ed])
+					if (in_inter and in_geocode) or (in_micro_desc and in_geocode) :
+						ed_conf_list.append([3,ed])
+				ed_guess_conf = sorted(ed_conf_list)[0]
+			elif df_two_plus_ed_guess['conf'].min() == 4 :
+				#choose a random confidence 4 guess
+				df_ed_guess4 = df_ed_guess[df_ed_guess['conf']==4]
+				ed_guess_conf = list(df_ed_guess4.sample(n=1)[['conf','ed']].values[0])
+			else :
+				assert("THIS SHOULD NOT HAPPEN" == False)
+				
 
 		return ed_guess_conf
 
@@ -1793,13 +1807,21 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 		else:
 			return '|'.join(eds)
 
+	def get_ed_micro_desc(fields) :
+		if(fields[0] != ' ' and fields[0] != None) :
+			return fields[0].split('-')[0]
+		elif(fields[1] != ' ' and fields[1] != None) :
+			return fields[1].split('-')[0]
+		else :
+			return ''
+
 	city_name, state_abbr, decade = city_info 
 	city_name = city_name.replace(' ','')
 	state_abbr = state_abbr.upper()
 
 	ed_inter_shp = geo_path + city_name + '_' + str(decade) + '_ed_inter.shp'
 	df_ed_inter = load_shp(ed_inter_shp)
-	df_ed_inter.loc[:,'ED_inter'] = df_ed_inter['ED_inter'].astype(str).replace('0','')
+	df_ed_inter.loc[:,'ed_inter'] = df_ed_inter['ed_inter'].astype(str).replace('0','')
 	df_ed_inter.loc[:,'pblk_id'] = df_ed_inter['pblk_id'].astype(int)
 
 	ed_geo_shp = geo_path + city_name + '_' + str(decade) + '_ed_geo.shp'
@@ -1808,6 +1830,11 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	df_ed_geo.loc[:,['ED_ID','ED_ID2','ED_ID3']]= df_ed_geo[['ED_ID','ED_ID2','ED_ID3']].astype(object).replace(np.nan,0).astype(int).astype(str).replace('0','')
 
 	ed_desc_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_ed_desc.shp'
+
+	block_guess_shp = geo_path + city_name + "_" + str(decade) + "_block_guess.shp"
+	df_ed_micro_desc = load_shp(block_guess_shp)
+	df_ed_micro_desc.loc[:,'pblk_id'] = df_ed_micro_desc['pblk_id'].astype(int)
+	
 
 	# If 1940, can use non-spatial joins...
 	if decade == 1940:
@@ -1829,17 +1856,20 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 		df_ed_inter_desc_shp = load_shp(ed_inter_desc_shp)
 		df_ed_inter_desc_shp.loc[:,'ed_desc'] = df_ed_inter_desc_shp['ed_desc'].astype(str).replace('None','')
 		df = df_ed_inter_desc_shp.merge(df_ed_geo.drop(['geometry'], axis=1), on='pblk_id')
+		df = df.merge(df_ed_micro_desc.drop(['geometry'], axis=1), on='pblk_id')
 
 	# Select relevant variables and extract best ED guesses
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].apply(lambda x: get_ed_geocode(x), axis=1)
 	df.loc[:,'ed_desc'] = df.apply(lambda x: format_ed_desc(x['ed_desc']), axis=1)
-	df.loc[:,'ED_inter'] = df['ED_inter'].astype(str)
+	df.loc[:,'ed_inter'] = df['ed_inter'].astype(str).replace('0','').replace('None','')
+	df.loc[:,'ed_micro_desc'] = df[['blockdesc','blockdesc2']].apply(lambda x : str(get_ed_micro_desc(x)),axis=1)
 	if decade == 1940:
-		relevant_vars = ['geometry','pblk_id','ed_desc','ED_inter','ed_geocode','cblk_id']
+		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode','cblk_id']
 	else:
-		relevant_vars = ['geometry','pblk_id','ed_desc','ED_inter','ed_geocode']
+		relevant_vars = ['geometry','pblk_id','ed_desc','ed_inter','ed_geocode','ed_micro_desc']
 	df_ed_guess = df.loc[:,relevant_vars]
-	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x), axis=1))
+
+	df_ed_guess.loc[:,'ed_conf'], df_ed_guess.loc[:,'ed_guess'] = zip(*df_ed_guess[relevant_vars].apply(lambda x: select_best_ed_guess(x,decade), axis=1))
 
 	# Relabel confidence variable descriptively 
 	label_conf = {}
@@ -1848,7 +1878,7 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	label_conf[1] = "1. Three agree"
 	label_conf[2] = "2. Two agree"
 	label_conf[3] = "3. Descriptions only"
-	label_conf[4] = "4. Intersections only"
+	label_conf[4] = "4. Intersections only or Microdata Descriptions only"
 	label_conf[5] = "5. Geocoding only"
 
 	df_ed_guess.loc[:,'ed_conf'] = df_ed_guess.apply(lambda x: label_conf[x['ed_conf']], axis=1)

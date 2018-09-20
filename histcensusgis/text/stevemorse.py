@@ -404,6 +404,10 @@ def download_sm_ed_desc(year,keep_dir=False,file_path='S:/Projects/1940Census',o
 	#city_info_df = city_info_df.append(pd.DataFrame(new_york))
 	global city_state_iterator
 	city_state_iterator = zip(city_info_df['city_name'],city_info_df['state_abbr'])
+	'''global city_state_iterator
+	city_state_iterator = [('spokane',"wa"),
+                               ('scranton',"pa"),
+                               ('salt lake',"ut")]'''
 	global sm_ed_descriptions
 	sm_ed_descriptions = {}
 	print("Starting "+str(year))
