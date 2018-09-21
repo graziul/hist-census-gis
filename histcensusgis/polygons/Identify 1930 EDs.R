@@ -24,7 +24,7 @@ decade <- args[3]
 
 #Bring in microdata points
 dbf_file <- paste(dir_path,city_name,"_",decade,"_Pblk_Points.dbf",sep="")
-Points <- read.dbf(dbf_file)$dbf
+Points <- read.dbf(dbf_file)
 tot_points <- length(Points[,1])  
 
 #Make variable names lowercase
