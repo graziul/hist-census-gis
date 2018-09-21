@@ -1067,7 +1067,7 @@ def check_for_desc_files(city_info, paths, grid_street_var):
 		InterLines = Intersect_TXT.readlines()[1:]
 
 		# Ensure desriptions file exist
-		descriptions_file = 'S:/Projects/1940Census/SMdescriptions/'+city_spaces+"_SM_ED_desc.txt"
+		descriptions_file = 'S:/Projects/1940Census/SMdescriptions/'+city_name+state_abbr+"_SM_ED_desc.txt"
 		if os.stat(descriptions_file).st_size == 0 or not os.path.isfile(descriptions_file):
 			print("No ED description data found for " + city_spaces + state_abbr)
 			raise ValueError
