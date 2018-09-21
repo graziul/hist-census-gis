@@ -1821,7 +1821,15 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 
 	ed_inter_shp = geo_path + city_name + '_' + str(decade) + '_ed_inter.shp'
 	df_ed_inter = load_shp(ed_inter_shp)
-	df_ed_inter.loc[:,'ed_inter'] = df_ed_inter['ed_inter'].astype(str).replace('0','')
+
+        if 'ed_inter' in list(df_ed_inter) :
+                ed_inter_var = 'ed_inter'
+        elif 'ED_inter' in list(df_ed_inter) :
+                ed_inter_var = 'ED_inter'
+        else :
+                assert('ED_inter and ed_inter not found'==False)
+	
+	df_ed_inter.loc[:,'ed_inter'] = df_ed_inter[ed_inter_var].astype(str).replace('0','')
 	df_ed_inter.loc[:,'pblk_id'] = df_ed_inter['pblk_id'].astype(int)
 
 	ed_geo_shp = geo_path + city_name + '_' + str(decade) + '_ed_geo.shp'
@@ -1856,7 +1864,7 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 		df_ed_inter_desc_shp = load_shp(ed_inter_desc_shp)
 		df_ed_inter_desc_shp.loc[:,'ed_desc'] = df_ed_inter_desc_shp['ed_desc'].astype(str).replace('None','')
 		df = df_ed_inter_desc_shp.merge(df_ed_geo.drop(['geometry'], axis=1), on='pblk_id')
-		df = df.merge(df_ed_micro_desc.drop(['geometry'], axis=1), on='pblk_id')
+		df = df.merge(df_ed_micro_desc.drop(['geometry','ed_inter'], axis=1), on='pblk_id')
 
 	# Select relevant variables and extract best ED guesses
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].apply(lambda x: get_ed_geocode(x), axis=1)
