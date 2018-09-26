@@ -174,7 +174,7 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 	#Get number of physical blocks
 	num_physical_blocks = int(arcpy.GetCount_management(block_shp).getOutput(0))
 	#Get number of microdata blocks
-	num_micro_blocks = len(df_pre['block'].unique())
+	num_micro_blocks = len(df_pre.groupby(['block','ed']).groups)
 
 	#Create {Census block:streets} dict from microdata 
 	df = df_pre.groupby(['ed_block',micro_street_var]).size().to_frame('st_addresses').reset_index()
