@@ -225,7 +225,7 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 		for field in fields:
 			with arcpy.da.SearchCursor(block_shp,['pblk_id',field]) as cursor:
 				for row in cursor:
-					if row[1] != ' ':
+					if row[1] != ' ' and row[1] != '0':
 						labels_step1.append(row[1])
 						pblks_labeled1.append(row[0])
 		num_labels_step1 = len(labels_step1)
