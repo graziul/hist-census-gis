@@ -14,6 +14,7 @@ import arcpy
 import sys
 import subprocess
 import random
+import re
 arcpy.env.overwriteOutput = True
 
 #
@@ -70,8 +71,8 @@ def create_pblks(city_info, geo_path):
 	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
 
 	if not os.path.isfile(split_grid):
-                print("Processing raw stgrid for %s" %decade)
-                _ = process_raw_grid(city_info, geo_path)
+		print("Processing raw stgrid for %s" %decade)
+		_ = process_raw_grid(city_info, geo_path)
 
 	#Create Physical Blocks# #####
 	arcpy.FeatureToPolygon_management(split_grid, pblk_shp)
@@ -130,7 +131,7 @@ def identify_blocks_geocode(city_info, paths):
 	else:
 		print("OK!\n")
 
-# Uses block descriptions from microdata to fill in block numbers 
+# Uses block descriptions from microdata to fill in block numbers
 def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess', v=7):
 
 	city_name, state_abbr, decade = city_info
@@ -198,10 +199,10 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 		join_operation="JOIN_ONE_TO_MANY", join_type="KEEP_ALL", field_mapping=field_mapSJ, 
 		match_option="SHARE_A_LINE_SEGMENT_WITH", search_radius="", distance_field_name="")
 	df_pblk_grid = load_shp(pblk_grid_shp.replace(".shp",".dbf"))
-
+	
 	# Group by pblk_id to create some dictionaries
 	df_grouped = df_pblk_grid.groupby('pblk_id')
-	# This dictionary is used here as empiric census block descriptions
+	# pblk_st_dict is used here as empiric census block descriptions
 	pblk_st_dict = {pblk:list(set(grid_list['FULLNAME'].tolist())) for pblk, grid_list in df_grouped}
 	# Exclude certain street names "City Limits"
 	exclude_list = ['City Limits']
@@ -239,12 +240,15 @@ def identify_blocks_microdata(city_info, paths, micro_street_var='st_best_guess'
 
 	#Look for block description matches
 
+
 	def check_block(temp):
 		map_block, map_streets = temp
+		map_streets = [x if x!=None else '' for x in map_streets]
+		map_streets_no_dir = map(lambda x : re.sub('^[NSEW]+ ','',x), map_streets)
 		matches = []
 		for micro_block, microdata_streets in unknown_micro_blocks_dict.items():
 			u = [i.decode('utf-8') for i in microdata_streets]
-			num_matching_streets = len(set(map_streets).intersection(set(u)))
+			num_matching_streets = len((set(map_streets)|set(map_streets_no_dir)).intersection(set(u)))
 			prop_matching_map = float(num_matching_streets)/len(map_streets)
 			if prop_matching_map >= thresh:
 				matches.append(micro_block)	
