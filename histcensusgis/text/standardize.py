@@ -27,6 +27,10 @@ def standardize_street(st):
 	st = re.sub('\\\\','',st)
 	st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
 	st = st.replace('(','').replace(')','')
+
+	#fix 'Ave. "L"' (found in SM descript for NYC)
+	if re.search('"[a-z]"$',st) :
+		st = st.replace('"','')
 	#consider extended a diff stname#
 	#st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
 

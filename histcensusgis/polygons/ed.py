@@ -480,7 +480,7 @@ def prepare_map_intersections(city_info, grid_street_var, paths) :
 		code_block="")
 
 	previous_stage = latest_stage
-	latest_stage = intermed_path + city_name + "_spatial_join.shp"
+	latest_stage = intermed_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_spatial_join.shp'
 	target_feature_file = intermed_path + "split_endpoints.shp"
 	#join intersection ID back to points file with the rest of the data
 
@@ -518,7 +518,7 @@ def prepare_map_intersections(city_info, grid_street_var, paths) :
 	arcpy.ExportXYv_stats(Input_Feature_Class=latest_stage, 
 		Value_Field="FID;Join_Count;TARGET_FID;FID_fullna;"+grid_street_var+";ORIG_FID;POINT_X;POINT_Y;POINT_X_1;POINT_Y_1;Interse_ID", 
 		Delimiter="COMMA",
-		Output_ASCII_File = intermed_path + city_name + "_Intersections.txt", 
+		Output_ASCII_File = intermed_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.txt',
 		Add_Field_Names_to_Output="ADD_FIELD_NAMES")
 
 # returns list of all EDs shared by all streets in st_ed_dict_chk
@@ -956,11 +956,11 @@ def ed_inter_algo(city_info, paths, grid_street_var):
 
 	# Ensure required files exist (i.e. dependent processes have been run)
 	print("Checking for files necessary to process %s (Intersections algorithm)" % (city_name))
-	intersections_file = geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'
-	if ~os.path.isfile(intersections_file):
+	intersections_file = geo_path + 'IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.shp'
+	if not os.path.isfile(intersections_file):
 		prepare_map_intersections(city_info, grid_street_var, paths)
 
-	Intersect_TXT = open(geo_path + '/IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.txt')
+	Intersect_TXT = open(geo_path + 'IntersectionsIntermediateFiles/' + city_name + state_abbr + '_' + str(decade) + '_stgrid_edit_Uns2_Intersections.txt')
 	SMLines = csv.reader(SM_ED_TXT)
 	next(SMLines, None)  # skip header
 	SMLines1 = csv.reader(SM_ED_TXT1)
@@ -1321,7 +1321,7 @@ def run_desc_analysis(city_info, paths, grid_street_var, wildcard=None) :
 		arcpy.AddField_management (stgrid_shp, "NAME", "TEXT")
 		with arcpy.da.UpdateCursor(stgrid_shp, [grid_street_var,"NAME"]) as up_cursor:
 			for row in up_cursor :
-				row[1] = isolate_st_name(str(row[0]))
+				row[1] = isolate_st_name(str(row[0].encode('ascii',errors='ignore')))
 				up_cursor.updateRow(row)
 
 		# Isolate St NAMEs
@@ -1822,12 +1822,12 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 	ed_inter_shp = geo_path + city_name + '_' + str(decade) + '_ed_inter.shp'
 	df_ed_inter = load_shp(ed_inter_shp)
 
-        if 'ed_inter' in list(df_ed_inter) :
-                ed_inter_var = 'ed_inter'
-        elif 'ED_inter' in list(df_ed_inter) :
-                ed_inter_var = 'ED_inter'
-        else :
-                assert('ED_inter and ed_inter not found'==False)
+	if 'ed_inter' in list(df_ed_inter) :
+		ed_inter_var = 'ed_inter'
+	elif 'ED_inter' in list(df_ed_inter) :
+		ed_inter_var = 'ED_inter'
+	else :
+		assert('ED_inter and ed_inter not found'==False)
 	
 	df_ed_inter.loc[:,'ed_inter'] = df_ed_inter[ed_inter_var].astype(str).replace('0','')
 	df_ed_inter.loc[:,'pblk_id'] = df_ed_inter['pblk_id'].astype(int)
@@ -1864,7 +1864,11 @@ def combine_ed_maps(city_info, geo_path, hn_ranges):
 		df_ed_inter_desc_shp = load_shp(ed_inter_desc_shp)
 		df_ed_inter_desc_shp.loc[:,'ed_desc'] = df_ed_inter_desc_shp['ed_desc'].astype(str).replace('None','')
 		df = df_ed_inter_desc_shp.merge(df_ed_geo.drop(['geometry'], axis=1), on='pblk_id')
-		df = df.merge(df_ed_micro_desc.drop(['geometry','ed_inter'], axis=1), on='pblk_id')
+		if 'ed_inter' in df_ed_micro_desc.columns :
+			fields_to_drop = ['geometry','ed_inter']
+		else :
+			fields_to_drop = ['geometry']
+		df = df.merge(df_ed_micro_desc.drop(fields_to_drop, axis=1), on='pblk_id')
 
 	# Select relevant variables and extract best ED guesses
 	df.loc[:,'ed_geocode'] = df[['ED_ID','ED_ID2','ED_ID3']].apply(lambda x: get_ed_geocode(x), axis=1)

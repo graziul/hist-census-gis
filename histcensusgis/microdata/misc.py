@@ -337,7 +337,9 @@ def create_addresses(city_info, paths, df=None):
 
 	# Select variables for file
 	# Create ED-block
-	if decade == 1930:
+	if decade == 1920:
+                vars_of_interest = ['index','fullname', 'ed','type','hn']
+	elif decade == 1930:
 		vars_of_interest = ['index','fullname', 'ed','type','Mblk','hn','ed_block']
 		df.loc[:,('ed_int')] = df['ed'].astype(int)
 		df.loc[:,('ed_block')] = df['ed_int'].astype(str) + '-' + df['mblk'].astype(str)

@@ -401,7 +401,7 @@ def download_sm_ed_desc(year,keep_dir=False,file_path='S:/Projects/1940Census',o
 		{'city_name':'manhattan','state_abbr':'ny'}, 
 		{'city_name':'brooklyn','state_abbr':'ny'},
 		{'city_name':'bronx','state_abbr':'ny'}]
-	#city_info_df = city_info_df.append(pd.DataFrame(new_york))
+	city_info_df = city_info_df.append(pd.DataFrame(new_york))
 	global city_state_iterator
 	city_state_iterator = zip(city_info_df['city_name'],city_info_df['state_abbr'])
 	'''global city_state_iterator

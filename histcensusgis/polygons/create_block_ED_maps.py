@@ -14,7 +14,7 @@ city_info_df['state_abbr'] = city_info_df['state_abbr'].str.replace(' ','')
 city_state_iterator = zip(city_info_df['city_name'],city_info_df['state_abbr'])
 
 def get_4prong_ed_maps() :
-        for city, state_abbr in [("Philadelphia","PA")] :
+        for city, state_abbr in [("Manhattan","NY")] :
                 city_info = [city,state_abbr,1930]
                 decade = 1930
                 geo_path = file_path+'/'+city+'/GIS_edited/'
@@ -27,8 +27,7 @@ def get_4prong_ed_maps() :
                         if not os.path.isfile(city+'_1930_block_guess.shp') :
                                 try :
                                         print "Trying to create block guess map for "+city
-                                        '''if not os.path.isfile(city+ "_"+str(decade)+ "_block_geo.shp") :
-                                                identify_blocks_geocode(city_info, paths)'''
+                                        identify_blocks_geocode(city_info, paths)
                                         identify_blocks_microdata(city_info, paths)
                                 
                                 except Exception as e:
