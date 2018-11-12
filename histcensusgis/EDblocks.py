@@ -93,7 +93,7 @@ def combine_ed_block_maps(city_info, paths):
 
 	df = df_ed_shp.merge(df_block_shp.loc[:,df_block_shp.columns!='geometry'], on='pblk_id')
 
-	def generate_ed_block_guesses():
+def generate_ed_block_guesses():
 		
 
 	df['am_bn'] = df.apply(lambda x: generate_ed_block_guesses(x[]), axis=1)

@@ -2,22 +2,8 @@
 
 from histcensusgis.microdata import *
 from histcensusgis.Clean import clean_microdata
+from multiprocessing import Pool
 
-city_name = sys.argv[1]
-state_abbr = sys.argv[2]
-decade = sys.argv[3]
-ed_map_flag = sys.argv[4]
-batch = sys.argv[5]
-
-city_info = [city_name, state_abbr, decade]
-print(city_info, ed_map_flag)
-if batch:
-	batch_clean_microdata(int(decade))
-else:
-	if city_info[:2] == ["All","All"] :
-		batch_clean_microdata(int(decade))
-	else :
-		clean_microdata(city_info=city_info, ed_map=ed_map_flag)
 
 def batch_clean_microdata(decade, city_list_csv='CityExtractionList.csv', file_path='/home/s4-data/LatestCities'):
 
@@ -72,7 +58,7 @@ def batch_clean_microdata(decade, city_list_csv='CityExtractionList.csv', file_p
 	#	clean_microdata(i[0], i[1])
 	#stuff = itertools.izip(city_info_list)
 	#func = partial(clean_microdata, city_info)
-	pool = Pool(processes=16, maxtasksperchild=1)
+	pool = Pool(processes=4, maxtasksperchild=1)
 	temp = pool.map(clean_microdata_w_args, city_info_list)
 	pool.close()
 
@@ -84,4 +70,27 @@ def clean_microdata_w_args(city_info):
 	# Farm out cleaning across multiple instances of Python
 	#stuff = itertools.izip(city_info_list, itertools.repeat(street_source), itertools.repeat(ed_map),itertools.repeat(debug), itertools.repeat(file_path))
 	#to_do_list = list(stuff)
+
+
+city_name = sys.argv[1]
+state_abbr = sys.argv[2]
+decade = int(sys.argv[3])
+ed_map_flag = sys.argv[4]
+batch = sys.argv[5]
+
+city_info = [city_name, state_abbr, decade]
+print(city_info, ed_map_flag)
+if batch:
+	batch_clean_microdata(decade)
+else:
+	if city_info[:2] == ["All","All"] :
+		batch_clean_microdata(decade)
+	else :
+		clean_microdata(city_info=city_info, ed_map=ed_map_flag)
+
+
+
+
+
+
 
