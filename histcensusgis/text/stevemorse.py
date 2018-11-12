@@ -151,17 +151,19 @@ def get_sm_st_ed(decade, sm_st_ed_dict, package_path):
 	print("Missing Steve Morse street-ED data for %s cities in %s" % (str(no_data),str(decade)))
 
 # Output list usable by students
-def output_usable_list(sm_dict, decade):
+def output_usable_list(sm_st_ed_dict, decade, city_state_iterator):
 
 	sm_dict = sm_st_ed_dict[decade]
 
-	for city_state in city_state_iterator:
+	for city_state in city_state_iterator.itertuples(index=False):
 
-		c_s = city_state[0] + city_state[1].upper()
-		file_name = file_path + '/' + str(decade) + '/sm_lists/' + c_s + '_SM.xlsx'
+		city = city_state[0].replace(' ','')
+		state = city_state[1]
+		c_s = (city,state)
+		file_name = file_path + '/' + str(decade) + '/sm_lists/' + city + state.upper() + '_SM.xlsx'
 		wb = Workbook()
 
-		temp = sm_dict[city_state]
+		temp = sm_dict[c_s]
 		sm_st_ed_dict_city = {k:v for d in [v for k,v in temp.items()] for k,v in d.items()}
 
 		#Save street-to-ED sheet
@@ -198,7 +200,7 @@ def output_usable_list(sm_dict, decade):
 		if decade == 1930:
 			ws_st1940 = wb.create_sheet('1940 Streets')
 			ws_st1940.append(['1940 Streets'])
-			streetlist = sm_st_ed_dict[1940][city_state].keys()
+			streetlist = sm_st_ed_dict[1940][c_s].keys()
 			streetlist.sort()
 			for i in streetlist:
 				ws_st1940.append([i])
@@ -257,8 +259,8 @@ def scrape_sm_st_ed(file_path, decades=[1900,1910,1920,1930,1940]):
 	# Output lists for use by students
 	sm_st_ed_dict = pickle.load(open(package_path + '/text/sm_st_ed_dict.pickle','rb'))
 	for decade in decades:
-		sm_ed_st_dict = create_ed_st_dict(sm_st_ed_dict[decade])
-		output_usable_list(sm_ed_st_dict, decade)
+		#sm_ed_st_dict = create_ed_st_dict(sm_st_ed_dict[decade], city_state_iterator)
+		output_usable_list(sm_st_ed_dict, decade, city_state_iterator)
 
 # Load Steve Morse st_ed data
 def load_steve_morse(city_info):

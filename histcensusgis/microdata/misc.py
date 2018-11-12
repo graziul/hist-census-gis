@@ -25,6 +25,22 @@ import pandas as pd
 import numpy as np
 from histcensusgis.microdata.street import create_cleaning_street_dict
 
+
+# Deal with exact ties: add exact_tie_bool==True and make exact_bool==False
+def exact_ties_bool(df):
+	exact_match = 'exact_match'
+	exact_bool = 'exact_match_bool'
+
+	# set new boolean var
+	df['exact_tie_bool'] = False
+	df.loc[(df[exact_bool]) & (df[exact_match]==''), 'exact_tie_bool'] = True
+
+	# fix exact_bool where exact tie is true
+	df.loc[df['exact_tie_bool'], exact_bool] = False
+
+	return df
+
+
 def set_priority(df):
 
 	start_priority = time.time()

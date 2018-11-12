@@ -1,6 +1,6 @@
 ﻿#
 #	Name: 		STclean.py
-#	Authors: 	Chris Graziul
+#	Authors: 	Chris Graziul, Ben Bellman
 #
 #	Input:		file_name - File name of city file, saved in Stata 13 (or below) format
 #	Output:		<file_name>_autocleaned.csv - City file with addresses cleaned 
@@ -15,6 +15,7 @@
 #               2. Fix blank street names (naive)
 
 import codecs
+import csv
 import sys
 import re
 import time
@@ -28,10 +29,96 @@ import fuzzyset
 import geopandas as gpd
 import pandas as pd
 import numpy as np
+from itertools import compress
 from histcensusgis.microdata.hn import *
 from histcensusgis.text.standardize import *
 from histcensusgis.text.stevemorse import *
 from histcensusgis.s4utils.IOutils import *
+from histcensusgis.microdata.block import *
+
+### functions for defining descriptive lists
+
+def list_type_error(list_type):
+	valid = ['exact', 'fuzzy', 'exact_ties', 'manual']
+	if not list_type in valid:
+		raise ValueError('list_type arg must be one of: ' + str(valid)) 
+
+
+def initialize_list(list_type, city_info, file_path, version):
+	# check if list is valid
+	list_type_error(list_type)
+
+	# unpack microdata info
+	city_name, state_abbr, decade = city_info
+
+	# create file path for list, create if does not exist
+	list_path = file_path + '/%s/autocleaned/%s/%s_lists/' % (str(decade), 'V'+str(version), list_type)
+	if not os.path.exists(list_path):
+		os.makedirs(list_path)
+
+	# open file for output
+	output = open(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), list_type), 'w')
+
+	# write column names depending on list type
+	if list_type == 'exact':
+		output.write('micro_st,micro_ed,match_st\n')
+
+	if list_type == 'fuzzy':
+		output.write('micro_st,micro_ed,match_st,match_score\n')
+
+	if list_type == 'exact_ties':
+		output.write('micro_st,micro_ed,possible_match\n')
+
+	if list_type == 'manual':
+		output.write('micro_st,micro_ed,new_st,extra_st,new_hn,new_block,new_institution,rear_flag\n')
+
+	# close file output
+	output.close()
+
+	return list_path
+
+
+def append_to_list(list_type, city_info, list_dict, micro_st, micro_ed, match_info = ''):
+	# check if list is valid
+	list_type_error(list_type)
+
+	# unpack microdata info
+	city_name, state_abbr, decade = city_info
+
+	# get list path from dictionary
+	list_path = list_dict[list_type]
+
+	# output new line based on microdata record
+	# press forward with recoding, and add to this function as you tackle match cases
+
+	output = open(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), list_type), 'a')
+
+	if list_type == 'exact':
+	#	else:
+		output.write(micro_st + ',' + micro_ed + ',' + match_info + '\n')
+
+	if list_type == 'fuzzy':
+		output.write(micro_st + ',' + micro_ed + ',' + match_info[1] + ',' + str(match_info[0]) + '\n')
+
+	if list_type == 'exact_ties':
+		for st in match_info:
+			output.write(micro_st + ',' + micro_ed + ',' + st + '\n')
+
+	if list_type == 'manual':
+		output.write(micro_st + ',' + micro_ed + ',,,,,,\n')
+
+	output.close()
+
+
+# this function re-sorts the match lists by micro_ed, then micro_st
+def finalize_lists(city_info, file_path, version):
+	city_name, state_abbr, decade = city_info
+	for a in ['exact', 'fuzzy', 'exact_ties', 'manual']:
+		list_path = file_path + '/%s/autocleaned/%s/%s_lists/' % (str(decade), 'V'+str(version), a)
+		l = pd.read_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a))
+		l.sort_values(['micro_ed','micro_st'])
+		l.to_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), index = False)
+
 
 #
 # Step 1: Load city
@@ -82,10 +169,7 @@ def load_city(city_info, file_path):
 
 	return df, load_time
 
-def rename_variables(df, decade, path="/home/s4-data/LatestCities") :
-	decade = int(decade)
-	print("\nStandardizing variable names\n")
-	# Load renaming information from .csv
+def change_var_names(df, decade, path="/home/s4-data/LatestCities"):
 	var_names_ref = csv.reader(open(path+"/VariableRecodes.csv","rb"))
 	columns = var_names_ref.next()
 	for row in var_names_ref :
@@ -111,13 +195,25 @@ def rename_variables(df, decade, path="/home/s4-data/LatestCities") :
 			continue
 		if name_to_change != None:		
 			df[std_name] = df[name_to_change]
+
+	return df
+
+def remove_dash(ed):
+	if '-' in ed:
+		return ed.split('-')[1]
+	else:
+		return ed
+
+def rename_variables(df, decade, path="/home/s4-data/LatestCities") :
+	decade = int(decade)
+	print("\nStandardizing variable names\n")
+
+	# Load renaming information from .csv
+	df = change_var_names(df, decade, path)
+
 	# Clean up raw variables a bit
 	df['street_raw'] = df['street_raw'].astype(str)
-	def remove_dash(ed):
-		if '-' in ed:
-			return ed.split('-')[1]
-		else:
-			return ed
+
 	if decade != 1940:
 		df['ed'] = df['ed'].astype(str)
 		df['ed'] = df['ed'].str.split('.').str[0]
@@ -127,6 +223,9 @@ def rename_variables(df, decade, path="/home/s4-data/LatestCities") :
 	df['hn'] = df['hn'].str.replace('Inf', '')
 	df['hn'] = df['hn'].str.replace('1e', '')
 	df['hn'] = df['hn'].apply(make_int)
+	# clean block number if 1930
+	if decade == 1930:
+		df['block_list'] = df['block'].map(parse_block_string)
 	return df
 
 '''
@@ -421,7 +520,7 @@ def try_to_find_dir(st, DIR, ed):
 		#POSSIBLE: Add something to catch when only some cases are missing DIR (based on street-ED)?
 		return st, True, False
 
-# This is the higher level precleaning function (with SIS flag)
+# This is the higher level precleaning function
 
 def preclean_street(df, city_info, file_path):
 
@@ -441,7 +540,7 @@ def preclean_street(df, city_info, file_path):
 
 	# If we found Steve Morse data for that decade, proceed as usual
 	if len(sm_all_streets) != 0:
-		print('SM file does exists for '+city_name+', '+state_abbr+' in '+str(decade))
+		print('SM file exists for '+city_name+', '+state_abbr+' in '+str(decade))
 		#Create dictionary {NAME:num_NAME_versions}
 		num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}
 		#Flatten for use elsewhere
@@ -463,21 +562,16 @@ def preclean_street(df, city_info, file_path):
 				year_try = year_try + 10
 				sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse([city_name, state_abbr, year_try])
 			except KeyError:
-				sm_all_streets = []
+				sm_all_streets = None
 				break
 		# delete the ED dictionaries, they are wrong
 		del sm_st_ed_dict_nested
 		sm_ed_st_dict = None
 		sm_st_ed_dict = None
-		# If we found Steve Morse data for the city, use it 
-		if len(sm_all_streets) != 0:
-			#print SM status
-			print('SM file doespath not exist for '+city_name+', '+state_abbr+' in '+str(decade))
-		# If we did not find Steve Morse data, return a bunch of Nones
-		else:
-			print('SM file could not be found for '+city_name+', '+state_abbr)
-			# delete the ED dictionaries, they are wrong
-			sm_all_streets = None
+
+		# print SM status
+		print('SM file does not exist for '+city_name+', '+state_abbr+' in '+str(decade))
+			
 
 	#If no TYPE, check if NAME is unique (and so we can assume TYPE = "St")
 	df['street_precleaned'], df['TYPE'] = zip(*df.apply(lambda x: replace_singleton_names_w_st(x['street_precleaned'], x['NAME'], x['TYPE']), axis=1))
@@ -500,7 +594,7 @@ def preclean_street(df, city_info, file_path):
 
 
 #
-# Step 3a: Import street names from street grids  
+# Extra step: Import street names from street grids  
 #
 
 specstd = {ord(u'’'): u"'", }
@@ -597,78 +691,25 @@ def get_stgrid_with_EDs(city_info, map_type, file_path, use_1940=True):
 
 	return all_streets, ed_st_dict
 
+
+
 #
-# Step 3b: Identify exact matches based on Steve Morse and 1940 street grid
+# Step 3: Identify exact matches based on Steve Morse and 1940 street grid
 #
 
-#Function to do exact matching against Steve Morse street-ED lists
-def find_exact_matches_sm(df, street, sm_all_streets, basic_info):
+# Function to run all matching for numbered streets and return results to Clean.py
+def find_exact_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict, ed_map, same_year, file_path, list_dict):
 
-	post, num_records, num_streets = basic_info
-
-	# Check for exact matches between Steve Morse ST and microdata ST
-	df['exact_match_sm_bool'+post] = df[street].apply(lambda s: s in sm_all_streets)
-	num_exact_matches_sm = np.sum(df['exact_match_sm_bool'+post])
-	num_noexact_matches_sm =  num_records - num_exact_matches_sm
-	prop_exact_matches_sm = float(num_exact_matches_sm)/float(num_records)
-	print("Cases with exact matches (Steve Morse): "+str(num_exact_matches_sm)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_sm, 1))+"%)")
-
-	# Keep track of unique streets that do and do not have exact matches 
-	df_exact_matches_sm = df[df['exact_match_sm_bool'+post]]
-	df_noexact_matches_sm = df[~df['exact_match_sm_bool'+post]]
-
-	num_streets_exact_sm = len(df_exact_matches_sm.groupby([street]).count())
-	num_streets_noexact_sm = len(df_noexact_matches_sm.groupby([street]).count())
-	while num_streets_exact_sm + num_streets_noexact_sm != num_streets:
-		print("Error in number of streets")
-		break
-	prop_exact_streets_sm = float(num_streets_exact_sm)/float(num_streets)
-	print("Streets with exact matches (Steve Morse): "+str(num_streets_exact_sm)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_sm, 1))+"%)")
-
-	# Compile info for later use
-	exact_info_sm = [num_exact_matches_sm, num_noexact_matches_sm, 
-	num_streets_exact_sm, num_streets_noexact_sm]
-
-	return df, exact_info_sm
-
-#Function to do exact matching against 1940 street grid
-def find_exact_matches_grid(df, street, st_grid_st_list, basic_info):
-
-	post, num_records, num_streets = basic_info
-
-	# Determine if cases without Steve Morse exact match have street grid exact match
-	df.loc[df['exact_match_sm_bool'+post]==False,'exact_match_stgrid_bool'+post] = df.loc[df['exact_match_sm_bool'+post]==False,street].apply(lambda s: s in st_grid_st_list)
-	num_exact_matches_stgrid = np.sum(df['exact_match_stgrid_bool'+post])
-	num_noexact_matches_stgrid = num_records - num_exact_matches_stgrid
-	prop_exact_matches_stgrid = float(num_exact_matches_stgrid)/float(num_records)
-	print("Cases with exact matches (street grid): "+str(num_exact_matches_stgrid)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches_stgrid, 1))+"%)")
-
-	# Keep track of unique streets that do and do not have exact matches in street grid
-	df['temp'] = df['exact_match_stgrid_bool'+post].fillna('')
-	df_exact_matches_stgrid = df[df['temp']==True]
-	df_noexact_matches_stgrid = df[df['temp']==False]
-	del df['temp']
-
-	num_streets_exact_stgrid = len(df_exact_matches_stgrid.groupby([street]).count())
-	num_streets_noexact_stgrid = len(df_noexact_matches_stgrid.groupby([street]).count())
-	prop_exact_streets_stgrid = float(num_streets_exact_stgrid)/float(num_streets)
-	print("Streets with exact matches (street grid): "+str(num_streets_exact_stgrid)+" of "+str(num_streets)+" streets ("+str(round(100*prop_exact_streets_stgrid, 1))+"%)\n")
-
-	# Compile info for later use
-	exact_info_stgrid = [num_exact_matches_stgrid, num_noexact_matches_stgrid, 
-	num_streets_exact_stgrid, num_streets_noexact_stgrid]
-
-	return df, exact_info_stgrid
-
-# Function to run all exact matching and return results to Clean.py
-# We are considering adding a step for exact matching within ED before checking the city
-# Will need a flag to check if same_year = True (if not, both ED-street dictionaries are 'None' values and can't be used)
-def find_exact_matches(df, city, street, sm_all_streets, source):
-
-	print("\nExact matching algorithm for %s \n" % (street))
+	print("\nBegin exact matching algorithm\n")
 
 	# Timer start
 	start = time.time()
+
+	# initialize map_type based on ed_map arg
+	if ed_map:
+		map_type = 'smgrid'
+	else:
+		map_type = 'sm'
 
 	# Bookkeeping
 	try:
@@ -676,60 +717,326 @@ def find_exact_matches(df, city, street, sm_all_streets, source):
 	except:
 		post = ''
 	num_records = len(df)
-	num_streets = len(df.groupby([street]).count())
+	num_streets = len(df.groupby([street_var]).count())
 	basic_info = [post,num_records,num_streets]
 
-	if source == 'sm':
-		# Check for exact matches between microdata and Steve Morse
-		df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
-		df['exact_match_stgrid_bool'+post] = False
-		exact_info_stgrid = [0, 0, 0, 0]
-	elif source == 'stgrid':
-		st_grid_st_list = get_streets_from_street_grid(city,state,file_path)
-		# Check for exact matches between microdata and 1940 street grid 
-		df, exact_info_stgrid = find_exact_matches_grid(df, street, st_grid_st_list, basic_info)
-		df['exact_match_sm_bool'+post] = False
-		exact_info_sm = [0, 0, 0, 0]
-	elif source == 'both':
-		# Check for exact matches between microdata and Steve Morse
-		df, exact_info_sm = find_exact_matches_sm(df, street, sm_all_streets, basic_info)
-		# Try to check for exact matches between microdata and 1940 street grid 
-		try:
-			st_grid_st_list = get_streets_from_street_grid(city,state,file_path)
-			df, exact_info_stgrid = find_exact_matches_grid(df, street, st_grid_st_list, basic_info)
-		except:
-			exact_info_stgrid = [0, 0, 0, 0]
-			df['exact_match_stgrid_bool'+post] = False
-			
-	# Create final exact match variable
-	df['exact_match_bool'+post] = np.where(df['exact_match_sm_bool'+post] | df['exact_match_stgrid_bool'+post]==True,True,False)
-	df['exact_match_type'] = np.where(df['exact_match_stgrid_bool'+post] & ~df['exact_match_sm_bool'+post],'StGrid','')
-	df.loc[df['exact_match_sm_bool'+post],'exact_match_type'] = 'SM'
+	# Run functions depending on street source(s)
+	'''
+	if ed_map==True:
 
-	# Generate some information
-	num_exact_matches = df['exact_match_bool'+post].sum()
-	prop_exact_matches = float(num_exact_matches)/float(num_records)
-	print("Total cases with exact matches: "+str(num_exact_matches)+" of "+str(num_records)+" cases ("+str(round(100*prop_exact_matches, 1))+"%)")
+		#Get 1940 grid exact matches
+		grid_1940_all_streets, grid_1940_ed_st_dict = get_stgrid_with_EDs(city_info=city_info, 
+			map_type='1940', 
+			file_path=file_path)
+		df, exact_info_1940_grid, resid = find_exact_matches_module(df=df, 
+			street=street_var, 
+			all_streets=grid_1940_all_streets, 
+			ed_st_dict=grid_1940_ed_st_dict, 
+			map_type='1940',
+			same_year=same_year,
+			city_info=city_info,
+			list_dict=list_dict)
 
-	df_exact_matches = df[df['exact_match_bool'+post]]
-	num_streets_exact = len(df_exact_matches.groupby([street]).count())
-	prop_exact_streets = float(num_streets_exact)/float(num_streets)
-	print("Total streets with exact matches: "+str(num_streets_exact)+" of "+str(num_streets)+" total streets pairs ("+str(round(100*prop_exact_streets, 1))+"%)")
+		#Get Contemporary grid exact matches
+		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city_info=city_info, 
+			map_type='Contemp', 
+			file_path=file_path)
+		df, exact_info_Contemp_grid, resid = find_exact_matches_module(df=df, 
+			street=street_var, 
+			all_streets=grid_Contemp_all_streets, 
+			ed_st_dict=grid_Contemp_ed_st_dict, 
+			map_type='Contemp', 
+			resid=resid,
+			same_year=same_year,
+			city_info=city_info,
+			list_dict=list_dict)
 
-	# Timer stop
+		exact_info = exact_info_1940_grid + exact_info_Contemp_grid 
+
+		# Get Steve Morse exact matches
+		df, exact_info_sm, resid = find_exact_matches_module(df=df, 
+			street=street_var, 
+			all_streets=sm_all_streets, 
+			ed_st_dict=sm_ed_st_dict, 
+			map_type='sm',
+			same_year=same_year,
+			resid=resid,
+			city_info=city_info,
+			list_dict=list_dict)
+
+		exact_info = exact_info + exact_info_sm 
+
+	else:
+	'''
+	# If no street-ED map information, just get Steve Morse exact matches
+	df, exact_info_sm, resid = find_exact_matches_module(df=df, 
+		street=street_var, 
+		all_streets=sm_all_streets, 
+		ed_st_dict=sm_ed_st_dict, 
+		map_type=map_type,
+		same_year=same_year,
+		city_info=city_info,
+		list_dict=list_dict)
+	exact_info = exact_info_sm
+
+	return df, exact_info
+
+
+
+
+#Function to do exact matching against Steve Morse street-ED lists
+# need a 'resid' argument when I extend for street grid files
+def find_exact_matches_module(df, street, all_streets, ed_st_dict, map_type, same_year, city_info, list_dict):	
+
+	### Note: the logic of this step is directly borrowing from the exact match module
+
+	start = time.time()
+
+	try:
+		post = '_' + street.split('_')[2].split('HN')[0]
+	except:
+		post = ''
+
+	#Set exact match var names
+	#exact_match = 'exact_match_' + post
+	#exact_bool = 'exact_match_bool' + post
+	exact_match = 'exact_match'
+	exact_bool = 'exact_match_bool'
+
+	# group by street within ED
+	df_grouped = df.groupby([street, 'ed'])
+	exact_match_dict = {}
+
+	# Match unique streets within EDs to ED street list using name and type (no direction)
+	for st_ed, _ in df_grouped:
+		# If Steve Morse data come from same year as microdata, use ED for num matching
+		if same_year:
+			exact_match_dict[st_ed] = exact_match_function(st_ed[0], st_ed[1], ed_st_dict, city_info, list_dict)
+		# If Steve Morse data DO NOT come from same year as microdata, do not use ED for num matching
+		else:
+			exact_match_dict[st_ed] = exact_match_function_no_ed(st_ed[0], all_streets, city_info, list_dict)
+
+	#Get exact street matches
+	df[exact_match], df[exact_bool] = zip(*df.apply(lambda x: exact_match_dict[x[street], x['ed']], axis=1))
+
+	#Compute number of residuals
+	num_records = len(df)
+	resid = num_records - len(df[df[exact_bool]])
+
+	#Generate dashboard information
+	num_exact_matches = np.sum(df[exact_bool])
+	prop_exact_matches = float(num_exact_matches)/num_records
+	print("Exact matches (using " + map_type + "): "+str(num_exact_matches)+" of "+str(num_records)+" unmatched cases ("+str(round(100*float(num_exact_matches)/float(num_records), 1))+"%)")
 	end = time.time()
 	exact_matching_time = round(float(end-start)/60, 1)
 	print("Exact matching took %s minutes\n" % (str(exact_matching_time)))
+	exact_info = [num_exact_matches, exact_matching_time]
 
-	# Generate dashboard info
-	exact_info = exact_info_sm + [num_records, num_streets] + exact_info_stgrid + [exact_matching_time]
+	return df, exact_info, resid
 
-	return df, exact_info
+
+#define very small function for checking an exact match
+def ex_match(a, b):
+	return a == b
+
+#define num match with dir, name, type
+def exact_match_dnt(street, street_list, ed, city_info, list_dict):
+	nomatch = ['', False]
+
+	#Store index where there is an exact match with street being considered
+	index = [ex_match(a, street) for a in street_list]
+	#Get names of match(es) from SM ED list !with direction!
+	exact_match = list(compress(street_list, index))
+	#Return match if there is only one
+	if len(exact_match) == 1:
+		append_to_list(list_type='exact',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=exact_match[0])
+		return [exact_match[0], True]
+	else:
+		return "Not done"
+
+#define num match with name, type (no dir)
+def exact_match_nt(street, street_list, ed, city_info, list_dict):
+	nomatch = ['', False]
+	tiematch = ['', True]
+	street_no_dir = re.sub('^[NSEW][EW]? ', '', street)
+	street_list_no_dir = [re.sub('^[NSEW][EW]? ', '', a) for a in street_list]
+
+	#Store index where there is an exact match with street being considered
+	index = [ex_match(a, street_no_dir) for a in street_list_no_dir]
+	#Get names of match(es) from SM ED list !with direction!
+	exact_match = list(compress(street_list, index))
+	#Return match if there is only one
+	if len(set(exact_match)) == 1:
+		append_to_list(list_type='exact',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=exact_match[0])
+		return [exact_match[0], True]
+	#If multiple matches, return no match and add to ambiguous list
+	if len(set(exact_match)) > 1:
+		append_to_list(list_type='exact_ties',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=exact_match)
+		return tiematch
+	else:
+		return "Not done"
+
+#define num match with name, type (no dir)
+def exact_match_dn(street, street_list, ed, city_info, list_dict):
+	nomatch = ['', False]
+	tiematch = ['', True]
+	street_no_type = re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', street)
+	street_list_no_type = [re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', a) for a in street_list]
+
+	#Store index where there is an exact match with street being considered
+	index = [ex_match(a, street_no_type) for a in street_list_no_type]
+	#Get names of match(es) from SM ED list !with direction!
+	exact_match = list(compress(street_list, index))
+	#Return match if there is only one
+	if len(set(exact_match)) == 1:
+		append_to_list(list_type='exact',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=exact_match[0])
+		return [exact_match[0], True]
+	#If multiple matches, return no match and add to ambiguous to be checked manually
+	if len(set(exact_match)) > 1:
+		append_to_list(list_type='exact_ties',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=exact_match)
+		return tiematch
+	else:
+		return "Not done"
+
+#define num match with only name (no dir or type)
+def exact_match_n(street, street_list, ed, city_info, list_dict):
+	nomatch = ['', False]
+	tiematch = ['', True]
+	street_no_dir = re.sub('^[NSEW][EW]? ', '', street)
+	street_no_dir_no_type = re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', street_no_dir)
+	street_list_no_dir = [re.sub('^[NSEW][EW]? ', '', a) for a in street_list]
+	street_list_no_dir_no_type = [re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', a) for a in street_list_no_dir]
+
+	#Store index where there is an exact match with street being considered
+	index = [ex_match(a, street_no_dir_no_type) for a in street_list_no_dir_no_type]
+	#Get names of match(es) from SM ED list !with direction!
+	exact_match = list(compress(street_list, index))
+	#Return match if there is only one
+	if len(set(exact_match)) == 1:
+		append_to_list(list_type='exact',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=exact_match[0])
+		return [exact_match[0], True]
+	#If multiple matches, return no match and add to list of manual checks
+	if len(set(exact_match)) > 1:
+		append_to_list(list_type='exact_ties',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=exact_match)
+		return tiematch
+	else:
+		# Don't return to junk list, as these will get fuzzy matched in next step
+		return nomatch
+
+#Num matching algorithm
+def exact_match_function(street, ed, ed_streets_dict, city_info, list_dict):
+
+	nomatch = ['', False]
+
+	#Return null if street is blank
+	if street == '':
+		return nomatch
+	#Microdata ED may not be in Steve Morse, if so then no match
+	try:	
+		ed_streets = ed_streets_dict[ed]
+	except:
+		return nomatch
+
+	# Check to see if microdata street has a type or direction
+	DIR = re.search('^[NSEW][EW]? ', street)
+	TYPE = re.search(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', street)
+
+	# process if street has dir but no type
+	if (DIR != None) & (TYPE == None):
+		exact_info = exact_match_dn(street, ed_streets, ed, city_info, list_dict)
+		if exact_info != "Not done":
+			return exact_info
+		exact_info = exact_match_n(street, ed_streets, ed, city_info, list_dict)
+		return exact_info
+
+	# process if street has both dir and type
+	else:
+		exact_info = exact_match_dnt(street, ed_streets, ed, city_info, list_dict)
+		if exact_info != "Not done":
+			return exact_info
+		exact_info = exact_match_nt(street, ed_streets, ed, city_info, list_dict)
+		if exact_info != "Not done":
+			return exact_info
+		exact_info = exact_match_n(street, ed_streets, ed, city_info, list_dict)
+		return exact_info
+
+
+
+
+
+
+#exact matching algorithm when SM file is from a later year (same_year = False)
+def exact_match_function_no_ed(street, all_streets, city_info, list_dict):
+	nomatch = ['', False]
+	ed = ''
+	
+	#Return null if street is blank
+	if street == '':
+		return nomatch
+
+	# Check to see if microdata street has a type or direction
+	DIR = re.search('^[NSEW][EW]? ', street)
+	TYPE = re.search(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', street)
+
+	# process if street has dir but no type
+	if (DIR != None) & (TYPE == None):
+		exact_info = exact_match_dn(street, ed_streets, ed, city_info, list_dict)
+		if exact_info != "Not done":
+			return exact_info
+		exact_info = exact_match_n(street, ed_streets, ed, city_info, list_dict)
+		return exact_info
+
+	# process if street has both dir and type
+	else:
+		exact_info = exact_match_dnt(street, ed_streets, ed, city_info, list_dict)
+		if exact_info != "Not done":
+			return exact_info
+		exact_info = exact_match_nt(street, ed_streets, ed, city_info, list_dict)
+		if exact_info != "Not done":
+			return exact_info
+		exact_info = exact_match_n(street, ed_streets, ed, city_info, list_dict)
+		return exact_info
+
 
 #
 # Step 4a: Search for fuzzy matches
 #
-
+'''
 #Function to check if street names differ by one character
 def diff_by_one_char(st1, st2):
 	if len(st1) == len(st2):
@@ -742,15 +1049,25 @@ def diff_by_one_char(st1, st2):
 			return False
 	else:
 		return False
+'''
 
 #Fuzzy matching algorithm
-def fuzzy_match_function(street, ed, ed_streets_dict, all_streets_fuzzyset, check_too_similar=False):
+# Check too similar is now deprecated
+
+def fuzzy_match_function(street, ed, ed_streets_dict, all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict):
 
 	nomatch = ['', '', False]
+
+	#DIR, NAME, TYPE = street_info
+	#street = DIR+' '+NAME+' '+TYPE
+	#street = street.strip()
+
+	TYPE = re.search(' ((St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike))$', street)
 
 	#Return null if street is blank
 	if street == '':
 		return nomatch
+
 	#Microdata ED may not be in Steve Morse, if so then add it to problem ED list and return null
 	try:
 		ed_streets = ed_streets_dict[ed]
@@ -759,59 +1076,221 @@ def fuzzy_match_function(street, ed, ed_streets_dict, all_streets_fuzzyset, chec
  #		print("Problem ED:" + str(ed))
 		return nomatch
 
-	#Step 1: Find best match among streets associated with microdata ED
-	try:
-		best_match_ed = ed_streets_fuzzyset[street][0]
-	except:
-		return nomatch
-	#Step 2: Find best match among all streets
-	try:
-		best_match_all = all_streets_fuzzyset[street][0]
-	except:
-		return nomatch    
-	#Step 3: If both best matches are the same, return as best match
-	if (best_match_ed[1] == best_match_all[1]) & (best_match_ed[0] >= 0.5):
-		#Check how many other streets in ED differ by one character
-		if check_too_similar:
-			too_similar = sum([diff_by_one_char(st, best_match_ed[1]) for st in sm_ed_streets])
-			if too_similar == 0:
-				return [best_match_ed[1], best_match_ed[0], True]
-			else:
-				return nomatch
-		else: 
-			return [best_match_ed[1], best_match_ed[0], True]
-	#Step 4: If both are not the same, return one with the higher score (to help manual cleaning)
+	# Create fuzzyset without type if microdata street has no type
+	ed_streets_notype = [re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', a) for a in ed_streets]
+	ed_streets_notype_fuzzyset = fuzzyset.FuzzySet(ed_streets_notype)
+
+	# Fuzzy match without the direction
+	street_no_dir = re.sub('^[NSEW][EW]? ', '', street)
+
+	### Start of fuzzy match algorithm
+
+	#Step 1: Find best three matches among streets associated with microdata ED
+	# Check if type exists in microdata street, run accordingly
+	if not TYPE:
+		try:
+			best_match_ed = ed_streets_notype_fuzzyset[street_no_dir]
+		except:
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch
 	else:
-		if best_match_all[0] < best_match_ed[0]:
-			return [best_match_ed[1], best_match_ed[0], False]
+		try:
+			best_match_ed = ed_streets_fuzzyset[street_no_dir]
+		except:
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch
+
+	#Step 2: Find best match among all streets
+	# check type again
+	if not TYPE:
+		try:
+			best_match_all = all_streets_notype_fuzzyset[street_no_dir]
+		except:
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch  
+	else:
+		try:
+			best_match_all = all_streets_fuzzyset[street_no_dir]
+		except:
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch
+
+	#Step 3: Collect top scores and compare if ED or city is highest
+	ed_score = best_match_ed[0][0]
+	city_score = best_match_all[0][0]
+
+	#Side-step: if no type, remake fuzzy match objects with full street name
+	if not TYPE:
+		best_match_ed_return = [(x[0], ed_streets[ed_streets_notype.index(x[1])]) for x in best_match_ed]
+		best_match_all_return = [(x[0], all_streets[all_streets_notype.index(x[1])]) for x in best_match_all]
+	else:
+		best_match_ed_return = best_match_ed
+		best_match_all_return = best_match_all
+
+	#Step 4: If city score is highest, check for tie, and if score is high enough to return
+	if city_score > ed_score:
+		if (city_score >= 0.9) & (ed_score < 0.7):
+			# ambiguous case
+			if len(best_match_all) > 1:
+				append_to_list(list_type='manual',
+					city_info=city_info,
+					list_dict=list_dict,
+					micro_st=street,
+					micro_ed=ed)
+				return nomatch
+			# fuzzy match case
+			else:
+				append_to_list(list_type='fuzzy',
+					city_info=city_info,
+					list_dict=list_dict,
+					micro_st=street,
+					micro_ed=ed,
+					match_info=best_match_all_return[0])
+				return [best_match_all_return[0][1], best_match_all_return[0][0], True]
+		if ed_score >= 0.5:
+			# ambiguous case
+			if len(best_match_ed) > 1:
+				append_to_list(list_type='manual',
+					city_info=city_info,
+					list_dict=list_dict,
+					micro_st=street,
+					micro_ed=ed)
+				return nomatch
+			# fuzzy match case
+			else:
+				append_to_list(list_type='fuzzy',
+					city_info=city_info,
+					list_dict=list_dict,
+					micro_st=street,
+					micro_ed=ed,
+					match_info=best_match_ed_return[0])
+				return [best_match_ed_return[0][1], best_match_ed_return[0][0], True]
+		# junk case
 		else:
-			return [best_match_all[1], best_match_all[0], False]
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch
+
+	#Step 5: ED match is best; check if match score is high enough; check if too similar
+	else:
+		if ed_score >= 0.5:
+			# ambiguous case
+			if len(best_match_ed) > 1:
+				append_to_list(list_type='manual',
+					city_info=city_info,
+					list_dict=list_dict,
+					micro_st=street,
+					micro_ed=ed)
+				return nomatch
+			# fuzzy match case
+			else:
+				append_to_list(list_type='fuzzy',
+					city_info=city_info,
+					list_dict=list_dict,
+					micro_st=street,
+					micro_ed=ed,
+					match_info=best_match_ed_return[0])
+				return [best_match_ed_return[0][1], best_match_ed_return[0][0], True]
+		# junk case	
+		else:
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch
+
 
 #Fuzzy matching algorithm when SM file is from a later year (same_year = False)
-def fuzzy_match_function_no_ed(street, all_streets_fuzzyset):
+def fuzzy_match_function_no_ed(street, all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict):
 	
 	nomatch = ['', '', False]
+
+	TYPE = re.search(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', street)
 	
 	#Return null if street is blank
 	if street == '':
 		return nomatch
-	
-	#Find best match among all streets
-	try:
-		best_match_all = all_streets_fuzzyset[street][0]
-	except:
+
+	# drop direction
+	#street_no_dir = re.sub('^[NSEW][EW]? ', '', street)
+
+	# Find best match among all streets
+	# use street list without type if microdata street has no type
+	if not TYPE:
+		try:
+			best_match_all = all_streets_notype_fuzzyset[street]
+		except:
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch
+	else:
+		try:
+			best_match_all = all_streets_fuzzyset[street]
+		except:
+			append_to_list(list_type='manual',
+				city_info=city_info,
+				list_dict=list_dict,
+				micro_st=street,
+				micro_ed=ed)
+			return nomatch
+
+	# Reattach type to output
+	if not TYPE:
+		best_match_all_return = [(x[0], all_streets[all_streets_notype.index(x[1])]) for x in best_match_all]
+	else:
+		best_match_all_return = best_match_all
+
+	# if best match is a tie, return as ambiguous
+	if len(best_match_all) > 1:
+		append_to_list(list_type='manual',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed)
 		return nomatch
-	return [best_match_all[1], best_match_all[0], True]
+	# otherwise, return match
+	else:
+		append_to_list(list_type='fuzzy',
+			city_info=city_info,
+			list_dict=list_dict,
+			micro_st=street,
+			micro_ed=ed,
+			match_info=best_match_all_return[0])
+		return [best_match_all_return[0][1], best_match_all_return[0][0], True]
 
 #Helper function (necessary since dictionary built only for cases without validated exact matches)
 def get_fuzzy_match(exact_match, fuzzy_match_dict, street, ed):
 	#Only look at cases without validated exact match
 	if not (exact_match):
 		#Need to make sure "Unnamed" street doesn't get fuzzy matched
-		if 'Unnamed' in street:
+		if street == 'Unnamed':
 			return ['', '', False]
 		#Get fuzzy match    
 		else:
+			#street_info.append(ed)
 			return fuzzy_match_dict[street, ed]
 	#Return null if exact validated match
 	else:
@@ -825,12 +1304,12 @@ def update_current_match(current_match, current_match_bool, new_match, new_match
 		return current_match, current_match_bool
 
 #Function to do fuzzy matching using multiple sources
-def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type, same_year, resid=0):
+def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type, same_year, city_info, list_dict, resid=0):
 
 	start = time.time()
 
 	try:
-		post = '_' + street.split('_')[2].split('HN')[0]
+		post = '_' + street_var.split('_')[2].split('HN')[0]
 	except:
 		post = ''
 
@@ -842,6 +1321,10 @@ def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type,
 	#Create all street fuzzyset only once
 	all_streets_fuzzyset = fuzzyset.FuzzySet(all_streets)
 
+	#create all street fuzzyset without directions
+	all_streets_notype = [re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', a) for a in all_streets]
+	all_streets_notype_fuzzyset = fuzzyset.FuzzySet(all_streets_notype)
+
 	#Create dictionary based on Street-ED pairs for faster lookup using helper function
 	df_no_exact_match = df[~(df['current_match_bool'+post])]
 	df_grouped = df_no_exact_match.groupby([street_var, 'ed'])
@@ -851,10 +1334,10 @@ def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type,
 		for st_ed, _ in df_grouped:
 			# If Steve Morse data come from same year as microdata, use ED for fuzzy matching
 			if same_year:
-				fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], ed_st_dict, all_streets_fuzzyset)
+				fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], ed_st_dict, all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict)
 			# If Steve Morse data DO NOT come from same year as microdata, do not use ED for fuzzy matching
 			else:
-				fuzzy_match_dict[st_ed] = fuzzy_match_function_no_ed(st_ed[0], all_streets_fuzzyset)
+				fuzzy_match_dict[st_ed] = fuzzy_match_function_no_ed(st_ed[0], all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict)
 	else:
 		# For when there is no Steve Morse dictionary or Street Grid
 		return df, [0, 0], len(df)-len(df_no_exact_match)
@@ -880,24 +1363,41 @@ def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type,
 	return df, fuzzy_info, resid
 
 #Function to run all fuzzy matching and return results to Clean.py
-def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map, same_year):
+def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict, ed_map, same_year, file_path, list_dict):
 
 	city_name, state_abbr, _ = city_info
+
+	# initialize map_type based on ed_map arg
+	if ed_map:
+		map_type = 'smgrid'
+	else:
+		map_type = 'sm'
 
 	try:
 		post = '_' + street.split('_')[2].split('HN')[0]
 	except:
 		post = ''
 
-	print("Fuzzy matching algorithm for %s \n" % (street_var))
+	#Set exact match var names
+	#exact_match = 'exact_match_' + post
+	#exact_bool = 'exact_match_bool' + post
+	exact_match = 'exact_match'
+	exact_bool = 'exact_match_bool'
+
+	print("Begin fuzzy matching algorithm\n")
 
 	#Initialize fuzzy_match_bool
 	df['fuzzy_match_bool'] = False
 
-	#Initialize current match to exact matches that were found
+	#Initialize current match columns to exact matches that were found
+	# boolean for match
+	df['current_match_bool'+post] = False
+	df.loc[df[exact_bool], 'current_match_bool'+post] = True
+
+	# actual match
 	df['current_match'+post] = ''
-	df['current_match_bool'+post] = df['exact_match_bool']
-	df.loc[df['current_match_bool'+post],'current_match'+post] = df[street_var]
+	df.loc[df[exact_bool],'current_match'+post] = df[exact_match]
+
 
 	if ed_map==True:
 
@@ -910,22 +1410,27 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			all_streets=grid_1940_all_streets, 
 			ed_st_dict=grid_1940_ed_st_dict, 
 			map_type='1940',
-			same_year=same_year)
+			same_year=same_year,
+			city_info=city_info,
+			list_dict=list_dict)
 
+		'''
 		#Get Contemporary grid fuzzy matches
 		grid_Contemp_all_streets, grid_Contemp_ed_st_dict = get_stgrid_with_EDs(city_info=city_info, 
 			map_type='Contemp', 
 			file_path=file_path)
 		df, fuzzy_info_Contemp_grid, resid = find_fuzzy_matches_module(df=df, 
-			street_var=street_var, 
+			#street_var=street_var, 
 			all_streets=grid_Contemp_all_streets, 
 			ed_st_dict=grid_Contemp_ed_st_dict, 
 			map_type='Contemp', 
 			resid=resid,
-			same_year=same_year)
+			same_year=same_year,
+			city_info=city_info,
+			list_dict=list_dict)
 
 		#Get Chicago group 1930 grid fuzzy matches
-		'''
+		
 		if city_name in ['Boston', 'Cincinnatti','Philadelphia']:
 			grid_1930_all_streets, grid_1930_ed_st_dict = get_stgrid_with_EDs(city_info=city_info, 
 				map_type='Chicago', 
@@ -947,9 +1452,11 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			street_var=street_var, 
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
-			map_type='sm',
+			map_type=map_type,
 			same_year=same_year,
-			resid=resid)
+			resid=resid,
+			city_info=city_info,
+			list_dict=list_dict)
 
 		fuzzy_info = fuzzy_info + fuzzy_info_sm 
 
@@ -959,8 +1466,10 @@ def find_fuzzy_matches(df, city_info, street_var, sm_all_streets, sm_ed_st_dict,
 			street_var=street_var, 
 			all_streets=sm_all_streets, 
 			ed_st_dict=sm_ed_st_dict, 
-			map_type='sm',
-			same_year=same_year)
+			map_type=map_type,
+			same_year=same_year,
+			city_info=city_info,
+			list_dict=list_dict)
 		fuzzy_info = fuzzy_info_sm
 
 	return df, fuzzy_info
@@ -1063,108 +1572,8 @@ def check_ed_match(microdata_ed,microdata_st,sm_st_ed_dict):
 		else:
 			return False
 
-# Side-step for NYC files
-# Since SM dictionaries are for the 5 boroughs, the process must be done for each
-# This function is identical to the clean_microdata() process for other cities, but includes this loop and append
-
-def clean_nyc(df, city_info, file_path):
-
-	boros = {50:'bronx', 470:'brooklyn', 610:'manhattan', 810:'queens', 850:'staten island'}
-	codes = df['county'].unique()
-	for code in codes:
-		boro = boros[code]
-
-		city_info[0] = boro
-				
-		print('Begin cleaning ' + boro)
-				
-		boro_df = df.loc[df['county'] == code]
-
-		#
-		# Step 2: Format raw street names and fill in blank street names
-		#
-
-		# Step 2a: Properly format street names and get Steve Morse street-ed information
-		boro_df, preclean_info = preclean_street(boro_df, city_info, file_path)  
-		sm_all_streets, sm_st_ed_dict, sm_ed_st_dict, _, same_year  = preclean_info  
-
-		# Step 2b: Use formatted street names to get house number sequences
-		street_var = 'street_precleaned'
-		boro_df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(boro_df, street_var, 'hn_outlier1', decade, HN_SEQ, ED_ST_HN_dict)
-
-		# Step 2c: Use house number sequences to fill in blank street names
-		boro_df, fix_blanks_info1 = fix_blank_st(boro_df, boro, HN_SEQ, 'street_precleaned', sm_st_ed_dict)
-
-		#
-		# Step 3: Identify exact matches
-		#
-
-		preclean_var = 'street_precleanedHN'
-
-		# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
-		boro_df, exact_info = find_exact_matches(boro_df, city_name, preclean_var, sm_all_streets, street_source)
-
-		#
-		# Step 4: Search for fuzzy matches and use result to fill in more blank street names
-		#
-
-		# Step 4a: Search for fuzzy matches
-		boro_df, fuzzy_info = find_fuzzy_matches(boro_df, city_info, preclean_var, sm_all_streets, sm_ed_st_dict, file_path, ed_map = False)
-		street_var = 'street_post_fuzzy'
-		boro_df[street_var] = boro_df[preclean_var]
-		boro_df.loc[boro_df['current_match_bool'],street_var] = boro_df['current_match']
-
-		# Step 4b: Use fuzzy matches to get house number sequences
-		boro_df, HN_SEQ, ED_ST_HN_dict = handle_outlier_hns(boro_df, street_var, 'hn_outlier2', decade, HN_SEQ, ED_ST_HN_dict)
-
-		# Step 4c: Use house number sequences to fill in blank street names
-		boro_df, fix_blanks_info2 = fix_blank_st(boro_df, boro, HN_SEQ, 'street_post_fuzzy', sm_st_ed_dict)
-
-		#	
-		# Step 5: Create overall match and all check variables
-		#
-
-		post_var = 'street_post_fuzzyHN'
-		boro_df = create_overall_match_variables(boro_df, decade)
-
-		print("\nOverall matches: "+str(boro_df['overall_match_bool'].sum())+" of "+str(len(boro_df))+" total cases ("+str(round(100*float(boro_df['overall_match_bool'].sum())/len(boro_df),1))+"%)\n")
-
-		# Append all the borough files together
-
-		try:
-			nyc
-		except NameError:
-			nyc = new_df
-		else:            
-			nyc = nyc.append(new_df)
-				
-		print(boro + ' is done!')
 
 
-	#
-	# Step 6: Set priority level for residual cases
-	#
 
-	#df, priority_info = set_priority(df)
 
-	#
-	# Step 7: Save full dataset and generate dashboard information 
-	#
 
-	city_state = city_name.replace(' ','') + state_abbr
-	autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
-	if ~os.path.exists(autoclean_path):
-		os.makedirs(autoclean_path)
-	file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
-	df.to_csv(file_name_all)
-
-	'''
-	#Generate dashbaord info
-	times = [load_time, total_time]
-	if decade != 1940:
-		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times, fix_blanks_info1, fix_blanks_info2)
-	else:
-		info = gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, times)
-	'''
-	
-	print("%s %s, %s complete" % (decade, city_name, state_abbr))

@@ -7,9 +7,20 @@ import pandas as pd
 import itertools
 
 # Version number 
-version = 7
+version = 8
 
 # Changelog
+#
+# V8
+#   - Function now creates three new files documenting results
+#      * csv lists describing all ed_st combos in microdata
+#      * exact matches, fuzzy matches, non-matches for manual inspection
+#      * still need to add funcitonality to update cleaned data with manual results
+#   - New logic for exact matching function within ED
+#      * try whole string, then drop direction, then drop type (and drop type in SM/Grid data)
+#   - Now fuzzy matching without type in ED list if microdata street has no type
+#   - Now applies new function for cleaning block numbers in 1930, written by Amory
+#   - Small changes to sm_st_ed_dict file and scraping process
 #
 # V7
 #   - Using grid street names for exact name matching and first fuzzy name matching (SM used for second)
@@ -46,7 +57,7 @@ version = 7
 #
 # V1 - Original run
 
-def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
+def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
 
 	datestr = time.strftime("%Y_%m_%d")
 
@@ -56,8 +67,18 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 	# Step 0: Initialize a bunch of variables for use throughout
 	#
 
+	# initialize house number dictionaries
 	HN_SEQ = {}
 	ED_ST_HN_dict = {}
+
+	# Initialize lists describing st_ed combo results
+	types = ['exact', 'fuzzy', 'exact_ties', 'manual']
+	paths = []
+	for l in types:
+		add = initialize_list(l, city_info, file_path, version)
+		paths.append(add)
+	# create dictionary to reference later
+	list_dict = dict(zip(types, paths))
 
 	#Save to logfile
 	log_path = file_path + "/%s/logs/" % (str(decade))
@@ -78,13 +99,6 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 	except:
 		print("Raw data not found for %s, %s (may not have existed)" % (city_name, state_abbr))
 		return
-
-	# Side step: If processing NYC all at once, run a separate process
-	# Process is identical to below, but must be applied to all boroughs separately
-
-	if city_name == 'NewYork' or city_name == 'new york':
-		clean_nyc(df, city_info, file_path)
-		return 
 
 	#
 	# Step 2: Format raw street names and fill in blank street names
@@ -111,7 +125,15 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 	#
 
 	# Identify exact matches based on 1930 Steve Morse and/or 1940 street grid
-	df, exact_info = find_exact_matches(df, city_name, preclean_var, sm_all_streets, street_source)
+	df, exact_info = find_exact_matches(df=df,
+		city_info=city_info,
+		street_var=preclean_var,
+		sm_all_streets=sm_all_streets,
+		sm_ed_st_dict=sm_ed_st_dict,
+		ed_map=ed_map,
+		same_year=same_year,
+		file_path=file_path,
+		list_dict=list_dict)
 
 	#
 	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
@@ -122,10 +144,11 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 		city_info=city_info, 
 		street_var=preclean_var, 
 		sm_all_streets=sm_all_streets, 
-		sm_ed_st_dict=sm_ed_st_dict, 
-		file_path=file_path, 
+		sm_ed_st_dict=sm_ed_st_dict,  
 		ed_map=ed_map,
-		same_year=same_year)
+		same_year=same_year, 
+		file_path=file_path,
+		list_dict=list_dict)
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df[preclean_var]
 	df.loc[df['current_match_bool'],street_var] = df['current_match']
@@ -142,6 +165,9 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 	# Step 5: Create overall match and all check variables
 	#
 
+	# before overall matches, must recode boolean vars for exact ties
+	df = exact_ties_bool(df)
+
 	df = create_overall_match_variables(df)
 
 	print("\nOverall matches: "+str(df['overall_match_bool'].sum())+" of "+str(len(df))+" total cases ("+str(round(100*float(df['overall_match_bool'].sum())/len(df),1))+"%)\n")
@@ -156,6 +182,10 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 	# Step 7: Save full dataset and generate dashboard information 
 	#
 
+	# before export, finalize external match lists
+	finalize_lists(city_info, file_path, version)
+
+	# export data
 	city_state = city_name.replace(' ','') + state_abbr
 	autoclean_path = file_path + '/%s/autocleaned/%s/' % (str(decade), 'V'+str(version))
 	if not os.path.exists(autoclean_path):
@@ -183,10 +213,8 @@ def clean_microdata(city_info, street_source='both', ed_map=False, debug=False, 
 
 '''
 # Build dashboard for decade and save
-
 city_state = ['City','State']
 header_names = ['decade'] + city_state + ['NumCases']
-
 if decade != 1940:
 	STprop_names = ['propExactMatchesStGrid','propFuzzyMatches','propBlankSTfixed']
 	STnum_names = city_state + ['numExactMatchesStGrid','numFuzzyMatches','numBlankSTfixed']
@@ -195,35 +223,26 @@ if decade != 1940:
 		'HnOutliers2','StreetNameBlanks2','BlankSingletons2','PerSingletons2']
 	Time_names = city_state + ['LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime',
 		'BlankFixTime','PriorityTime','TotalTime']
-
 	sp = ['']
 	names = header_names + STprop_names + sp + STnum_names + sp + ED_names + sp + FixBlank_names + sp + Time_names
-
 	df = pd.DataFrame(temp,columns=names)
-
 	dfSTprop = df.iloc[:,1:8].sort_values(by='prop_exact_matches_stgrid').reset_index()
 	dfSTnum = df.iloc[:,8:14].sort_values(by='ResidSt').reset_index()
 	dfED = df.iloc[:,14:18].sort_values(by=city_state,ascending=False).reset_index()
 	dfFixBlank = df.iloc[:,18:29].reset_index()
 	dfTime = df.iloc[:,29:40].sort_values(by='TotalTime').reset_index()
-
 	dashboard = pd.concat([dfSTprop, dfSTnum, dfHNprop, dfHNnum, dfRprop, dfRnum, dfperPriority, dfPriority, dfseqPriority, dfperseqPriority, dfED, dfFixBlank, dfTime],axis=1)
 else:
 	STprop_names = ['propExactMatches','propFuzzyMatches','propResid']
 	STnum_names = city_state + ['numExactMatches','numFuzzyMatches','numResid']
 	Time_names = city_state + ['LoadTime','PrecleanTime','ExactMatchingTime','FuzzyMatchingTime','TotalTime']
-
 	sp = ['']
 	names = header_names + STprop_names + sp + STnum_names + sp + Time_names
-
 	df = pd.DataFrame(temp,columns=names)
-
 	dfSTprop = df.iloc[:,1:8].sort_values(by='propExactMatches').reset_index()
 	dfSTnum = df.iloc[:,8:14].sort_values(by='numResid').reset_index()
 	dfTime = df.iloc[:,15:25].sort_values(by='TotalTime').reset_index()
-
 	dashboard = pd.concat([dfSTprop, dfSTnum, dfTime],axis=1)
-
 dashboard['version'] = version
 csv_file = file_path + '/%s/CleaningSummary%s_%s.csv' % (str(decade),str(decade),datestr)
 dashboard.to_csv(csv_file,index=False)
