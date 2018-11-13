@@ -10,6 +10,7 @@ import math
 import pickle
 import fuzzyset
 from histcensusgis.s4utils.AmoryUtils import *
+from histcensusgis.text.standardize import isolate_st_name
 import numpy as np
 
 def standardize_hn(s):
@@ -259,17 +260,6 @@ def handle_outlier_hns(df, street_var, outlier_var, year, HN_SEQ, ED_ST_HN_dict)
 		seq_end = num_seq(df,ind+1,num,1)
 
 		return [seq_start,seq_end]#[seq_start,seq_end,get_hn(seq_start),get_hn(seq_end)]
-
-	#Returns just the NAME component of the street phrase, if any#
-	def isolate_st_name(st) :
-		if(not (st == None or st == '' or st == -1)) :
-
-			TYPE = re.search(r' (St|Ave|Blvd|Pl|Drive|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Ter|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
-			if(TYPE) :
-				st = re.sub(TYPE.group(0), "",st)
-			st = re.sub("^[NSEW]+ ","",st)
-			st = st.strip()
-		return st
 
 	#returns True if st does not share a NAME with any other street in ed
 	def st_name_ed_check(st, ed, st_ed_dict) :

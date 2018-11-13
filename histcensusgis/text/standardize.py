@@ -379,7 +379,7 @@ def Num_Standardize(NAME) :
 
 #Returns just the NAME component of the street phrase, if any If second argument is True, return a list of all components 
 def isolate_st_name(st,whole_phrase = False) :
-	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
+	if (st == None or st == '' or st == -1) or (not isinstance(st, str) or (not isinstance(st, unicode)) :
 		return ''
 	else :
 		TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|Rive?r?|Ocean|Bay|Canal|Sound|[Ll]ine|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
