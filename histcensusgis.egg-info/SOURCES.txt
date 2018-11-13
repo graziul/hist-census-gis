@@ -22,6 +22,7 @@ histcensusgis/microdata/HarmonizeMicroMap.py
 histcensusgis/microdata/Segregation Values.R
 histcensusgis/microdata/Sumby Function.R
 histcensusgis/microdata/__init__.py
+histcensusgis/microdata/block.py
 histcensusgis/microdata/error_fix.py
 histcensusgis/microdata/hn.py
 histcensusgis/microdata/misc.py
@@ -34,7 +35,9 @@ histcensusgis/polygons/Identify 1930 Blocks.R
 histcensusgis/polygons/Identify 1930 EDs.R
 histcensusgis/polygons/__init__.py
 histcensusgis/polygons/block.py
+histcensusgis/polygons/create_block_ED_maps.py
 histcensusgis/polygons/ed.py
+histcensusgis/polygons/test.R
 histcensusgis/s4utils/AmoryUtils.py
 histcensusgis/s4utils/ArcUtils.py
 histcensusgis/s4utils/IOutils.py

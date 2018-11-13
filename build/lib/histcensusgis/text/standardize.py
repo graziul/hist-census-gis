@@ -27,6 +27,10 @@ def standardize_street(st):
 	st = re.sub('\\\\','',st)
 	st = re.sub(r' \(?([Cc][Oo][Nn][\'Tt]*d?|[Cc][Oo][Nn][Tt][Ii][Nn][Uu][Ee][Dd])\)?$','',st)
 	st = st.replace('(','').replace(')','')
+
+	#fix 'Ave. "L"' (found in SM descript for NYC)
+	if re.search('"[a-z]"$',st) :
+		st = st.replace('"','')
 	#consider extended a diff stname#
 	#st = re.sub(r' [Ee][XxsS][tdDT]+[^ ]*$','',st)
 
@@ -294,10 +298,14 @@ def sm_standardize(st) :
 	else :
 		DIR = ""
 
-	TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
+	TYPE = re.search(r' (St|Street|Ave?|Avenue|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike|Park|Boundary|Home|Hsptl)$',st)
 	if(TYPE) :
 		st = re.sub(TYPE.group(0),"",st)
 		TYPE = TYPE.group(1)
+		if(TYPE=="Street") :
+			TYPE = "St"
+		if(TYPE=="Avenue") :
+			TYPE = "Ave"
 		if(TYPE=="Av") :
 			TYPE = "Ave"
 		if(TYPE=="Rd") :
@@ -314,6 +322,8 @@ def sm_standardize(st) :
 			TYPE = "Aly"
 	else :
 		if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
+			TYPE = ""
+		if st == "Broadway" :
 			TYPE = ""
 		else :
 			TYPE = "St"
@@ -369,7 +379,7 @@ def Num_Standardize(NAME) :
 
 #Returns just the NAME component of the street phrase, if any If second argument is True, return a list of all components 
 def isolate_st_name(st,whole_phrase = False) :
-	if (st == None or st == '' or st == -1) or (not isinstance(st, str)) :
+	if (st == None or st == '' or st == -1) or (not isinstance(st, str) and not isinstance(st, unicode)) :
 		return ''
 	else :
 		TYPE = re.search(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|CityLimits|Hwy|Fwy|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|Rive?r?|Ocean|Bay|Canal|Sound|[Ll]ine|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$',st)
