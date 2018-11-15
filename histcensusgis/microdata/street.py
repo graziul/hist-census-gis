@@ -862,7 +862,7 @@ def exact_match_dnt(street, street_list, ed, city_info, list_dict):
 #define num match with name, type (no dir)
 def exact_match_nt(street, street_list, ed, city_info, list_dict):
 	nomatch = ['', False]
-	tiematch = ['', True]
+	tiematch = [street, True]
 	street_no_dir = re.sub('^[NSEW][EW]? ', '', street)
 	street_list_no_dir = [re.sub('^[NSEW][EW]? ', '', a) for a in street_list]
 
@@ -894,7 +894,7 @@ def exact_match_nt(street, street_list, ed, city_info, list_dict):
 #define num match with name, type (no dir)
 def exact_match_dn(street, street_list, ed, city_info, list_dict):
 	nomatch = ['', False]
-	tiematch = ['', True]
+	tiematch = [street, True]
 	street_no_type = re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', street)
 	street_list_no_type = [re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', a) for a in street_list]
 
@@ -926,7 +926,7 @@ def exact_match_dn(street, street_list, ed, city_info, list_dict):
 #define num match with only name (no dir or type)
 def exact_match_n(street, street_list, ed, city_info, list_dict):
 	nomatch = ['', False]
-	tiematch = ['', True]
+	tiematch = [street, True]
 	street_no_dir = re.sub('^[NSEW][EW]? ', '', street)
 	street_no_dir_no_type = re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', street_no_dir)
 	street_list_no_dir = [re.sub('^[NSEW][EW]? ', '', a) for a in street_list]

@@ -12,9 +12,9 @@ version = 8
 # Changelog
 #
 # V8
-#   - Function now creates three new files documenting results
+#   - Function now creates four new files documenting results
 #      * csv lists describing all ed_st combos in microdata
-#      * exact matches, fuzzy matches, non-matches for manual inspection
+#      * exact matches, fuzzy matches, exact ties (matched but original street name used), and non-matches for manual inspection
 #      * still need to add funcitonality to update cleaned data with manual results
 #   - New logic for exact matching function within ED
 #      * try whole string, then drop direction, then drop type (and drop type in SM/Grid data)
