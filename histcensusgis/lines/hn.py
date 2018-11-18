@@ -275,8 +275,9 @@ def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
 		print("OK!\n")
 
 # Renumber grid using microdata
-def renumber_grid(city_name, state_abbr, paths, decade, df=None, geocode=False):
+def renumber_grid(city_info, paths, df=None, geocode=False):
 
+	city_name, state_abbr, decade = city_info
 	#Paths
 	_, _, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"

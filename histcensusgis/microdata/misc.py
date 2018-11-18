@@ -302,8 +302,10 @@ def gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, tim
 
 	return info
 
-def load_cleaned_microdata(city_info, dir_path, v=7):
+def load_cleaned_microdata(city_info, dir_path, v=8):
 	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
+	
 	try:
 		microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAuto.dta"
 		df = load_large_dta(microdata_file)
@@ -326,7 +328,7 @@ def create_addresses(city_info, paths, df=None):
 
 	_, dir_path = paths
 	# Load microdata file if not passed to function
-	if type(df) == 'NoneType' or df == None:
+	if type(df) == 'NoneType' or type(df) != pd.core.frame.DataFrame:
 		df = load_cleaned_microdata(city_info, dir_path)
 	df.columns = map(str.lower, df.columns)
 	# Set index variable

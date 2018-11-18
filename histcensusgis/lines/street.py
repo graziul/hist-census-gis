@@ -735,7 +735,7 @@ def find_consecutive_segments(grid_shp, grid_street_var, debug_flag=False):
 	return name_sequence_dict, exact_next_dict
 
 # Fix street grid names using microdata
-def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro=None, v=7, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
+def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro=None, v=8, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD','MAX_RTOADD']):
 
 	"""
 	Fix street grid names 
@@ -777,7 +777,8 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 	grid_uns2 =  geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 	grid_uns2_backup = grid_uns2.replace('.shp','prefix.shp')
 	if city_name == "StLouis":
-		ed_shp = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+		#ed_shp = geo_path + city_name + "_" + str(decade) + "_ED.shp"
+		ed_shp = geo_path + city_name + "_" + str(decade) + "_ed_guess.shp"
 	st_grid_ed_shp = geo_path + city_name + state_abbr + '_' + str(decade) + '_stgrid_ED_intersect.shp'
 
 	arcpy.CopyFeatures_management(grid_uns2, grid_uns2_backup)
@@ -790,12 +791,19 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 
 	def get_grid_ed_df(grid_shp, ed_shp, st_grid_ed_shp, hn_ranges):
 
-		arcpy.Intersect_analysis (in_features=[grid_shp, ed_shp], 
-			out_feature_class=st_grid_ed_shp, 
-			join_attributes="ALL")
+		if not os.path.exists(st_grid_ed_shp):
+			arcpy.Intersect_analysis (in_features=[grid_shp, ed_shp], 
+				out_feature_class=st_grid_ed_shp, 
+				join_attributes="ALL")
 
 		df = load_shp(st_grid_ed_shp, hn_ranges)
-
+		if 'ed' not in df.columns.values:
+			try:
+				df.loc[:,('ed')] = df['ed_guess']
+				del df['ed_guess']
+			except:
+				df.loc[:,('ed')] = df['aggr_ed']
+				del df['aggr_ed']
 		return df
 
 	df_grid_ed = get_grid_ed_df(grid_uns2, ed_shp, st_grid_ed_shp, hn_ranges)
@@ -806,7 +814,8 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 	#
 
 	# Load microdata
-	df_micro = load_cleaned_microdata(city_info, dir_path)
+	if type(df_micro) != pd.core.frame.DataFrame:
+		df_micro = load_cleaned_microdata(city_info, dir_path)
 
 	# Convert to string
 	df_micro[micro_street_var] = df_micro[micro_street_var].astype(str)
@@ -821,7 +830,7 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 	# Step 3: Load Steve Morse data 
 	#
 
-	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_spaces, state_abbr, decade, dir_path)
+	sm_all_streets, _, sm_ed_st_dict = load_steve_morse(city_info)
 
 	#
 	# Step 4: Perform exact matching
@@ -912,6 +921,7 @@ def grid_names_fix(city_info, paths, micro_street_var, grid_street_var, df_micro
 		all_streets=micro_all_streets, 
 		basic_info=basic_info, 
 		source="micro")
+
 
 	#
 	# Step 5: Perform fuzzy matching
