@@ -85,6 +85,10 @@ def load_shp(filename, ranges=None):
 
 # Function to save Pandas DF as DBF file 
 def save_shp(df, shapefile_name):
+	#ESRI .shp files do not recognize boolean data types, so convert to int before saving
+	for variable in df.columns.values:
+		if df[variable].dtype == 'bool':
+			df[variable] = df[variable].astype(int)
 	df.to_file(filename=shapefile_name, encoding='utf-8', driver='ESRI Shapefile')
 
 # Function to convert Excel to .csv

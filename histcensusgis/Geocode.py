@@ -76,7 +76,7 @@ df_micro = fix_micro_dir_using_ed_map(city_info=city_info,
 	df_micro=df)
 
 #
-# Step 3: Use microdata to fix street grid names
+# Step 3: Use microdata and Steve Morse to fix street grid names
 #
 
 grid_names_fix(city_info=city_info, 
@@ -98,17 +98,8 @@ create_addresses(city_info=city_info,
 	df=df_micro)
 
 # Step 4b: Get updated contemporary geocode (using updated adresses from df_micro)
-initial_geocode(geo_path=dir_path+'/GIS_edited/', 
-	city_name=city, 
-	state_abbr=state,
-	hn_ranges=hn_ranges)
-
-# Save current
-file_name_students = dir_path + '/StataFiles_Other/%s/%s%s_StudAutoDirFixed.csv' % (str(decade),city, state)
-df_micro2.to_csv(file_name_students)
-dofile = script_path + "/utils/ConvertCsvToDta.do"
-cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
-subprocess.call(cmd) 
+initial_geocode(city_info=city_info,
+	geo_path=geo_path)
 
 if decade==1930:
 	# Step 4c: Get block numbers
@@ -123,17 +114,15 @@ if decade==1930:
 		decade=decade,
 		df_micro=df_micro)
 
-# If we want, save the microdata file 
-save = False
-if save:
-	file_name_students = dir_path + '/StataFiles_Other/1930/%s%s_StudAutoDirBlockFixed.csv' % (city, state)
-	try:
-		df_micro2.to_csv(file_name_students)
-	except:
-		df_micro.to_csv(file_name_students)
-	dofile = script_path + "/utils/ConvertCsvToDta.do"
-	cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
-	subprocess.call(cmd) 
+# Save current
+file_name_students = dir_path + '/StataFiles_Other/%s/%s%s_StudAutoDirFixed.csv' % (str(decade),city, state)
+if decade==1930:
+	df_micro2.to_csv(file_name_students)
+elif decade==1940:
+	df_micro.to_csv(file_name_students)
+dofile = script_path + "/utils/ConvertCsvToDta.do"
+cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
+subprocess.call(cmd) 
 
 end = time.time()
 
@@ -143,11 +132,14 @@ print(str(float(end-start)/60)+" minutes")
 # Step 5: Renumber grid based on updated 1930 microdata and street grid (requires block map)
 #
 
-renumber_grid(city_info=city_info,
-	paths=paths, 
-	decade=decade,
-	df=df_micro2)
-
+if decade==1930:
+	renumber_grid(city_info=city_info,
+		paths=paths, 
+		df=df_micro2)
+elif decade==1940:
+	renumber_grid(city_info=city_info,
+		paths=paths, 
+		df=df_micro)
 #
 # Step 6: Fill in blanks
 #

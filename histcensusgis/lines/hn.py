@@ -278,15 +278,19 @@ def add_ranges_to_new_grid(city_name, state_abbr, file_name, paths):
 def renumber_grid(city_info, paths, df=None, geocode=False):
 
 	city_name, state_abbr, decade = city_info
+	city_name = city_name.replace(' ','')
 	#Paths
-	_, _, dir_path = paths
+	_, dir_path = paths
 	geo_path = dir_path + "/GIS_edited/"
 
 	#Files
 	microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city_name + state_abbr + "_StudAutoDirBlockFixed.dta"
 	stgrid_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 	out_file = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_renumbered.shp"
-	block_shp_file = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
+	if decade==1930:
+		block_shp_file = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
+	elif decade==1940:
+		block_shp_file = geo_path + city_name + "_" + str(decade) + "_block_ED_checked.shp"
 	addresses = geo_path + city_name + "_" + str(decade) + "_Addresses.csv"
 	points = geo_path + city_name + "_" + str(decade) + "_Points_updated.shp"
 	pblk_file = block_shp_file #Note: This is the manually edited block file
