@@ -323,7 +323,7 @@ def sm_standardize(st) :
 	else :
 		if re.search("[Cc]ity [Ll]imits|[Rr]ailroad [Tt]racks",orig_st) :
 			TYPE = ""
-		if st == "Broadway" :
+		elif st == "Broadway" :
 			TYPE = ""
 		else :
 			TYPE = "St"
