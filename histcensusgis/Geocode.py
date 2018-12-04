@@ -3,28 +3,29 @@
 #
 
 import time
-from blocknum.blocknum import *
-from geocoding.GeocodeFunctions import *
+from histcensusgis.polygons.block import *
+from histcensusgis.points.geocode import *
+import arcpy
 # overwrite output
 arcpy.env.overwriteOutput=True
 
-#city_spaces = 'St Louis'
-#city = city_spaces.replace(' ','')
-#state = 'MO'
-#micro_street_var = 'st_best_guess'
-#grid_street_var = 'FULLNAME'
-#decade = 1930
-
+city_spaces = 'St Louis'
+city = city_spaces.replace(' ','')
+state = 'MO'
+micro_street_var = 'st_best_guess'
+grid_street_var = 'FULLNAME'
+decade = 1940
+city_info = [city_spaces, state, decade]
 #geocode_file = ""
 #different_geocode = False
 #if geocode_file != "":
 #	different_geocode = True
 
 # Paths
-#dir_path = "C:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
-#r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
-#paths = [r_path, dir_path]
-#hn_ranges = ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD']
+dir_path = "S:/Projects/1940Census/" + city #TO DO: Directories need to be city_name+state_abbr
+r_path = "C:/Program Files/R/R-3.4.2/bin/Rscript"
+paths = [r_path, dir_path]
+hn_ranges = ['MIN_LFROMA','MAX_LTOADD','MIN_RFROMA','MAX_RTOADD']
 
 start = time.time()
 
@@ -32,29 +33,37 @@ start = time.time()
 # Step 1: Get a good ED map, good street grid, and initial geocode on contemporary ranges
 #
 
-microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city + state + "_StudAuto.dta"
-df = load_large_dta(microdata_file)
+geo_path = dir_path + "/GIS_edited/"
+
+#microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city + state + "_StudAuto.dta"
+#df = load_large_dta(microdata_file)
+microdata_file = dir_path + "/StataFiles_Other/" + str(decade) + "/" + city + state + "_AutoCleanedV8.csv"
+df = pd.read_csv(microdata_file, low_memory=False)
 df.loc[:,('index')] = df.index
 #df1 = df[['index','hn','dir','name','type',micro_street_var,'ed','block']]
 
-# Create 1930 addresses
-create_addresses(city_name=city, 
-	state_abbr=state, 
+# Create addresses
+create_addresses(city_info=city_info, 
 	paths=paths, 
-	decade=decade,
 	df=df)
 
-# Create blocks and block points (gets Uns2 and points30)
-create_blocks_and_block_points(city_name=city, 
-	state_abbr=state, 
-	paths=paths)
+# Create blocks and process street grid if necessary
+create_pblks(city_info=city_info, 
+	geo_path=geo_path)
 
-# Identify 1930 EDs 
+if decade==1930:
+	t = None
+	# Identify 1930 EDs 
 
-# Matt's code
-# Amory's code
-# Combination code
-#identify_1930_eds(city_name, paths)
+	# Matt's code
+	# Amory's code
+	# Combination code
+	#identify_1930_eds(city_name, paths)
+elif decade==1940:
+	# Identify 1940 EDs (done by block labeling and aggregation)
+	block_shp = geo_path + city + state + "_" + str(decade) + "_block_map_edit.shp"
+	ed_shp = geo_path + city + state + "_" + str(decade) + "_ed_guess.shp"
+	arcpy.Dissolve_management(in_features=block_shp, out_feature_class=ed_shp, dissolve_field=["aggr_ed"])
 
 # Manual process of filling in EDs 
 
@@ -62,25 +71,20 @@ create_blocks_and_block_points(city_name=city,
 # Step 2: Use ED map to fix DIR in microdata using initial geocode on contemporary ranges
 #
 
-df_micro = fix_micro_dir_using_ed_map(city_name=city, 
-	state_abbr=state,
-	micro_street_var=micro_street_var, 
-	grid_street_var=grid_street_var,
+df_micro = fix_micro_dir_using_ed_map(city_info=city_info,
 	paths=paths,
-	decade=decade,
 	df_micro=df)
 
 #
-# Step 3: Use microdata to fix street grid names
+# Step 3: Use microdata and Steve Morse to fix street grid names
 #
 
-fix_st_grid_names(city_spaces=city_spaces, 
-	state_abbr=state, 
+grid_names_fix(city_info=city_info, 
+	paths=paths, 
 	micro_street_var=micro_street_var, 
 	grid_street_var=grid_street_var,
-	paths=paths, 
-	decade=decade,
-	df_micro=df_micro)
+	df_micro=df_micro,
+	v=8)
 
 #
 # Step 4: Use ED map and contemporary geocode to fix microdata block numbers
@@ -88,48 +92,37 @@ fix_st_grid_names(city_spaces=city_spaces,
 
 # Step 4a: Update addresses and contemporary geocode
 
-# Create 1930 addresses (now uses updated addresses in df_micro)
-create_addresses(city_name=city, 
-	state_abbr=state, 
-	paths=paths,
-	decade=decade, 
+# Create addresses (now uses updated addresses in df_micro)
+create_addresses(city_info=city_info, 
+	paths=paths, 
 	df=df_micro)
 
 # Step 4b: Get updated contemporary geocode (using updated adresses from df_micro)
-initial_geocode(geo_path=dir_path+'/GIS_edited/', 
-	city_name=city, 
-	state_abbr=state,
-	hn_ranges=hn_ranges)
+initial_geocode(city_info=city_info,
+	geo_path=geo_path)
+
+if decade==1930:
+	# Step 4c: Get block numbers
+
+	identify_blocks_geocode(city_name, paths, decade)
+	identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, decade)
+
+	# Step 4d: Fix microdata block numbers using updated geocode and microdata (requires block map)
+	df_micro2 = fix_micro_blocks_using_ed_map(city_name=city, 
+		state_abbr=state, 
+		paths=paths, 
+		decade=decade,
+		df_micro=df_micro)
 
 # Save current
 file_name_students = dir_path + '/StataFiles_Other/%s/%s%s_StudAutoDirFixed.csv' % (str(decade),city, state)
-df_micro2.to_csv(file_name_students)
+if decade==1930:
+	df_micro2.to_csv(file_name_students)
+elif decade==1940:
+	df_micro.to_csv(file_name_students)
 dofile = script_path + "/utils/ConvertCsvToDta.do"
 cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
 subprocess.call(cmd) 
-
-# Step 4c: Get block numbers
-
-identify_blocks_geocode(city_name, paths, decade)
-identify_blocks_microdata(city_name, state_abbr, micro_street_var, paths, decade)
-
-
-# Step 4d: Fix microdata block numbers using updated geocode and microdata (requires block map)
-
-df_micro2 = fix_micro_blocks_using_ed_map(city_name=city, 
-	state_abbr=state, 
-	paths=paths, 
-	decade=decade,
-	df_micro=df_micro)
-
-# If we want, save the microdata file 
-save = False
-if save:
-	file_name_students = dir_path + '/StataFiles_Other/1930/%s%s_StudAutoDirBlockFixed.csv' % (city, state)
-	df_micro2.to_csv(file_name_students)
-	dofile = script_path + "/utils/ConvertCsvToDta.do"
-	cmd = ["C:/Program Files (x86)/Stata15/StataSE-64","/e","do", dofile, file_name_students, file_name_students.replace('.csv','.dta')]
-	subprocess.call(cmd) 
 
 end = time.time()
 
@@ -139,12 +132,14 @@ print(str(float(end-start)/60)+" minutes")
 # Step 5: Renumber grid based on updated 1930 microdata and street grid (requires block map)
 #
 
-renumber_grid(city_name=city, 
-	state_abbr=state, 
-	paths=paths, 
-	decade=decade,
-	df=df_micro2)
-
+if decade==1930:
+	renumber_grid(city_info=city_info,
+		paths=paths, 
+		df=df_micro2)
+elif decade==1940:
+	renumber_grid(city_info=city_info,
+		paths=paths, 
+		df=df_micro)
 #
 # Step 6: Fill in blanks
 #

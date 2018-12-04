@@ -64,13 +64,14 @@ def get_pblks(city_info, paths, hn_ranges=['MIN_LFROMA','MIN_RFROMA','MAX_LTOADD
 # Creates physical blocks shapefile 
 def create_pblks(city_info, geo_path):
 
-	city_name, _, decade = city_info
+	city_name, state_abbr, decade = city_info
 	city_name = city_name.replace(' ','')
 
 	pblk_shp = geo_path + city_name + "_" + str(decade) + "_Pblk.shp"
 	split_grid = geo_path + city_name + "_" + str(decade) + "_stgrid_Split.shp"
+	grid_uns2 = geo_path + city_name + state_abbr + "_" + str(decade) + "_stgrid_edit_Uns2.shp"
 
-	if not os.path.isfile(split_grid):
+	if not os.path.isfile(split_grid) or not os.path.isfile(grid_uns2):
 		print("Processing raw stgrid for %s" %decade)
 		_ = process_raw_grid(city_info, geo_path)
 
@@ -519,7 +520,7 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 
 	# Load files
 	df_grid = load_shp(grid_shp, hn_ranges)
-	if df_micro == None:
+	if type(df_micro) != pd.core.frame.DataFrame:
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 	try:
 		df_micro.rename(columns={'DIR':'dir'},inplace=True)
@@ -532,7 +533,7 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 		_, DIR, _, _ = standardize_street(st)
 		return DIR
 
-	df_grid['DIR'] = df_grid.apply(lambda x: get_dir(x[grid_street_var]), axis=1)
+	df_grid.loc[:,('DIR')] = df_grid.apply(lambda x: get_dir(x[grid_street_var]), axis=1)
 	save_shp(df_grid, grid_shp)
 
 	arcpy.Intersect_analysis(in_features=[grid_shp, ed_shp], 
@@ -541,15 +542,20 @@ def fix_micro_dir_using_ed_map(city_info, paths, df_micro=None, micro_street_var
 
 	# Get the spatial join dbf and extract some info
 	df_intersect = load_shp(grid_ed_intersect_shp, hn_ranges)
-	try:
+	if 'ed' in df_intersect.columns.values:
 		ed_var = 'ed'
 		df_dir_ed = df_intersect[['DIR',ed_var]].drop_duplicates()
-	except:
+		df_dir_ed = df_dir_ed[df_dir_ed[ed_var]!=0]
+	elif 'ed_guess' in df_intersect.columns.values:
 		ed_var = 'ed_guess'
 		df_dir_ed[ed_var] = df_dir_ed[ed_var].astype(int) 
 		df_dir_ed = df_intersect[['DIR',ed_var]].drop_duplicates()
+		df_dir_ed = df_dir_ed[df_dir_ed[ed_var]!=0]
+	elif 'aggr_ed' in df_intersect.columns.values:
+		ed_var = 'aggr_ed'
+		df_dir_ed = df_intersect[['DIR',ed_var]].drop_duplicates()
+		df_dir_ed = df_dir_ed[df_dir_ed[ed_var]!='']
 	df_dir_ed = df_dir_ed[df_dir_ed['DIR']!='']
-	df_dir_ed = df_dir_ed[df_dir_ed[ed_var]!=0]
 	eds = df_dir_ed[ed_var].drop_duplicates().tolist()
 
 	# Create dictionary of {ED:list(DIRs)}
@@ -658,14 +664,14 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 	df_points = load_shp(points_shp, hn_ranges)
 	df = df_points[df_points['Status']!='M']
 	# ERROR: LOST INDEX SOMEWHERE ALONG THE WAY
-	try:
+	if 'ed' in df.columns.values:
 		ed_var = 'ed'
-		resid_vars = ['index',ed_var,'fullname','state','city','address']
-		df_resid = df[resid_vars]
-	except:
+	elif 'ed_guess' in df.columns.values:
 		ed_var = 'ed_guess'
-		resid_vars = ['index',ed_var,'fullname','state','city','address']
-		df_resid = df[resid_vars]
+	elif 'aggr_ed' in df.columns.values:
+		ed_Var = 'aggr_ed'
+	resid_vars = ['index',ed_var,'fullname','state','city','address']
+	df_resid = df[resid_vars]
 	if os.path.isfile(resid_add_csv):
 		os.remove(resid_add_csv)
 	df_resid.to_csv(resid_add_csv)
@@ -685,12 +691,16 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 
 	# Identify points in the correct ED
 	arcpy.MakeFeatureLayer_management(resid_ed_intersect_shp, "geocodelyr1")
-	try:
+	if ed_var=='ed':
 		sql_exp=""" 'ed' = 'ed_1' """
 		arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", "[ed]==[ed_1]")
-	except:
+	elif ed_var=='ed_guess':
 		sql_exp=""" 'ed_guess' = 'ed' """
 		arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", sql_exp)
+	elif ed_var=='aggr_ed':
+		sql_exp=""" 'aggr_ed' = 'ed' """
+		arcpy.SelectLayerByAttribute_management("geocodelyr1", "NEW_SELECTION", sql_exp)
+
 	arcpy.CopyFeatures_management("geocodelyr1",inrighted_shp)
 
 	# Intersect points in the correct ED with block map
@@ -702,7 +712,7 @@ def fix_micro_blocks_using_ed_map(city_info, paths, df_micro=None, hn_ranges=['M
 	fix_block_dict = df_correct_ed[['index','block']].set_index('index')['block'].to_dict()
 
 	# Replace microdata block number with block map block number
-	if df_micro == None:
+	if type(df_micro) != pd.core.frame.DataFrame:
 		df_micro = load_cleaned_microdata(city_info, dir_path)
 	df_micro['block_old'] = df_micro['block']
 
