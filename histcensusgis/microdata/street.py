@@ -127,14 +127,14 @@ def finalize_lists(city_info, file_path, version):
 def load_city(city_info, file_path):
 
 	city, state, year = city_info
-	city = city.replace(' ','')
+	c = city.replace(' ','')
 
 	start = time.time()
 
-	if city == "StatenIsland":
-		c = "Richmond"
-	else:
-		c = city
+	#if city == "StatenIsland":
+	#	c = "Richmond"
+	#else:
+	#	c = city
 
 	# Try to load file, return error if can't load or file has no cases
 	try:
