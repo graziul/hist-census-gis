@@ -814,7 +814,7 @@ def find_exact_matches_module(df, street, all_streets, ed_st_dict, map_type, sam
 			exact_match_dict[st_ed] = exact_match_function(st_ed[0], st_ed[1], ed_st_dict, city_info, list_dict)
 		# If Steve Morse data DO NOT come from same year as microdata, do not use ED for num matching
 		else:
-			exact_match_dict[st_ed] = exact_match_function_no_ed(st_ed[0], all_streets, city_info, list_dict)
+			exact_match_dict[st_ed] = exact_match_function_no_ed(st_ed[0], st_ed[1], all_streets, city_info, list_dict)
 
 	#Get exact street matches
 	df[exact_match], df[exact_bool] = zip(*df.apply(lambda x: exact_match_dict[x[street], x['ed']], axis=1))
@@ -1001,7 +1001,7 @@ def exact_match_function(street, ed, ed_streets_dict, city_info, list_dict):
 
 
 #exact matching algorithm when SM file is from a later year (same_year = False)
-def exact_match_function_no_ed(street, all_streets, city_info, list_dict):
+def exact_match_function_no_ed(street, ed, all_streets, city_info, list_dict):
 	nomatch = ['', False]
 	ed = ''
 	
@@ -1015,21 +1015,21 @@ def exact_match_function_no_ed(street, all_streets, city_info, list_dict):
 
 	# process if street has dir but no type
 	if (DIR != None) & (TYPE == None):
-		exact_info = exact_match_dn(street, ed_streets, ed, city_info, list_dict)
+		exact_info = exact_match_dn(street, all_streets, ed, city_info, list_dict)
 		if exact_info != "Not done":
 			return exact_info
-		exact_info = exact_match_n(street, ed_streets, ed, city_info, list_dict)
+		exact_info = exact_match_n(street, all_streets, ed, city_info, list_dict)
 		return exact_info
 
 	# process if street has both dir and type
 	else:
-		exact_info = exact_match_dnt(street, ed_streets, ed, city_info, list_dict)
+		exact_info = exact_match_dnt(street, all_streets, ed, city_info, list_dict)
 		if exact_info != "Not done":
 			return exact_info
-		exact_info = exact_match_nt(street, ed_streets, ed, city_info, list_dict)
+		exact_info = exact_match_nt(street, all_streets, ed, city_info, list_dict)
 		if exact_info != "Not done":
 			return exact_info
-		exact_info = exact_match_n(street, ed_streets, ed, city_info, list_dict)
+		exact_info = exact_match_n(street, all_streets, ed, city_info, list_dict)
 		return exact_info
 
 
@@ -1221,7 +1221,7 @@ def fuzzy_match_function(street, ed, ed_streets_dict, all_streets, all_streets_f
 
 
 #Fuzzy matching algorithm when SM file is from a later year (same_year = False)
-def fuzzy_match_function_no_ed(street, all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict):
+def fuzzy_match_function_no_ed(street, ed, all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict):
 	
 	nomatch = ['', '', False]
 
@@ -1337,7 +1337,7 @@ def find_fuzzy_matches_module(df, street_var, all_streets, ed_st_dict, map_type,
 				fuzzy_match_dict[st_ed] = fuzzy_match_function(st_ed[0], st_ed[1], ed_st_dict, all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict)
 			# If Steve Morse data DO NOT come from same year as microdata, do not use ED for fuzzy matching
 			else:
-				fuzzy_match_dict[st_ed] = fuzzy_match_function_no_ed(st_ed[0], all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict)
+				fuzzy_match_dict[st_ed] = fuzzy_match_function_no_ed(st_ed[0], st_ed[1], all_streets, all_streets_fuzzyset, all_streets_notype, all_streets_notype_fuzzyset, city_info, list_dict)
 	else:
 		# For when there is no Steve Morse dictionary or Street Grid
 		return df, [0, 0], len(df)-len(df_no_exact_match)
