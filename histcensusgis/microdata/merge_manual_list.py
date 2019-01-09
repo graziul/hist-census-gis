@@ -22,7 +22,7 @@ def merge_manual_list(city_info, file_path='/home/s4-data/LatestCities'):
 	print 'Merging autocleaned data with manual fixes for ' + city_name + ', ' + state_abbr
 
 	# load autocleaned data and edited manual list
-	auto = pd.read_csv(file_path + '/' + str(decade) + '/autocleaned/V8/' + auto_file, low_memory = False)
+	auto = pd.read_csv(file_path + '/' + str(decade) + '/autocleaned/V8/' + auto_file)
 	manual = pd.read_csv(file_path + '/' + str(decade) + '/autocleaned/V8/manual_lists_edited/' + manual_file)
 
 	# change the annoying 'HN' tag that is sometimes on precleaned variable
