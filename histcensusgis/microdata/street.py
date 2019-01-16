@@ -1065,10 +1065,10 @@ def fuzzy_match_function(street, ed, ed_streets_dict, all_streets, all_streets_f
 	TYPE = re.search(r' ((St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike))$', street)
 
 	# check sensitive street types for matching without type
-	if TYPE is not None:
-		if TYPE.group(0) == ' Blvd':
-			TYPE = None
-			street = re.sub(r' Blvd$', '', street)
+	#if TYPE is not None:
+	#	if TYPE.group(0) == ' Blvd':
+	#		TYPE = None
+	#		street = re.sub(r' Blvd$', '', street)
 
 
 	#Return null if street is blank
