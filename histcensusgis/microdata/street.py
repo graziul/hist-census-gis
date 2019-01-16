@@ -1062,7 +1062,14 @@ def fuzzy_match_function(street, ed, ed_streets_dict, all_streets, all_streets_f
 	#street = DIR+' '+NAME+' '+TYPE
 	#street = street.strip()
 
-	TYPE = re.search(' ((St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike))$', street)
+	TYPE = re.search(r' ((St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike))$', street)
+
+	# check sensitive street types for matching without type
+	if TYPE is not None:
+		if TYPE.group(0) == ' Blvd':
+			TYPE = None
+			street = re.sub(r' Blvd$', '', street)
+
 
 	#Return null if street is blank
 	if street == '':
@@ -1077,11 +1084,11 @@ def fuzzy_match_function(street, ed, ed_streets_dict, all_streets, all_streets_f
 		return nomatch
 
 	# Create fuzzyset without type if microdata street has no type
-	ed_streets_notype = [re.sub(' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', a) for a in ed_streets]
+	ed_streets_notype = [re.sub(r' (St|Ave?|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pkwy|Cir|Ter|La|Ln|Way|Trail|Sq|Aly|Bridge|Bridgeway|Walk|Crescent|Creek|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike)$', '', a) for a in ed_streets]
 	ed_streets_notype_fuzzyset = fuzzyset.FuzzySet(ed_streets_notype)
 
 	# Fuzzy match without the direction
-	street_no_dir = re.sub('^[NSEW][EW]? ', '', street)
+	street_no_dir = re.sub(r'^[NSEW][EW]? ', '', street)
 
 	### Start of fuzzy match algorithm
 
@@ -1145,7 +1152,7 @@ def fuzzy_match_function(street, ed, ed_streets_dict, all_streets, all_streets_f
 
 	#Step 4: If city score is highest, check for tie, and if score is high enough to return
 	if city_score > ed_score:
-		if (city_score >= 0.9) & (ed_score < 0.7):
+		if (city_score >= 0.8) & (ed_score < 0.7):
 			# ambiguous case
 			if len(best_match_all) > 1:
 				append_to_list(list_type='manual',

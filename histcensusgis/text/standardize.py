@@ -298,7 +298,7 @@ def sm_standardize(st) :
 	else :
 		DIR = ""
 
-	TYPE = re.search(r' (St|Street|Ave?|Avenue|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike|Park|Boundary|Home|Hsptl)$',st)
+	TYPE = re.search(r' (St|Street|Ave?|Avenue|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Riv|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike|Boundary|Home|Hsptl)$',st)
 	if(TYPE) :
 		st = re.sub(TYPE.group(0),"",st)
 		TYPE = TYPE.group(1)
@@ -314,6 +314,8 @@ def sm_standardize(st) :
 			TYPE = "Drive"
 		if(TYPE=="La") :
 			TYPE = "Ln"
+		if(TYPE=="Riv") :
+			TYPE = "River"
 		if(re.match("Terr?a?c?e?",TYPE)) :
 			TYPE = "Ter"
 		if(re.match("Pa?r?kwa?y",TYPE)) :
@@ -327,6 +329,14 @@ def sm_standardize(st) :
 			TYPE = ""
 		else :
 			TYPE = "St"
+
+	# make changes if SM has direction spelled out, and it's not an actual street name (West Ave, South St)
+	dir_test = re.search(r'^(West|East|North|South)', st)
+	name_no_dir = re.sub(dir_test.group(0), '', st).strip()
+
+	if (DIR=='') & (dir_test.group(0)!='') & (name_no_dir!=''):
+		DIR = dir_test.group(0)
+		st = name_no_dir
 	
 	NAME = st
 	st = (DIR+" "+NAME+" "+TYPE).strip()
