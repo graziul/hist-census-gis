@@ -331,12 +331,12 @@ def sm_standardize(st) :
 			TYPE = "St"
 
 	# make changes if SM has direction spelled out, and it's not an actual street name (West Ave, South St)
-	dir_test = re.search(r'^(West|East|North|South)', st)
-	name_no_dir = re.sub(dir_test.group(0), '', st).strip()
-
-	if (DIR=='') & (dir_test.group(0)!='') & (name_no_dir!=''):
-		DIR = dir_test.group(0)
-		st = name_no_dir
+	dir_test = re.search(r'^(West|East|North|South) ', st)
+	if dir_test:
+		name_no_dir = re.sub(dir_test.group(0), '', st).strip()
+		if (DIR=='') & (name_no_dir!=''):
+			DIR = dir_test.group(0)[0]
+			st = name_no_dir
 	
 	NAME = st
 	st = (DIR+" "+NAME+" "+TYPE).strip()

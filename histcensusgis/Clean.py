@@ -56,7 +56,7 @@ version = 8
 #
 # V1 - Original run
 
-def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities'):
+def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, file_path='/home/s4-data/LatestCities', use_lists=True):
 
 	datestr = time.strftime("%Y_%m_%d")
 
@@ -71,13 +71,16 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	ED_ST_HN_dict = {}
 
 	# Initialize lists describing st_ed combo results
-	types = ['exact', 'fuzzy', 'exact_ties', 'manual']
-	paths = []
-	for l in types:
-		add = initialize_list(l, city_info, file_path, version)
-		paths.append(add)
-	# create dictionary to reference later
-	list_dict = dict(zip(types, paths))
+	if use_lists == True:
+		types = ['exact', 'fuzzy', 'exact_ties', 'manual']
+		paths = []
+		for l in types:
+			add = initialize_list(l, city_info, file_path, version)
+			paths.append(add)
+		# create dictionary to reference later
+		list_dict = dict(zip(types, paths))
+	else:
+		list_dict = None
 
 	#Save to logfile
 	log_path = file_path + "/%s/logs/" % (str(decade))
@@ -132,7 +135,8 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 		ed_map=ed_map,
 		same_year=same_year,
 		file_path=file_path,
-		list_dict=list_dict)
+		list_dict=list_dict,
+		use_lists=use_lists)
 
 	#
 	# Step 4: Search for fuzzy matches and use result to fill in more blank street names
@@ -147,7 +151,8 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 		ed_map=ed_map,
 		same_year=same_year, 
 		file_path=file_path,
-		list_dict=list_dict)
+		list_dict=list_dict,
+		use_lists=use_lists)
 	street_var = 'street_post_fuzzy'
 	df[street_var] = df[preclean_var]
 	df.loc[df['current_match_bool'],street_var] = df['current_match']
@@ -182,7 +187,8 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	#
 
 	# before export, finalize external match lists
-	finalize_lists(city_info, file_path, version)
+	if use_lists == True:
+		finalize_lists(city_info, file_path, version)
 
 	# export data
 	city_state = city_name.replace(' ','') + state_abbr
