@@ -297,8 +297,8 @@ def sm_standardize(st) :
 		DIR = re.sub(" ","",DIR)
 	else :
 		DIR = ""
-
-	TYPE = re.search(r' (St|Street|Ave?|Avenue|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Riv|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike|Boundary|Home|Hsptl)$',st)
+	#Also attempt to capture Institutions, so "St" is not erroneously added to them
+	TYPE = re.search(r' (St|Street|Ave?|Avenue|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Riv|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike|Vista|Boundary|Home|House|Manor|Boys|Girls|Heart|Ho?spi?ta?l|Apa?r?tm?e?n?t?s|Hotel|School|College|Society|Asylum|Sanit[ao]rium|Seminary|Convent|Jail|Harbor|Field|Institute)$',st)
 	if(TYPE) :
 		st = re.sub(TYPE.group(0),"",st)
 		TYPE = TYPE.group(1)
