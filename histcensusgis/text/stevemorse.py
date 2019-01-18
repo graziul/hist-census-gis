@@ -129,23 +129,29 @@ def get_sm_st_ed(decade, sm_st_ed_dict, package_path):
 					else:
 						#Extract street name between ">" and "</option>""
 						st = line[line.find(end_num)+1:line.find(end_name)]
-						st = sm_standardize(st)
-						#Initialize dictionary for NAME if it doesn't exist already
-						NAME = st[2]
-						sm_st_ed_dict_city[NAME] = sm_st_ed_dict_city.setdefault(NAME, {})
-						#Extract EDs as one long string
-						st_str = line[line.find(start_num) + 7 : line.find(end_num)-1]
-						#Check for street name collisions (e.g. "3rd Pl" and "3rd Pl ext")
-						if st[0] in sm_st_ed_dict_city[NAME].keys():
-							for i in list(st_str.split(",")):
-								if i not in sm_st_ed_dict_city[NAME][st[0]]:
-									sm_st_ed_dict_city[NAME][st[0]].append(i)
-						else:    
-							#Split string of EDs into a list and assign to street name in dictionary
-							if decade == 1920 :
-								sm_st_ed_dict_city[NAME].update({st[0]:list([x.split('[')[0] for x in st_str.split(",")])})
-							else :
-								sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
+						
+						#Deal with Multiple TYPEs in a single line
+						split_type_test = st.split(' ')[-1]
+						for split_type in split_type_test.split('/') :
+							st = ' '.join(st.split(' ')[:-1])+' '+split_type
+							
+							st = sm_standardize(st.strip())
+							#Initialize dictionary for NAME if it doesn't exist already
+							NAME = st[2]
+							sm_st_ed_dict_city[NAME] = sm_st_ed_dict_city.setdefault(NAME, {})
+							#Extract EDs as one long string
+							st_str = line[line.find(start_num) + 7 : line.find(end_num)-1]
+							#Check for street name collisions (e.g. "3rd Pl" and "3rd Pl ext")
+							if st[0] in sm_st_ed_dict_city[NAME].keys():
+								for i in list(st_str.split(",")):
+									if i not in sm_st_ed_dict_city[NAME][st[0]]:
+										sm_st_ed_dict_city[NAME][st[0]].append(i)
+							else:    
+								#Split string of EDs into a list and assign to street name in dictionary
+								if decade == 1920 :
+									sm_st_ed_dict_city[NAME].update({st[0]:list([x.split('[')[0] for x in st_str.split(",")])})
+								else :
+									sm_st_ed_dict_city[NAME].update({st[0]:list(st_str.split(","))})
 		sm_st_ed_dict[decade][city_state] = sm_st_ed_dict_city
 		time.sleep(0.5)
 	print("Missing Steve Morse street-ED data for %s cities in %s" % (str(no_data),str(decade)))
