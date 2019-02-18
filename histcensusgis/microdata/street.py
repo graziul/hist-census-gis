@@ -535,8 +535,17 @@ def preclean_street(df, city_info, file_path):
 	#Use dictionary create st (cleaned street), DIR (direction), NAME (street name), and TYPE (street type)
 	df['street_precleaned'], df['DIR'], df['NAME'] ,df['TYPE'] = zip(*df['street_raw'].apply(lambda s: cleaning_dict[s]))
 
-	#Loading Steve Morse dicitonary
-	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
+	# Loading Steve Morse dicitonaries
+	# Test to see if full-city dictionary including all possible streets is available
+	sm_all_streets = pickle.load(open(package_path + '/text/full_city_street_dict.pickle', 'rb'))[(city_name, state_abbr.lower())]
+
+	# if exists, don't load "all_streets" SM list for that year
+	if sm_all_streets:
+		_, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
+	# if doesn't exist (sm_all_streets == None), load all three SM objects
+	else:
+		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
+
 
 	# If we found Steve Morse data for that decade, proceed as usual
 	if len(sm_all_streets) != 0:

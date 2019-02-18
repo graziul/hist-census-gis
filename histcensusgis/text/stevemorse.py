@@ -8,6 +8,7 @@ import os
 import histcensusgis
 import time
 import math
+import geopandas as gpd
 
 # Use one year's CityInfo file to get list of states
 file_path = '/home/s4-data/LatestCities'
@@ -437,3 +438,80 @@ def download_sm_ed_desc(year,keep_dir=False,file_path='S:/Projects/1940Census',o
 		#print(ed+", "+str(desc).replace("[","").replace("]","").replace("Railroad Tracks","Railway"))
 		#pass
 		file_path.close()
+
+
+### Functions for creating and updating the separate "full city" dictionary 
+### that combines all unique street names form SM and the manually examined street grid (names only, not geometries)
+# Note: eventually need a function to take streets added to grid and add to these dictionaries
+
+# this function creates an empty pickle object to update later with full city street lists
+def initialize_city_street_dicts(file_path = '/home/s4-data/LatestCities'):
+
+	city_info_file = file_path + '/CityExtractionList.csv' 
+	city_info_df = pd.read_csv(city_info_file)
+	city_info_df = city_info_df[city_info_df['Status']>0]
+	city_info_df.loc[:,'city_name'], city_info_df.loc[:,'state_abbr'] = zip(*city_info_df['City'].str.split(','))
+	city_info_df = city_info_df[['city_name','state_abbr']]
+	city_info_df['city_name'] = city_info_df['city_name'].str.replace('Saint','St').str.replace('.','')
+	city_info_df['state_abbr'] = city_info_df['state_abbr'].str.replace(' ','').str.lower()
+	# Add New York boroughs
+	new_york = [{'city_name':'Staten Island','state_abbr':'ny'}, 
+		{'city_name':'Queens','state_abbr':'ny'}, 
+		{'city_name':'Manhattan','state_abbr':'ny'}, 
+		{'city_name':'Brooklyn','state_abbr':'ny'},
+		{'city_name':'Bronx','state_abbr':'ny'}]
+	city_info_df = city_info_df.append(pd.DataFrame(new_york))
+
+	full_city = {a:None for a in zip(city_info_df['city_name'],city_info_df['state_abbr'])}
+
+	pickle.dump(full_city, open(package_path + '/text/full_city_street_dict.pickle','wb'))
+
+
+
+# this function combines all unique street names from grid and Steve Morse
+# updates full_city_street_dict.pickle entry for city with full list
+# You must upload 
+def create_full_city_street_dict(city_name, state_abbr, file_path = '/home/s4-data/LatestCities'):
+
+	# load unique list of grid names (or return error that it doesn't exist)
+	try:
+		grid_dbf = gpd.read_file(file_path + '/grid_dbfs/' + city_name + state_abbr.upper() + '_stgrid.dbf')
+	except IOError:
+		sys.exit("No grid information found. Did you place this grid's .dbf file in '/home/s4-data/LatestCities/grid_dbfs'?")
+
+	grid_streets = list(grid_dbf['st40'].unique())
+	if grid_dbf['st30'].unique() != None:
+		grid_streets.extend(list(grid_dbf['st30'].unique()))
+		grid_streets = list(set(grid_streets))
+	# convert unicode to str
+	grid_streets = map(str, grid_streets)
+
+	# Load all avilable Steve Morse files for city
+	sm_streets = []
+	for decade in [1900, 1910, 1920, 1930, 1940]:
+		try:
+			all_streets, _, _ = load_steve_morse([city_name, state_abbr.lower(), decade])
+			sm_streets.extend(all_streets)
+			sm_streets = list(set(sm_streets))
+		except:
+			continue
+
+	# combine lists and keep unique names
+	sm_streets.extend(grid_streets)
+	combined_streets = list(set(sm_streets))
+
+	# open dictionary of full street lists
+	try:
+		full_city = pickle.load(open(package_path + '/text/full_city_street_dict.pickle', 'rb'))
+	except ValueError:
+		full_city = pickle.load(open(package_path + '/text/full_city_street_dict.pickle', 'r'))
+
+	# update list for this city
+	full_city[(city_name, state_abbr.lower())] = combined_streets
+
+	# save updated dictionary
+	pickle.dump(full_city, open(package_path + '/text/full_city_street_dict.pickle','wb'))
+
+
+
+

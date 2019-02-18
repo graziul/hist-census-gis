@@ -94,6 +94,7 @@ def standardize_street(st):
 	st = re.sub(r'[ \-]+([Pp]lzaz|[Pp][Ll][Aa][Zz][Aa])$',' Plaza',st)
 	st = re.sub(r'[ \-]+([Hh]ighway)$',' Hwy',st)
 	st = re.sub(r'[ \-]+([Hh]eights?)$',' Heights',st)
+	st = re.sub(r'[ \-]+([Tt][Uu]?[Rr]?[Nn]?[Pp][Ii]?[Kk][Ee]?)$',' Turnpike',st)
 
 	# "Park" is not considered a valid TYPE because it should probably actually be part of NAME #
 	match = re.search(r' ([Ss]t|[Aa]ve|[Bb]lvd|[Pp]l|[Dd]rive|[Rr]oad|[Cc]t|[Rr]ailway|[Rr][Rr]|[Cc]ity[Ll]imits|[Hh]wy|[Ff]wy|[Pp]kwy|[Cc]ir|[Cc]ircuit|[Tt]er|[Ll]n|[Ww]ay|[Tt]rail|[Ss]q|[Aa]ly|[Bb]ridge|[Bb]ridgeway|[Ww]alk|[Hh]eights|[Cc]rescent|[Cc]reek|[Rr]iver|[Ll]ine|[Pp]laza|[Ee]splanade|[Cc]emetery|[Vv]iaduct|[Tt]rafficway|[Tt]rfy|[Tt]urnpike)$',st)
@@ -320,6 +321,8 @@ def sm_standardize(st) :
 			TYPE = "Ter"
 		if(re.match("Pa?r?kwa?y",TYPE)) :
 			TYPE = "Pkwy"
+		if(TYPE=="Tpk") :
+			TYPE = "Turnpike"
 		if(re.match("All?e?y?",TYPE)) :
 			TYPE = "Aly"
 	else :
@@ -339,6 +342,9 @@ def sm_standardize(st) :
 			st = name_no_dir
 	
 	NAME = st
+	# fix "St " at beginning of name to "Saint "
+	NAME = re.sub(r"^St ","Saint ",NAME)
+
 	st = (DIR+" "+NAME+" "+TYPE).strip()
 	#print(orig_st)
 	#print("changed to "+st)
