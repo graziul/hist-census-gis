@@ -548,7 +548,7 @@ def preclean_street(df, city_info, file_path):
 
 
 	# If we found Steve Morse data for that decade, proceed as usual
-	if len(sm_all_streets) != 0:
+	if len(sm_st_ed_dict_nested) != 0:
 		print('SM file exists for '+city_name+', '+state_abbr+' in '+str(decade))
 		#Create dictionary {NAME:num_NAME_versions}
 		num_NAME_versions = {k:len(v) for k, v in sm_st_ed_dict_nested.items()}

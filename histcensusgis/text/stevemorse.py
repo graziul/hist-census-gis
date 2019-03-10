@@ -445,7 +445,7 @@ def download_sm_ed_desc(year,keep_dir=False,file_path='S:/Projects/1940Census',o
 # Note: eventually need a function to take streets added to grid and add to these dictionaries
 
 # this function creates an empty pickle object to update later with full city street lists
-def initialize_city_street_dicts(file_path = '/home/s4-data/LatestCities'):
+def initialize_full_city_street_dict(file_path = '/home/s4-data/LatestCities'):
 
 	city_info_file = file_path + '/CityExtractionList.csv' 
 	city_info_df = pd.read_csv(city_info_file)
@@ -471,7 +471,7 @@ def initialize_city_street_dicts(file_path = '/home/s4-data/LatestCities'):
 # this function combines all unique street names from grid and Steve Morse
 # updates full_city_street_dict.pickle entry for city with full list
 # You must upload 
-def create_full_city_street_dict(city_name, state_abbr, file_path = '/home/s4-data/LatestCities'):
+def create_full_city_street_list(city_name, state_abbr, file_path = '/home/s4-data/LatestCities'):
 
 	# load unique list of grid names (or return error that it doesn't exist)
 	try:
@@ -511,6 +511,13 @@ def create_full_city_street_dict(city_name, state_abbr, file_path = '/home/s4-da
 
 	# save updated dictionary
 	pickle.dump(full_city, open(package_path + '/text/full_city_street_dict.pickle','wb'))
+
+	# save street list as text file for manual street name cleaning
+	os.chdir(file_path + '/full_street_lists')
+	outfile = open(city_name + state_abbr.upper() + '_street_names.txt', 'w')
+	for line in combined_streets:
+		outfile.write(line + '\n')
+	outfile.close()
 
 
 

@@ -21,9 +21,19 @@ def merge_manual_list(city_info, file_path='/home/s4-data/LatestCities'):
 	street_var = 'manual_st'
 	print 'Merging autocleaned data with manual fixes for ' + city_name + ', ' + state_abbr
 
-	# set up objects for exact and fuzzy matching
-	sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
-	if len(sm_all_streets) == 0:
+	# Loading Steve Morse dicitonaries
+	# Test to see if full-city dictionary including all possible streets is available
+	sm_all_streets = pickle.load(open(package_path + '/text/full_city_street_dict.pickle', 'rb'))[(city_name, state_abbr.lower())]
+
+	# if exists, don't load "all_streets" SM list for that year
+	if sm_all_streets:
+		_, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
+	# if doesn't exist (sm_all_streets == None), load all three SM objects
+	else:
+		sm_all_streets, sm_st_ed_dict_nested, sm_ed_st_dict = load_steve_morse(city_info)
+
+	# set up flags for exact and fuzzy matching
+	if len(sm_st_ed_dict_nested) == 0:
 		same_year = False
 	else:
 		same_year = True
@@ -58,8 +68,8 @@ def merge_manual_list(city_info, file_path='/home/s4-data/LatestCities'):
 
 	### Finalize microdata
 
-	# overwrite hn, block, and institution with manual info if cell is empty
-	# Actually, this is more difficult than I thought, so I'm calling just having the manual info available enough
+	# only organizing fixed street names
+	# other information is still available in "manual" columns for later use
 
 	# create clean_final variable 
 	df['clean_final'] = ''
