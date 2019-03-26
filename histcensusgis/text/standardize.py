@@ -343,7 +343,7 @@ def sm_standardize(st) :
 	
 	NAME = st
 	# fix "St " at beginning of name to "Saint "
-	NAME = re.sub(r"^St ","Saint ",NAME)
+	NAME = re.sub(r"^St.? ","Saint ",NAME)
 
 	st = (DIR+" "+NAME+" "+TYPE).strip()
 	#print(orig_st)

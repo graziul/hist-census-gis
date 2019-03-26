@@ -483,8 +483,16 @@ def create_full_city_street_list(city_name, state_abbr, file_path = '/home/s4-da
 	if grid_dbf['st30'].unique() != None:
 		grid_streets.extend(list(grid_dbf['st30'].unique()))
 		grid_streets = list(set(grid_streets))
+	if grid_dbf['Alt_name'].unique() != None:
+		grid_streets.extend(list(grid_dbf['st30'].unique()))
+		grid_streets = list(set(grid_streets))
+
+	# drop None values from list 
+	grid_streets = [x for x in grid_streets if x]
+
 	# convert unicode to str
-	grid_streets = map(str, grid_streets)
+	#grid_streets = map(str, grid_streets)
+	grid_streets = [x.encode('ascii', 'replace') for x in grid_streets]
 
 	# Load all avilable Steve Morse files for city
 	sm_streets = []
@@ -515,7 +523,7 @@ def create_full_city_street_list(city_name, state_abbr, file_path = '/home/s4-da
 	# save street list as text file for manual street name cleaning
 	os.chdir(file_path + '/full_street_lists')
 	outfile = open(city_name + state_abbr.upper() + '_street_names.txt', 'w')
-	for line in combined_streets:
+	for line in sorted(combined_streets):
 		outfile.write(line + '\n')
 	outfile.close()
 

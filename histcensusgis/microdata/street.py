@@ -115,7 +115,10 @@ def finalize_lists(city_info, file_path, version):
 	city_name, state_abbr, decade = city_info
 	for a in ['exact', 'fuzzy', 'exact_ties', 'manual']:
 		list_path = file_path + '/%s/autocleaned/%s/%s_lists/' % (str(decade), 'V'+str(version), a)
-		l = pd.read_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a))
+		try:
+			l = pd.read_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), engine = 'python')
+		except:
+			continue
 		l.sort_values(['micro_ed','micro_st'])
 		l.to_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), index = False)
 
