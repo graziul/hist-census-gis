@@ -41,7 +41,10 @@ def merge_manual_list(city_info, file_path='/home/s4-data/LatestCities'):
 
 	# load autocleaned data and edited manual list
 	auto = pd.read_csv(file_path + '/' + str(decade) + '/autocleaned/V8/' + auto_file)
-	manual = pd.read_csv(file_path + '/' + str(decade) + '/autocleaned/V8/manual_lists_edited/' + manual_file).replace(np.nan, '', regex=True)
+	manual = pd.read_csv(file_path + '/' + str(decade) + '/manual_edits_19/manual_lists_edited/' + manual_file).replace(np.nan, '', regex=True)
+
+	# drop n_people column from manual list
+	manual.drop(['n_people'], axis=1) 
 
 	# change the annoying 'HN' tag that is sometimes on precleaned variable
 	if 'street_precleanedHN' in list(auto.columns):

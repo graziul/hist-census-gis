@@ -9,6 +9,7 @@ import histcensusgis
 import time
 import math
 import geopandas as gpd
+import sys
 
 # Use one year's CityInfo file to get list of states
 file_path = '/home/s4-data/LatestCities'
@@ -475,7 +476,7 @@ def create_full_city_street_list(city_name, state_abbr, file_path = '/home/s4-da
 
 	# load unique list of grid names (or return error that it doesn't exist)
 	try:
-		grid_dbf = gpd.read_file(file_path + '/grid_dbfs/' + city_name + state_abbr.upper() + '_stgrid.dbf')
+		grid_dbf = gpd.read_file(file_path + '/manual_edits_19/grid_dbfs/' + city_name + state_abbr.upper() + '_stgrid.dbf')
 	except IOError:
 		sys.exit("No grid information found. Did you place this grid's .dbf file in '/home/s4-data/LatestCities/grid_dbfs'?")
 
@@ -490,9 +491,10 @@ def create_full_city_street_list(city_name, state_abbr, file_path = '/home/s4-da
 	# drop None values from list 
 	grid_streets = [x for x in grid_streets if x]
 
-	# convert unicode to str
+	# convert unicode to str and sort
 	#grid_streets = map(str, grid_streets)
 	grid_streets = [x.encode('ascii', 'replace') for x in grid_streets]
+	grid_streets.sort()
 
 	# Load all avilable Steve Morse files for city
 	sm_streets = []
@@ -521,12 +523,47 @@ def create_full_city_street_list(city_name, state_abbr, file_path = '/home/s4-da
 	pickle.dump(full_city, open(package_path + '/text/full_city_street_dict.pickle','wb'))
 
 	# save street list as text file for manual street name cleaning
-	os.chdir(file_path + '/full_street_lists')
-	outfile = open(city_name + state_abbr.upper() + '_street_names.txt', 'w')
-	for line in sorted(combined_streets):
-		outfile.write(line + '\n')
-	outfile.close()
+	#os.chdir(file_path + '/full_street_lists')
+	#outfile = open(city_name + state_abbr.upper() + '_street_names.txt', 'w')
+	#for line in sorted(combined_streets):
+	#	outfile.write(line + '\n')
+	#outfile.close()
 
+	# save excel file of all comparison lists for manual street editing
+	output_comparison_lists(city_name, state_abbr, grid_streets)
+
+
+
+# function for oututting all reference lists for manual street list cleaning
+def output_comparison_lists(city_name, state_abbr, grid_streets, file_path = '/home/s4-data/LatestCities'):
+
+	# create workbook
+	wb = Workbook()
+
+	# create sheet for grid streets
+	ws_grid = wb.active
+	ws_grid.title = 'Grid'
+	for a in grid_streets:
+		ws_grid.append([ignore_unicode(a)])
+
+	# load sm for each year
+	for decade in [1900,1910,1920,1930,1940]:
+		_, temp, _ = load_steve_morse([city_name, state_abbr, decade])
+		if len(temp) > 0:
+			sm_st_ed_dict_city = {k:v for d in [v for k,v in temp.items()] for k,v in d.items()}
+
+			# create list of streets and each ED it appears in
+			ws_sm = wb.create_sheet('SM %s' % str(decade))
+			keylist = sm_st_ed_dict_city.keys()
+			keylist.sort()
+			for k in keylist:
+				t = [i for i in sm_st_ed_dict_city[k]]
+				ws_sm.append([ignore_unicode(k)]+t)
+		else:
+			continue
+
+	# save Excel sheet
+	wb.save(file_path + '/manual_edits_19/comparison_lists/' + city_name + state_abbr.upper() + '_comparison_lists.xlsx')
 
 
 
