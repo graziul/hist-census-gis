@@ -83,12 +83,12 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 		list_dict = None
 
 	#Save to logfile
-	#log_path = file_path + "/%s/logs/" % (str(decade))
-	#if not os.path.exists(log_path):
-	#	os.makedirs(log_path)
-	#original = sys.stdout	
-	#fsock = open(log_path + "%s_Cleaning%s.log" % (city_name.replace(' ','')+state_abbr, datestr),'wb')
-	#sys.stdout = fsock
+	log_path = file_path + "/%s/logs/" % (str(decade))
+	if not os.path.exists(log_path):
+		os.makedirs(log_path)
+	original = sys.stdout	
+	fsock = open(log_path + "%s_Cleaning%s.log" % (city_name.replace(' ','')+state_abbr, datestr),'wb')
+	sys.stdout = fsock
 	
 	print('%s Automated Cleaning\n' % (city_name))
 
@@ -188,7 +188,10 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 
 	# before export, finalize external match lists
 	if use_lists == True:
-		finalize_lists(df, city_info, file_path, version)
+		# sort lists alphabetically by micro_st and ed
+		resort_lists(city_info, file_path, version)
+		# add n_people column to manual lists for editing priority
+		finalize_manual_list(df, city_info, file_path, version)
 
 	# export data
 	city_state = city_name.replace(' ','') + state_abbr
@@ -200,10 +203,10 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 
 	print("%s %s, %s complete\n" % (decade, city_name, state_abbr))
 
-	#sys.stdout = sys.__stdout__
-	#fsock.close()
-	#os.chmod(fsock.name,0o777)
-	#os.chmod(file_name_all,0o777)
+	sys.stdout = sys.__stdout__
+	fsock.close()
+	os.chmod(fsock.name,0o777)
+	os.chmod(file_name_all,0o777)
 
 	'''
 	#Generate dashbaord info

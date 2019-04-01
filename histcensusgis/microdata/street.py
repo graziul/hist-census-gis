@@ -111,32 +111,39 @@ def append_to_list(list_type, city_info, list_dict, micro_st, micro_ed, match_in
 
 
 # this function re-sorts the match lists by micro_ed, then micro_st
-def finalize_lists(df, city_info, file_path, version):
+def resort_lists(city_info, file_path, version):
 	city_name, state_abbr, decade = city_info
 	for a in ['exact', 'fuzzy', 'exact_ties', 'manual']:
 		list_path = file_path + '/%s/autocleaned/%s/%s_lists/' % (str(decade), 'V'+str(version), a)
 		try:
-			l = pd.read_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), dtype = str)
+			l = pd.read_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), engine = 'python')
 		except:
 			continue
-
-		if a == 'manual':
-			# count how many times each street-ed combo appears
-			micro = df[['street_precleaned', 'ed']]
-			micro = pd.DataFrame(micro.groupby(['street_precleaned', 'ed']).size().reset_index(name = 'n_people'))
-			micro = micro.rename(columns = {'street_precleaned':'micro_st', 'ed':'micro_ed'})
-
-			# merge to list
-			merged = micro.merge(l)
-
-			# export
-			merged.sort_values(['micro_st','micro_ed'])
-			merged.to_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), index = False)
-			merged.to_csv(file_path + '/manual_edits_19/manual_lists/%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), index = False)
-
-		# export
-		l.sort_values(['micro_st','micro_ed'])
+		l.sort_values(['micro_ed','micro_st'])
 		l.to_csv(list_path + '%s_%s_%s_list.csv' % (city_name+state_abbr, str(decade), a), index = False)
+
+
+# this function re-sorts the match lists by micro_ed, then micro_st
+def finalize_manual_list(df, city_info, file_path, version):
+
+	city_name, state_abbr, decade = city_info
+	list_path = file_path + '/%s/autocleaned/%s/manual_lists/' % (str(decade), 'V'+str(version))
+
+	# load manual list
+	l = pd.read_csv(list_path + '%s_%s_manual_list.csv' % (city_name+state_abbr, str(decade)), dtype = str)
+
+	# count how many times each street-ed combo appears
+	micro = df[['street_precleaned', 'ed']]
+	micro = pd.DataFrame(micro.groupby(['street_precleaned', 'ed']).size().reset_index(name = 'n_people'))
+	micro = micro.rename(columns = {'street_precleaned':'micro_st', 'ed':'micro_ed'})
+
+	# merge to list
+	merged = micro.merge(l)
+
+	# export
+	merged = merged.sort_values(['micro_st','micro_ed'])
+	merged.to_csv(list_path + '%s_%s_manual_list.csv' % (city_name+state_abbr, str(decade)), index = False)
+	merged.to_csv(file_path + '/manual_edits_19/manual_lists/%s_%s_manual_list.csv' % (city_name+state_abbr, str(decade)), index = False)
 		
 			
 
