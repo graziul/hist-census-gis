@@ -46,7 +46,7 @@ def fix_dup_address_ranges(shp, hn_ranges, debug_flag=False):
 
 	df = df[[OBJECTID,LFROMADD,LTOADD,RFROMADD,RTOADD,"IN_FID","LENGTH_GEO","size","START_X","END_X","START_Y","END_Y"]]
 
-	addresses = open('new_addresses.csv', 'wt') #this is deprecated, although topo errors are still output here.
+	addresses = open('new_addresses.csv', 'wt+') #this is deprecated, although topo errors are still output here.
 	addresses.write("fid,l_f_add,l_t_add,r_f_add,r_t_add,short_segment\n")
 
 	df = df.sort_values('IN_FID')
