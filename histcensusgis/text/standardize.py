@@ -75,18 +75,18 @@ def standardize_street(st):
 	st = re.sub(r'[ \-]+([Ss][Tt][Rr]?[Ee]?[Ee]?[Tt]?[SsEe]?|[Ss][\.][Tt]|[Ss][Tt]?.?[Rr][Ee][Ee][Tt])$',' St',st)
 	#st = re.sub(r'[ \-]+[Ss]tr?e?e?t?[ \-]',' St ',st) # Fix things like "4th Street Place"
 	st = re.sub(r'[ \-]+([Aa][Vv]|[Aa][VvBb][Ee][Nn][Uu]?[EesS]?|[aA]veenue|[Aa]vn[e]?ue|[Aa][Vv][Ee])$',' Ave',st)
-	match = re.search("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+([a-zA-Z])$",st)
+	match = re.search("[Aa][Vv][Ee]?([Nn][Uu][Ee])?[ \-]+([a-zA-Z])$",st)
 	if match :
 		 st = re.sub("([a-zA-Z])$","",st)
-		 st = re.sub("[Aa][Vv][Ee]([Nn][Uu][Ee])?[ \-]+",match.group(2)+" Ave",st)
-	st = re.sub(r'[ \-]+([Bb]\'?[Ll][Vv]\'?[Dd]|Bl\'?v\'?d|Blv|Blvi|Bly|Bldv|Bvl?d|Bl[ou]d|Bol\'d|[Bb][Oo][Uun][Ll][EeAa]?[Vvn]?[Aa]?[Rr]?[Dd]?)$',' Blvd',st)
+		 st = re.sub("[Aa][Vv][Ee]?([Nn][Uu][Ee])?[ \-]+",match.group(2)+" Ave",st)
+	st = re.sub(r'[ \-]+([Bb]\'?[Ll][Vv]\'?[Dd]|Bl\'?v\'?d|Blv|Blvi|Bly|Bldv|Bvld|Bol\'d|[Bb][Oo][Uu][Ll][EeAa]?[Vv]?[Aa]?[Rr]?[Dd]?)$',' Blvd',st)
 	st = re.sub(r'[ \-]+([Rr][Dd]|[Rr][Oo][Aa][Dd])$',' Road',st)
 	st = re.sub(r'[ \-]+[Dd][Rr][Ii]?[Vv]?[Ee]?$',' Drive',st)
 	st = re.sub(r'[ \-]+([Cc][Oo][Uu]?[Rr][Tt]|[Cc][Tt])$',' Ct',st)
 	st = re.sub(r'[ \-]+([Pp][Ll][Aa]?[Cc]?[Ee]?)$',' Pl',st)
 	st = re.sub(r'[ \-]+([Ss][Qq][Uu]?[Aa]?[Rr]?[Ee]?)$',' Sq',st)
 	st = re.sub(r'[ \-]+[Cc]ircle$',' Cir',st)
-	st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kwa?y|[Pp]k[wy]|[Pp]arkwy|[Pp]ra?kwa?y|[Pp]wy)$',' Pkwy',st)
+	st = re.sub(r'[ \-]+([Pp]rkway|[Pp]arkway|[Pp]ark [Ww]ay|[Pp]kwa?y|[Pp]ky|[Pp]arkwy|[Pp]ra?kwa?y|[Pp]wy)$',' Pkwy',st)
 	st = re.sub(r'[ \-]+[Ww][Aa][Yy]$',' Way',st)
 	st = re.sub(r'[ \-]+[Aa][Ll][Ll]?[Ee]?[Yy]?$',' Aly',st)
 	st = re.sub(r'[ \-]+[Tt][Ee][Rr]+[EeAa]?[Cc]?[Ee]?$',' Ter',st)
@@ -94,7 +94,6 @@ def standardize_street(st):
 	st = re.sub(r'[ \-]+([Pp]lzaz|[Pp][Ll][Aa][Zz][Aa])$',' Plaza',st)
 	st = re.sub(r'[ \-]+([Hh]ighway)$',' Hwy',st)
 	st = re.sub(r'[ \-]+([Hh]eights?)$',' Heights',st)
-	st = re.sub(r'[ \-]+([Tt][Uu]?[Rr]?[Nn]?[Pp][Ii]?[Kk][Ee]?)$',' Turnpike',st)
 
 	# "Park" is not considered a valid TYPE because it should probably actually be part of NAME #
 	match = re.search(r' ([Ss]t|[Aa]ve|[Bb]lvd|[Pp]l|[Dd]rive|[Rr]oad|[Cc]t|[Rr]ailway|[Rr][Rr]|[Cc]ity[Ll]imits|[Hh]wy|[Ff]wy|[Pp]kwy|[Cc]ir|[Cc]ircuit|[Tt]er|[Ll]n|[Ww]ay|[Tt]rail|[Ss]q|[Aa]ly|[Bb]ridge|[Bb]ridgeway|[Ww]alk|[Hh]eights|[Cc]rescent|[Cc]reek|[Rr]iver|[Ll]ine|[Pp]laza|[Ee]splanade|[Cc]emetery|[Vv]iaduct|[Tt]rafficway|[Tt]rfy|[Tt]urnpike)$',st)
@@ -298,8 +297,8 @@ def sm_standardize(st) :
 		DIR = re.sub(" ","",DIR)
 	else :
 		DIR = ""
-	#Also attempt to capture Institutions, so "St" is not erroneously added to them
-	TYPE = re.search(r' (St|Street|Ave?|Avenue|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Riv|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike|Vista|Boundary|Home|House|Manor|Boys|Girls|Heart|Ho?spi?ta?l|Apa?r?tm?e?n?t?s|Hotel|School|College|Society|Asylum|Sanit[ao]rium|Seminary|Convent|Jail|Harbor|Field|Institute)$',st)
+
+	TYPE = re.search(r' (St|Street|Ave?|Avenue|Blvd|Pl|Dr|Drive|Rd|Road|Ct|Railway|Circuit|Hwy|Fwy|Pa?r?kwa?y|Pkwy|Cir|Terr?a?c?e?|La|Ln|Way|Trail|Sq|All?e?y?|Bridge|Bridgeway|Walk|Crescent|Creek|River|Line|Plaza|Esplanade|[Cc]emetery|Viaduct|Trafficway|Trfy|Turnpike|Park|Boundary|Home|Hsptl)$',st)
 	if(TYPE) :
 		st = re.sub(TYPE.group(0),"",st)
 		TYPE = TYPE.group(1)
@@ -315,14 +314,10 @@ def sm_standardize(st) :
 			TYPE = "Drive"
 		if(TYPE=="La") :
 			TYPE = "Ln"
-		if(TYPE=="Riv") :
-			TYPE = "River"
 		if(re.match("Terr?a?c?e?",TYPE)) :
 			TYPE = "Ter"
 		if(re.match("Pa?r?kwa?y",TYPE)) :
 			TYPE = "Pkwy"
-		if(TYPE=="Tpk") :
-			TYPE = "Turnpike"
 		if(re.match("All?e?y?",TYPE)) :
 			TYPE = "Aly"
 	else :
@@ -332,19 +327,8 @@ def sm_standardize(st) :
 			TYPE = ""
 		else :
 			TYPE = "St"
-
-	# make changes if SM has direction spelled out, and it's not an actual street name (West Ave, South St)
-	dir_test = re.search(r'^(West|East|North|South) ', st)
-	if dir_test:
-		name_no_dir = re.sub(dir_test.group(0), '', st).strip()
-		if (DIR=='') & (name_no_dir!=''):
-			DIR = dir_test.group(0)[0]
-			st = name_no_dir
 	
 	NAME = st
-	# fix "St " at beginning of name to "Saint "
-	NAME = re.sub(r"^St.? ","Saint ",NAME)
-
 	st = (DIR+" "+NAME+" "+TYPE).strip()
 	#print(orig_st)
 	#print("changed to "+st)
