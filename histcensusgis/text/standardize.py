@@ -337,15 +337,15 @@ def sm_standardize(st) :
 # Standardize numbered streets [TODO: redundant code in standardize_street should use this instead]
 def Num_Standardize(NAME) :
 
-	NAME = re.sub("^[Tt]enth","10th",NAME)
+	NAME = re.sub("^[Tt]e+nth","10th",NAME)
 	NAME = re.sub("^[Ee]leven(th)?","11th",NAME)
 	NAME = re.sub("^[Tt]wel[fv]?e?th","12th",NAME)
-	NAME = re.sub("^[Tt]hirteen(th)?","13th",NAME)
-	NAME = re.sub("^[Ff]ourt[h]?een(th)?","14th",NAME)
-	NAME = re.sub("^[Ff]ift[h]?een(th)?","15th",NAME)
-	NAME = re.sub("^[Ss]ixt[h]?een(th)?","16th",NAME)
-	NAME = re.sub("^[Ss]event[h]?een(th)?","17th",NAME)
-	NAME = re.sub("^[eE]ighteen(th)?","18th",NAME)
+	NAME = re.sub("^[Tt]hirte+n(th)?","13th",NAME)
+	NAME = re.sub("^[Ff]ourt[h]?e+n(th)?","14th",NAME)
+	NAME = re.sub("^[Ff]ift[h]?e+n(th)?","15th",NAME)
+	NAME = re.sub("^[Ss]ixt[h]?e+n(th)?","16th",NAME)
+	NAME = re.sub("^[Ss]event[h]?e+n(th)?","17th",NAME)
+	NAME = re.sub("^[eE]ighte+n(th)?","18th",NAME)
 	NAME = re.sub("^[Nn]inet[h]?e+n(th)?","19th",NAME)
 	NAME = re.sub("^[Tt]went[iy]eth","20th",NAME)
 	NAME = re.sub("^[Tt]hirt[iy]eth","30th",NAME)
