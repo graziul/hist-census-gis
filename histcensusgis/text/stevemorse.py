@@ -481,10 +481,10 @@ def create_full_city_street_list(city_name, state_abbr, file_path = '/home/s4-da
 		sys.exit("No grid information found. Did you place this grid's .dbf file in '/home/s4-data/LatestCities/grid_dbfs'?")
 
 	grid_streets = list(grid_dbf['st40'].unique())
-	if grid_dbf['st30'].unique() != None:
+	if grid_dbf['st30'].unique() is not None:
 		grid_streets.extend(list(grid_dbf['st30'].unique()))
 		grid_streets = list(set(grid_streets))
-	if grid_dbf['Alt_name'].unique() != None:
+	if grid_dbf['Alt_name'].unique() is not None:
 		grid_streets.extend(list(grid_dbf['st30'].unique()))
 		grid_streets = list(set(grid_streets))
 

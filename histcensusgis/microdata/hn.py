@@ -24,7 +24,7 @@ def standardize_hn(s):
 			row = s
 			s = s['hn']
 		except:
-			s = str(s)
+			s = s.encode('ascii', errors='replace')
 	orig_s = s
 	s = s.strip()
 	hnFlag = ''
