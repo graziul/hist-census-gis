@@ -110,6 +110,8 @@ def merge_manual_list(city_info, file_path='/home/s4-data/LatestCities'):
 ### Function to generate lists of streets to check and add to the street grid
 def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/LatestCities'):
 
+	print 'Getting streets to check in grid for ' + city_name + ', ' + state_abbr
+
 	# load both the 1930 and 1940 fully cleaned microdata files, keep only needed columns and dropping blank streets
 	fc30 = pd.read_csv(file_path + '/1930/fully_cleaned/'+ city_name + state_abbr + '_1930_FullyCleaned.csv')[['ed', 'street_precleaned', 'clean_final']]
 	fc30 = fc30.loc[fc30.street_precleaned.isna() == False]
@@ -192,6 +194,9 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 	grid_geo = grid_geo.loc[grid_geo.geometry.isnull() == False]
 	grid_geo = grid_geo[['geometry', 'st30', 'st40']]
 	grid_geo = grid_geo.fillna('')
+	# add any other troublesome unicode errors in grid street names here
+	grid_geo.st30 = grid_geo.st30.apply(lambda x: re.sub(u'\xbd', '', x))
+	grid_geo.st40 = grid_geo.st40.apply(lambda x: re.sub(u'\xbd', '', x))
 
 	## Compare each valid street name in each list to grid
 	# only writing code for 1930 right now
@@ -296,6 +301,8 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 	st30_slim['notes'] = ''
 	# export list of streets for students to check/add in grid
 	st30_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/' + city_name + state_abbr.upper() + '_add_streets_1930.csv', index = False)
+
+	print city_name + ', ' + state_abbr + ' is done'
 
 
 	### Check streets in 1940 (not ready until 1940 ED polygons are ready)

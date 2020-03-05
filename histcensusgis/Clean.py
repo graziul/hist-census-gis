@@ -199,7 +199,7 @@ def clean_microdata(city_info, street_source='sm', ed_map=False, debug=False, fi
 	if not os.path.exists(autoclean_path):
 		os.makedirs(autoclean_path)
 	file_name_all = autoclean_path + '%s_AutoCleaned%s.csv' % (city_state, 'V'+str(version))
-	df.to_csv(file_name_all, index=False)
+	df.to_csv(file_name_all, index=False, encoding='utf-8')
 
 	print("%s %s, %s complete\n" % (decade, city_name, state_abbr))
 
