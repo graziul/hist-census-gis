@@ -6,6 +6,8 @@ import geopandas as gpd
 import os
 import re
 import fuzzyset
+import copy
+from functools import partial
 
 #city_name = 'Flint'
 #state_abbr = 'MI'
@@ -178,19 +180,19 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 	## Setting up GIS data
 
 	# load polygon files
-	ed_poly_30 = gpd.read_file(file_path + '/manual_edits_19/ed_polygons/1930/' + city_name + state_abbr + '_1930_ed_guess.shp')
-	#ed_poly_40 = gpd.read_file(file_path + '/manual_edits_19/ed_polygons/1940/' + city_name + state_abbr + '.shp')
+	ed_poly_30 = gpd.read_file(file_path + '/manual_edits_19/add_grid_streets/ed_polygons/1930/' + city_name + state_abbr + '_1930_ed_guess.shp')
+	ed_poly_40 = gpd.read_file(file_path + '/manual_edits_19/add_grid_streets/ed_polygons/1940/' + city_name + state_abbr + '_1940_EDmap.shp')
 
 	# drop empty geometries
 	ed_poly_30 = ed_poly_30.loc[ed_poly_30.geometry.isnull() == False]
-	# ed_poly_40 =
+	ed_poly_40 =ed_poly_40.loc[ed_poly_40.geometry.isnull() == False]
 
 	# dissolve blocks to get a single polygon row for each ED
 	ed_poly_30 = ed_poly_30[['ED_edit', 'geometry']].dissolve(by='ED_edit').reset_index()	
-	#ed_poly_40.dissolve(by='')
+	ed_poly_40 = ed_poly_40[['ED_num', 'geometry']].dissolve(by='ED_num').reset_index()
 
 	# load grid line file
-	grid_geo = gpd.read_file(file_path + '/manual_edits_19/historical_grids/' + city_name + state_abbr.upper() + '_streets_corrected_corners_restored.shp')
+	grid_geo = gpd.read_file(file_path + '/manual_edits_19/grids/pre_manual_historical_grids/' + city_name + state_abbr.upper() + '_streets_corrected_corners_restored.shp')
 	grid_geo = grid_geo.loc[grid_geo.geometry.isnull() == False]
 	grid_geo = grid_geo[['geometry', 'st30', 'st40']]
 	grid_geo = grid_geo.fillna('')
@@ -205,13 +207,16 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 	# for stboth, only use 1930 EDs for comparing with grid
 
 	# input is a tuple of street name and list of EDs it appears in form microdata
-	def compare_st_to_grid(info):
+	def compare_st_to_grid(info, year):
 		stname, ed_list = info
 
 		# convert ed_list to all strings, make lower to match letters in polygon files
 		ed_list = [str(a).lower() for a in ed_list]
 		# spatial join the grid with EDs the microdata street appears in
-		joined = gpd.sjoin(ed_poly_30.loc[ed_poly_30.ED_edit.isin(ed_list)], grid_geo)
+		if year == 1930:
+			joined = gpd.sjoin(ed_poly_30.loc[ed_poly_30.ED_edit.isin(ed_list)], grid_geo)
+		if year == 1940:
+			joined = gpd.sjoin(ed_poly_40.loc[ed_poly_40.ED_num.isin(ed_list)], grid_geo)
 		# create new df out of unique street names in grid
 		df = pd.DataFrame({'grid': joined.st30.dropna().unique().tolist() + joined.st40.dropna().unique().tolist()})
 		df = df.loc[df.grid != '']
@@ -274,39 +279,107 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 		else:
 			return pd.DataFrame({'original':[stname], 'exact':[0], 'type_fix':[0], 'fuzzy':[0], 'check_grid':[1], 'correct_st':['']})
 
+	# create partial versions of functions
+	compare_st_to_grid_30 = partial(compare_st_to_grid, year = 1930)
+	compare_st_to_grid_40 = partial(compare_st_to_grid, year = 1940)
+
 	### Check streets in both years
 	# using 1930 EDs only for spatial join
-	stboth_checks = pd.concat(map(compare_st_to_grid, zip(*[stboth.original.tolist(), stboth.ed_list_30.tolist()]))).reset_index(drop = True)
+	stboth_checks = pd.concat(map(compare_st_to_grid_30, zip(*[stboth.original.tolist(), stboth.ed_list_30.tolist()]))).reset_index(drop = True)
 	stboth_full = stboth.merge(stboth_checks, how = 'left')
 	# export full table of check info to folder
-	stboth_full.to_csv(file_path + '/manual_edits_19/micro_grid_check_info/' + city_name + state_abbr.upper() + '_check_info_both.csv', index = False)
+	stboth_full.to_csv(file_path + '/manual_edits_19/add_grid_streets/micro_grid_check_info/' + city_name + state_abbr.upper() + '_check_info_both.csv', index = False)
 	# keep only cases that need checking, format table for students
 	stboth_slim = stboth_full.loc[stboth_full.check_grid == 1]
 	stboth_slim = stboth_slim[['original', 'n_people_30', 'n_ed_30', 'ed_list_30', 'n_people_40', 'n_ed_40', 'ed_list_40', 'correct_st']]
 	stboth_slim['change_made'] = ''
 	stboth_slim['notes'] = ''
 	# export list of streets for students to check/add in grid
-	stboth_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/' + city_name + state_abbr.upper() + '_add_streets_both.csv', index = False)
+	stboth_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/both/' + city_name + state_abbr.upper() + '_add_streets_both.csv', index = False)
 
 
 	### Check streets in 1930
-	st30_checks = pd.concat(map(compare_st_to_grid, zip(*[st30.original.tolist(), st30.ed_list.tolist()]))).reset_index(drop = True)
+	st30_checks = pd.concat(map(compare_st_to_grid_30, zip(*[st30.original.tolist(), st30.ed_list.tolist()]))).reset_index(drop = True)
 	st30_full = st30.merge(st30_checks, how = 'left')
 	# export full table of check info to folder
-	st30_full.to_csv(file_path + '/manual_edits_19/micro_grid_check_info/' + city_name + state_abbr.upper() + '_check_info_1930.csv', index = False)
+	st30_full.to_csv(file_path + '/manual_edits_19/add_grid_streets/micro_grid_check_info/' + city_name + state_abbr.upper() + '_check_info_1930.csv', index = False)
 	# keep only cases that need checking, format table for students
 	st30_slim = st30_full.loc[st30_full.check_grid == 1]
 	st30_slim = st30_slim[['original', 'n_people', 'n_ed', 'ed_list', 'correct_st']]
 	st30_slim['added_to_grid'] = 0
 	st30_slim['notes'] = ''
 	# export list of streets for students to check/add in grid
-	st30_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/' + city_name + state_abbr.upper() + '_add_streets_1930.csv', index = False)
+	st30_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/1930/' + city_name + state_abbr.upper() + '_add_streets_1930.csv', index = False)
+
+
+	### Check streets in 1940
+	st40_checks = pd.concat(map(compare_st_to_grid_40, zip(*[st40.original.tolist(), st40.ed_list.tolist()]))).reset_index(drop = True)
+	st40_full = st40.merge(st40_checks, how = 'left')
+	# export full table of check info to folder
+	st40_full.to_csv(file_path + '/manual_edits_19/add_grid_streets/micro_grid_check_info/' + city_name + state_abbr.upper() + '_check_info_1940.csv', index = False)
+	# keep only cases that need checking, format table for students
+	st40_slim = st40_full.loc[st40_full.check_grid == 1]
+	st40_slim = st40_slim[['original', 'n_people', 'n_ed', 'ed_list', 'correct_st']]
+	st40_slim['added_to_grid'] = 0
+	st40_slim['notes'] = ''
+	# export list of streets for students to check/add in grid
+	st40_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/1940/' + city_name + state_abbr.upper() + '_add_streets_1940.csv', index = False)
 
 	print city_name + ', ' + state_abbr + ' is done'
 
+#streets_to_add_in_grid('Akron','OH')
 
-	### Check streets in 1940 (not ready until 1940 ED polygons are ready)
 
 
-#streets_to_add_in_grid('Philadelphia','PA')
+
+### Function to split edited "both" street grids into separate files for further editing
+# steps: 
+# 1) pull into new folder on server
+# 2) load grid into python
+# 3) create two new versions after changing stname column names and pasting values in for 1940
+# 4) export as two new shapefiles with descriptive names
+
+def split_grid_to_edit(city_name, state_abbr, file_path='/home/s4-data/LatestCities'):
+	print 'splitting grid for '+city_name+state_abbr
+	# load edited "both" grid
+	both_grid = gpd.read_file(file_path + '/manual_edits_19/grids/edited_both_grids/' + city_name + state_abbr.upper() + '_streets_corrected_corners_restored.shp')
+	both_grid = both_grid.loc[both_grid.geometry.isnull() == False]
+	# if no "stboth40", create a null column so code works for all cases
+	if 'stboth40' not in both_grid.columns:
+		both_grid['stboth40'] = ''
+	# drop st30 and st40 since I want to use these names
+	both_grid = both_grid.drop(columns = ['st30', 'st40'])
+	# copy into 1930 and 1940 versions
+	grid_30 = copy.copy(both_grid)
+	grid_40 = copy.copy(both_grid)
+	# in 1930, rename st_both as st30, drop extra colums
+	grid_30['st30'] = grid_30['st_both']
+	grid_30 = grid_30.drop(columns = ['st_both', 'stboth40'])
+	# in 1940, create st40 by supplementing any values from stboth40, drop extra colums
+	grid_40['st40'] = np.where(grid_40['stboth40'].notna(), grid_40['stboth40'], grid_40['st_both'])
+	grid_40 = grid_40.drop(columns = ['st_both', 'stboth40'])
+	# export shapefiles
+	grid_30.to_file(file_path + '/manual_edits_19/grids/grids_to_edit_1930/' + city_name + state_abbr.upper() + '_add_missing_streets_1930.shp')
+	grid_40.to_file(file_path + '/manual_edits_19/grids/grids_to_edit_1940/' + city_name + state_abbr.upper() + '_add_missing_streets_1940.shp')
+	# done!
+	print city_name+state_abbr+' grid is split!'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
