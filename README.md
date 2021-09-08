@@ -21,4 +21,4 @@
 <p>This project consists of two broad tasks - microdata cleaning and block numbering. A third task is the creation of historically accurate street grids, but this work is relatively straightforward and, for the most part, cannot be automated.</p>
 <p>Microdata cleaning and block numbering have been automated whenever possible. When we were not reasonably certain that automation would produce 100% accurate results we relied on manual processes that have been refined over the course of the project.</p>
 <img src="ProjectFlow.jpg"></img>
-<p>Please Contact <a href="mailto:christopher_graziul@brown.edu">christopher_graziul@brown.edu</a> if you have any questions.</p>
+<p>Please Contact <a href="mailto:graziul@uchicago.edu">Chris Graziul</a> if you have any questions.</p>
