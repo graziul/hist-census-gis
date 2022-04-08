@@ -134,7 +134,7 @@ def get_sm_st_ed(decade, sm_st_ed_dict, package_path):
 						
 						#Deal with Multiple TYPEs in a single line
 						split_type_test = st.split(' ')[-1]
-						for split_type in split_type_test.split('/') :
+						for split_type in split_type_test.split('/') : 
 							st = ' '.join(st.split(' ')[:-1])+' '+split_type
 							
 							st = sm_standardize(st.strip())

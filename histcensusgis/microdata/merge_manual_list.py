@@ -292,6 +292,8 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 	# keep only cases that need checking, format table for students
 	stboth_slim = stboth_full.loc[stboth_full.check_grid == 1]
 	stboth_slim = stboth_slim[['original', 'n_people_30', 'n_ed_30', 'ed_list_30', 'n_people_40', 'n_ed_40', 'ed_list_40', 'correct_st']]
+	stboth_slim = stboth_slim.rename(index=str, columns={'correct_st1':'correct_st'})
+	stboth_slim['correct_st2'] = ''
 	stboth_slim['change_made'] = ''
 	stboth_slim['notes'] = ''
 	# export list of streets for students to check/add in grid
@@ -306,7 +308,9 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 	# keep only cases that need checking, format table for students
 	st30_slim = st30_full.loc[st30_full.check_grid == 1]
 	st30_slim = st30_slim[['original', 'n_people', 'n_ed', 'ed_list', 'correct_st']]
-	st30_slim['added_to_grid'] = 0
+	st30_slim = st30_slim.rename(index=str, columns={'correct_st1':'correct_st'})
+	st30_slim['correct_st2'] = ''
+	st30_slim['change_made'] = ''
 	st30_slim['notes'] = ''
 	# export list of streets for students to check/add in grid
 	st30_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/1930/' + city_name + state_abbr.upper() + '_add_streets_1930.csv', index = False)
@@ -320,7 +324,9 @@ def streets_to_add_in_grid(city_name, state_abbr, file_path='/home/s4-data/Lates
 	# keep only cases that need checking, format table for students
 	st40_slim = st40_full.loc[st40_full.check_grid == 1]
 	st40_slim = st40_slim[['original', 'n_people', 'n_ed', 'ed_list', 'correct_st']]
-	st40_slim['added_to_grid'] = 0
+	st40_slim = st40_slim.rename(index=str, columns={'correct_st1':'correct_st'})
+	st40_slim['correct_st2'] = ''
+	st40_slim['change_made'] = ''
 	st40_slim['notes'] = ''
 	# export list of streets for students to check/add in grid
 	st40_slim.to_csv(file_path + '/manual_edits_19/add_grid_streets/lists_to_check/1940/' + city_name + state_abbr.upper() + '_add_streets_1940.csv', index = False)
