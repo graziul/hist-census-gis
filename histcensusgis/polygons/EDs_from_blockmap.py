@@ -6,6 +6,7 @@ from codecs import open
 import copy
 import arcpy
 import os
+from histcensusgis.s4utils.AmoryUtils import Dict_append
 
 arcpy.env.overwriteOutput = True
 
@@ -24,14 +25,6 @@ with open(directory+"\\Textfile\\"+city_name+"_Block_lines_edit.txt",'r',encodin
     blk_lines = blk_txt_file.readlines()
 with open(directory+"\\Textfile\\"+city_name+"_ED_lines_edit.txt",'r',encoding='utf-8-sig', errors='ignore') as ed_txt_file :
     ed_lines = ed_txt_file.readlines()
-
-
-# Dict: add v(alue) to k(ey), create k if it doesn't exist
-def Dict_append(Dict, k, v) :
-    if not k in Dict :
-        Dict[k] = [v]
-    else :
-        Dict[k].append(v)
 
 line_blk_dict = {} #lookup line number -> blk descript
 ed_line_dict = {} #lookup ed -> which line numbers

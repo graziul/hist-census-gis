@@ -123,38 +123,3 @@ def rename_raw(decade, file_path='/home/s4-data/LatestCities', city_extract_csv=
 		new_file = '%s/%s/%s.dta' % (file_path, str(decade), city)
 		os.rename(old_file, new_file)
 
-#
-# DEPRECATED 
-#
-
-'''
-#Function to reads in DBF files and return Pandas DF
-def dbf2DF(dbfile, upper=False): 
-	if dbfile.split('.')[1] == 'shp':
-		dbfile = dbfile.replace('.shp','.dbf')
-	db = ps.open(dbfile) #Pysal to open DBF
-	d = {col: db.by_col(col) for col in db.header} #Convert dbf to dictionary
-	#pandasDF = pd.DataFrame(db[:]) #Convert to Pandas DF
-	pandasDF = pd.DataFrame(d) #Convert to Pandas DF
-	if upper == True: #Make columns uppercase if wanted 
-		pandasDF.columns = map(str.upper, db.header) 
-	db.close() 
-	return pandasDF
-
-# Function to save Pandas DF as DBF file 
-def save_dbf(df, shapefile_name):
-	dir_temp = '/'.join(shapefile_name.split('/')[:-1])
-	file_temp = shapefile_name.split('/')[-1]
-	csv_file = dir_temp + "/temp_for_dbf.csv"
-	df.to_csv(csv_file,index=False)
-	try:
-		os.remove(dir_temp + "/schema.ini")
-	except:
-		pass
-	arcpy.TableToTable_conversion(in_rows=csv_file, out_path=dir_temp, out_name="temp_for_shp.dbf")
-	os.remove(shapefile_name.replace('.shp','.dbf'))
-	os.remove(csv_file)
-	os.rename(dir_temp+"/temp_for_shp.dbf",shapefile_name.replace('.shp','.dbf'))
-	os.remove(dir_temp+"/temp_for_shp.dbf.xml")
-	os.remove(dir_temp+"/temp_for_shp.cpg")
-'''

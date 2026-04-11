@@ -67,21 +67,10 @@ def batch_clean_microdata(decade, city_list_csv='CityExtractionList.csv', file_p
 	if len(missing_raw) > 0:
 		for i in missing_raw:
 			print("Missing %s%s.dta" % (i[0], i[1]))
-		#raise ValueError
-	#for i in city_info_list_w_args:
-	#	clean_microdata(i[0], i[1])
-	#stuff = itertools.izip(city_info_list)
-	#func = partial(clean_microdata, city_info)
 	pool = Pool(processes=16, maxtasksperchild=1)
 	temp = pool.map(clean_microdata_w_args, city_info_list)
 	pool.close()
 
 def clean_microdata_w_args(city_info):
 	clean_microdata(city_info=city_info)
-
-	#for i in city_info_list_w_args:
-	#	clean_microdata(i[0],i[1])
-	# Farm out cleaning across multiple instances of Python
-	#stuff = itertools.izip(city_info_list, itertools.repeat(street_source), itertools.repeat(ed_map),itertools.repeat(debug), itertools.repeat(file_path))
-	#to_do_list = list(stuff)
 

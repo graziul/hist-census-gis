@@ -1,25 +1,9 @@
 import re
 import urllib
-
+from histcensusgis.s4utils.AmoryUtils import Dict_append, Dict_append_unique
 
 
 state_list = ["ri"]
-
-
-# Dict: add v(alue) to k(ey), create k if it doesn't exist
-def Dict_append(Dict, k, v) :
-    if not k in Dict :
-        Dict[k] = [v]
-    else :
-        Dict[k].append(v)
-
-# Version of Dict_append that only accepts unique v(alues) for each k(ey)
-def Dict_append_unique(Dict, k, v) :
-    if not k in Dict :
-        Dict[k] = [v]
-    else :
-        if not v in Dict[k] :
-            Dict[k].append(v)
 
 def download_year(year) : #year = 1920 or year = 1940
     for state_abbr in state_list :

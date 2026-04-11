@@ -5,14 +5,19 @@ import fuzzyset
 import pandas as pd
 import pickle
 from dbfpy import dbf
+from histcensusgis.text.standardize import standardize_street
 
-file_path = '/home/s4-data/LatestCities' 
+file_path = '/home/s4-data/LatestCities'
 
 city = 'Houston'
 state = 'TX'
 year = 1930
 
-def standardize_street(st):
+# NOTE: standardize_street was previously defined locally here (256 lines).
+# It is now imported from histcensusgis.text.standardize, which is the
+# canonical, most up-to-date version of the function.
+
+def _old_standardize_street(st):
     runAgain = False
     st = st.rstrip('\n')
     orig_st = st

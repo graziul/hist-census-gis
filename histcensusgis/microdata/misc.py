@@ -242,38 +242,7 @@ def gen_dashboard_info(df, city_info, exact_info, fuzzy_info, preclean_info, tim
 
 	load_time,total_time = times
 
-	'''
-	problem_EDs = list(set(problem_EDs))
-	print("\nProblem EDs: %s" % (problem_EDs))
-
-	problem_EDs_present = False
-	if len(problem_EDs) > 0:
-		problem_EDs_present = True
-	'''
-
 	num_overall_matches = df['overall_match_bool'].sum()
-
-	'''
-	num_resid_check_st = len(df[df['check_st'] & ~df['check_hn']])
-	prop_resid_check_st = float(num_resid_check_st)/num_records
-
-	num_resid_check_hn = len(df[~df['check_st'] & df['check_hn']])
-	prop_resid_check_hn = float(num_resid_check_hn)/num_records
-
-	num_resid_check_st_hn = len(df[df['check_st'] & df['check_hn']])
-	prop_resid_check_st_hn = float(num_resid_check_st_hn)/num_records
-	'''
-
-	'''
-	num_resid_st = len(df[df['check_st']]) 
-	prop_resid_st = float(num_resid_st)/num_records
-	
-	num_resid_hn_total = num_resid_check_hn + num_resid_check_st_hn
-	prop_resid_hn_total = prop_resid_check_hn + prop_resid_check_st_hn
-
-	num_resid_total = num_resid_check_st + num_resid_check_st_hn + num_resid_check_hn
-	prop_resid_total = prop_resid_check_st + prop_resid_check_st_hn + prop_resid_check_hn
-	'''
 
 	header = [decade, city_name, state_abbr, num_records]
 	sp = ['']
